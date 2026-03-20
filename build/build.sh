@@ -316,6 +316,9 @@ alias la='ls -A'
 alias l='ls -CF'
 EOF
 
+# Allow processes to bind to a not exist ipv4 addresses
+grep -q "^net\.ipv4\.ip_nonlocal_bind.*1" /etc/sysctl.conf || echo "net.ipv4.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+
 # Enable ipv4 forward
 grep -q "^net\.ipv4\.ip_forward.*1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
