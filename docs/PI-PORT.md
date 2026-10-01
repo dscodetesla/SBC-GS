@@ -93,7 +93,7 @@ Pi 5: перевірити ядро 16K сторінок (`kernel_2712`) про�
 | Плата | HW-декодер | Примітка |
 |---|---|---|
 | Pi 3B+ | H.264 | немає HEVC |
-| Pi 4 | H.264 (stateful), HEVC (stateless `rpivid`) | `h264_v4l2m2m` зависав на 6.6.63 (SNIP, linux#6554) |
+| Pi 4 | HEVC (stateless `rpivid`, `VIDEO_RPI_HEVC_DEC`, SRC: `raspberrypi/linux` `rpi-6.12.y`, увімкнено за замовчуванням); H.264 (stateful) не підтверджено для поточної Pi OS | `h264_v4l2m2m` зависав на 6.6.63 (SNIP, linux#6554) |
 | Pi 5 | лише HEVC | відкриті проблеми декодера на втратах UDP (SNIP, linux#7609/#7612) |
 
 Конвеєр (власна пропозиція, джерела для OpenIPC на Pi немає): `udpsrc ! rtph265depay ! h265parse ! v4l2slh265dec ! kmssink`.
@@ -109,6 +109,7 @@ Pi 5: перевірити ядро 16K сторінок (`kernel_2712`) про�
 - Підпис MAVLink не обовʼязковий (канал wfb-ng уже шифрований), рішення відкладене.
 - RTK: `GPS_RTCM_DATA` (SNIP); `gpsd`/`chrony` у репо покривають лише час (REPO).
 - QGC на Pi: офіційний arm64 AppImage **не підтверджений** (SNIP, суперечливі дані). Практично: Pi пересилає UDP, GCS запущено на ноутбуці/телефоні.
+- Відео в wfb-ng: peer-схеми лише UDP та unix-сокет, TCP/multicast немає (SRC: `services.py`); подробиці й джерела в `docs/CHAINS.md`.
 
 ## 7. Меш і LoRa (PROPOSAL, опційно)
 
