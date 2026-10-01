@@ -7,7 +7,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Shims: special ones live as files in tests/shims/ (copied into the sandbox PATH dir); the names below are
 # generic log-only shims (log argv to $SHIM_LOG, succeed)
-LOGONLY="chroot mount reboot modprobe poweroff systemd-run umount iptables ip hwclock fsck.exfat wfb_rx"
+LOGONLY="chroot mount reboot modprobe poweroff systemd-run umount iptables ip hwclock fsck.exfat wfb_rx sgdisk resize2fs mkfs.exfat dtc setfont sync"
 
 sb_new() {
 	ROOT="$(mktemp -d)"
@@ -38,6 +38,10 @@ dtbo()     { : > "$ROOT/boot/dtbo/$1"; }
 # rewrite /etc /boot /media /config /sys /proc /run /gs /home /tmp when NOT preceded by a path character
 sb_rewrite() {
 	sed -E "s#(^|[^A-Za-z0-9_./-])/(etc|boot|media|config|sys|proc|run|gs|home|tmp)/#\1$ROOT/\2/#g" "$1" > "$2"
+	# case option rewrite_console=1: gs-init.sh tees to /dev/ttyFIQ0 and /dev/tty1; keep that off the real /dev
+	if [ "${rewrite_console:-0}" = 1 ]; then
+		mkdir -p "$ROOT/dev"; sed -i -E "s#(^|[^A-Za-z0-9_./-])/dev/(ttyFIQ0|tty1)([^A-Za-z0-9_]|\$)#\1$ROOT/dev/\2\3#g" "$2"
+	fi
 }
 
 # shellcheck disable=SC2154  # script_args, sleep_limit, gpioset_limit, invocation are set by tests/run.sh / the case
@@ -53,11 +57,11 @@ sb_run() {  # sb_run <script relative to repo>
 		export PATH="$ROOT/shims:/usr/bin:/bin" SLEEP_LIMIT="${sleep_limit:-0}" GPIOSET_LIMIT="${gpioset_limit:-0}"
 		case "$inv" in
 		sourced)
-			timeout 30 bash -c 'source "$1"; source "$2"' _ "$ROOT/etc/gs.conf" "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr" ;;
+			timeout 30 bash -c 'source "$1"; source "$2"' _ "$ROOT/etc/gs.conf" "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr" < /dev/null ;;
 		standalone_wait)
-			timeout 30 bash -c 's="$1"; shift; trap wait EXIT; source "$s" "$@"' _ "$ROOT/script.sh" ${script_args[@]+"${script_args[@]}"} > "$ROOT/stdout" 2> "$ROOT/stderr" ;;
+			timeout 30 bash -c 's="$1"; shift; trap wait EXIT; source "$s" "$@"' _ "$ROOT/script.sh" ${script_args[@]+"${script_args[@]}"} > "$ROOT/stdout" 2> "$ROOT/stderr" < /dev/null ;;
 		*)
-			timeout 30 bash "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr" ;;
+			timeout 30 bash "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr" < /dev/null ;;
 		esac
 		echo "exit=$?" > "$ROOT/exit"
 	) 2>/dev/null || true   # silences the shell's "Terminated" job message when a shim ends a daemon loop
