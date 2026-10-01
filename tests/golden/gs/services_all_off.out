@@ -1,0 +1,44 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+start wfb in standalone mode
+start stream service
+start button service
+gs service start completed
+== shim calls (sorted: background jobs make the order non-deterministic)
+findmnt -n -o SOURCE /
+fsck.exfat -a /dev/mmcblk0p4
+gpiofind PIN_22
+gpioset -D push-pull gpiochip0 22=0
+ip ro add 224.0.0.0/4 dev br0
+lsblk -no PKNAME /dev/mmcblk0p3
+mount --bind <ROOT>/tmp/wifibroadcast.cfg <ROOT>/etc/wifibroadcast.cfg
+mount --bind <ROOT>/tmp/wifibroadcast.default <ROOT>/etc/default/wifibroadcast
+mount /dev/mmcblk0p4 <ROOT>/Videos
+stub gs-applyconf.sh 
+stub wfb.sh 
+systemctl is-enabled ttyd
+systemd-run --unit=button <ROOT>/gs/button.sh
+systemd-run --unit=stream <ROOT>/gs/stream.sh
+== gs.conf changes
+184c184
+< webui_enable='yes'
+---
+> webui_enable='no'
+186c186
+< oled_enable='yes'
+---
+> oled_enable='no'
+211c211
+< otg_mode='device'
+---
+> otg_mode='host'
+227c227
+< ttyd_enable='yes'
+---
+> ttyd_enable='no'
+232c232
+< fan_service_enable='yes'
+---
+> fan_service_enable='no'

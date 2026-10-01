@@ -2,12 +2,12 @@
 == exit
 exit=0
 == stdout
-== shim calls
+== shim calls (sorted: background jobs make the order non-deterministic)
 gpiofind PIN_15
-stub otg-gadget.sh 
-gpioset -D push-pull -m time -s 1 gpiochip0 15=1
 gpioset -D push-pull -m time -s 1 gpiochip0 15=0
 gpioset -D push-pull -m time -s 1 gpiochip0 15=1
+gpioset -D push-pull -m time -s 1 gpiochip0 15=1
+stub otg-gadget.sh 
 == gs.conf changes
 == file /run/pixelpilot.msg
 change otg mode to device!

@@ -2,10 +2,10 @@
 == exit
 exit=0
 == stdout
-== shim calls
+== shim calls (sorted: background jobs make the order non-deterministic)
 gpiofind PIN_15
-gpioset -D push-pull -m time -s 1 gpiochip0 15=1
 gpioset -D push-pull -m time -s 1 gpiochip0 15=0
+gpioset -D push-pull -m time -s 1 gpiochip0 15=1
 gpioset -D push-pull -m time -s 1 gpiochip0 15=1
 == gs.conf changes
 == file /run/pixelpilot.msg
