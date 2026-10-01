@@ -30,5 +30,15 @@ for casefile in "$HERE"/cases/*/*.sh; do
 	else echo "DIFF     $suite/$name"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 done
+# static check of the udev rules (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/udev" ]; then
+	out="$(mktemp)"; "$HERE/static/udev.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/udev.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/udev"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/udev"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/udev"
+	else echo "DIFF     static/udev"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

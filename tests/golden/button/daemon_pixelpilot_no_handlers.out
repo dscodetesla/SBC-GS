@@ -1,0 +1,19 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+function  not found
+== shim calls
+== gs.conf changes
+162,163c162,163
+< btn_q2_single_press='scan_wfb_channel'
+< btn_q2_long_press='change_otg_mode'
+---
+> btn_q2_single_press=''
+> btn_q2_long_press=''
+165c165
+< btn_q3_long_press='change_wifi_mode'
+---
+> btn_q3_long_press=''
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host
