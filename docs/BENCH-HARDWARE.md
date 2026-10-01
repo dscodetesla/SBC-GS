@@ -24,6 +24,7 @@
 
 | Підключення | Статус / нотатки |
 |---|---|
+| Приймач ES900RX (Happymodel) | ESP8285 + SX1276, живлення 5 В (~100 мА), антена IPEX/U.FL, потужність телеметрії <17 dBm, 12×12×3 мм, 0.6 г, вихід CRSF; прошивка через pass-through або WiFi (SRC: [fpvua.org](https://fpvua.org/resources/happymodel-expresslrs-es900rx.57/), прочитано). Діапазон на сторінці вказано як «750MHz/915MHz», схоже на помилку: **варіант (868/915) приймача й ES900TX мають збігатися** (UNVERIFIED). ESP-чип дає змогу в принципі використати нативний MAVLink ELRS (вимога: ESP-передавач і ESP-приймач, SRC expresslrs.org); саме для ES900RX це INF. Сторінка приймача на expresslrs.org дала 404 |
 | ELRS RX → UART FC (CRSF) | ArduPilot: `SERIALx_PROTOCOL=23` для порту приймача; «ExpressLRS systems use the CRSF protocol and connect identically» (SRC ardupilot.org/copter/docs/common-crsf-telemetry.html) |
 | FC → USB Pi | У ArduPilot «Serial Port 0 is always assigned to the USB port», MAVLink2 за замовчуванням (SRC common-serial-options). Ім'я пристрою `/dev/ttyACM0` не підтверджене документацією ArduPilot: UNVERIFIED, перевірте `dmesg` |
 | wfb-ng ↔ FC | `peer = 'serial:ttyACM0:115200'` (форма з Setup-HOWTO; синтаксис підтверджує `serial_re` у `services.py`). Без пристрою wfb-ng **не стартує** (SRC) |
@@ -37,9 +38,10 @@
 
 | Підключення | Статус / нотатки |
 |---|---|
-| RTL8814AU → USB | **Найбільший ризик.** wfb-ng: «8811*, 8812bu, 8812cu or 8814au are different cards and not supported by author. They may work but it at your own risk.» (SRC, прочитано мною: wfb-ng wiki WiFi-hardware, рядок 5). `install_gs.sh` автовизначає лише `rtl88xxau_wfb` та `rtl88x2eu`, тож `WFB_NICS` задається вручну (SRC, `install_gs.sh`) |
+| **Рішення: на GS ставимо RTL8812 (AU або EU)** | Те саме сімейство, що на AIR, і єдине, що wfb-ng офіційно підтримує («we officially support only cards on Realtek RTL8812au and RTL8812eu», SRC wiki WiFi-hardware). Автор радить BL-M8812EU2 (SRC Setup-HOWTO). Вибір приймача ES900RX на це не впливає: радіо ELRS 900 МГц і wfb-ng незалежні. `DRIVER=8812au` (закріплений) або `8812eu` (не закріплений) |
+| RTL8814AU → USB (лише альтернатива) | **Найбільший ризик.** wfb-ng: «8811*, 8812bu, 8812cu or 8814au are different cards and not supported by author. They may work but it at your own risk.» (SRC, прочитано мною: wfb-ng wiki WiFi-hardware, рядок 5). `install_gs.sh` автовизначає лише `rtl88xxau_wfb` та `rtl88x2eu`, тож `WFB_NICS` задається вручну (SRC, `install_gs.sh`) |
 | Драйвери для 8814 | (a) `svpcom/rtl8812au` v5.2.20: `CONFIG_RTL8814A = n` у Makefile, код є, але вимкнений; чи працюють wfb-патчі з 8814 — UNVERIFIED. (b) `morrownr/8814au` (скрипт `DRIVER=8814au`): діапазон ядер за README 5.4–6.18.x, монітор є, ін'єкцію README не заявляє; автентичність README перевірити (агент бачив посилання на інший форк). (c) вбудований `rtw88_8814au`: існує в ядрі (коміт 2025-03), чи є в ядрі Pi OS — UNVERIFIED |
-| Рекомендація | Спочатку відпрацювати AIR(8812) ↔ GS з **8812** адаптером (підтримуваний шлях), лише потім міняти GS на 8814 і порівнювати |
+| Рекомендація | Базовий стенд: AIR(8812) ↔ GS(8812). 8814 розглядати пізніше, якщо потрібно порівняння |
 | Ядро Pi 5 | типово `kernel_2712.img` з 16K сторінками, інакше `kernel8.img` (SRC raspberrypi/documentation `boot.adoc`); DKMS збирається під запущене ядро: HW |
 | Живлення USB | Pi 5 дає 1.6 А на USB лише від БЖ на 5 А (25 Вт); «any other compatible power supply… restricts downstream USB devices to 600mA»; або `usb_max_current_enable=1` (SRC power-supplies.adoc) |
 | LAN → хост | `GS_FORWARD_IP=<IP хоста>`: wfb-ng шле UDP `connect://<host>:5600` (відео) та `:14550` (MAVLink). Схеми peer лише UDP IPv4 (SRC `services.py`). **Декодує хост**, тож відсутність апаратного H.264 на Pi 5 не заважає (INF) |
