@@ -2,10 +2,10 @@ name: CI
 
 on:
   pull_request:
-    paths: ['bench/**', 'gs/**', 'build/**', '.github/workflows/ci.yml']
+    paths: ['bench/**', 'gs/**', 'build/**', 'tests/**', '.github/workflows/ci.yml']
   push:
     branches: [main]
-    paths: ['bench/**', 'gs/**', 'build/**', '.github/workflows/ci.yml']
+    paths: ['bench/**', 'gs/**', 'build/**', 'tests/**', '.github/workflows/ci.yml']
   workflow_dispatch:
 
 concurrency:
@@ -27,11 +27,18 @@ jobs:
         run: shellcheck -x -S warning *.sh
       - name: py_compile
         run: python3 -m py_compile bench/*.py gs/*.py
-      - name: shellcheck gs/ and build/ (informational baseline, not blocking yet)
-        continue-on-error: true
-        run: |
-          shellcheck -x -S warning gs/*.sh build/*.sh | tee /tmp/baseline.txt || true
-          echo "findings in gs/ and build/: $(grep -c '^In ' /tmp/baseline.txt)" >> "$GITHUB_STEP_SUMMARY"
+      - name: shellcheck ratchet for gs/ and build/ (no new findings allowed)
+        run: tests/shellcheck-ratchet.sh
+      - name: shellcheck the test harness
+        run: shellcheck -x -S warning tests/*.sh tests/lib/*.sh
+
+  golden:
+    runs-on: ubuntu-24.04
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Golden-output regression tests for gs/*.sh (no hardware)
+        run: tests/run.sh
 
   loopback:
     runs-on: ubuntu-24.04
