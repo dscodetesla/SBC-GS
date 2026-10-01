@@ -44,8 +44,9 @@ It prints proxy status, `recentRelayFailures`, git conflicts, and per-URL HTTP/C
 6. Ask the user to paste/upload the content or request an allowlist; run `read_documentation` topic `environment.network` for the exact setting.
 
 ### Layer-B ladder (site's own bot-protection, e.g. Cloudflare on forums)
+0. **`WebFetch` / `WebSearch` first** (ToolSearch-load them). They fetch from the tool service, not through the sandbox proxy, so they can read pages the sandbox `curl` gets Cloudflare-challenged on (verified 2026-10-01: forums.raspberrypi.com thread fetched OK while `curl` got 403). This is a sanctioned tool, not a bypass. Caveats: output is a small-model summary → ask for exact quotes + author, treat as `unverified` until cross-checked; if WebFetch also returns a challenge, fall through; never use it on hosts under a Layer-A policy denial to dodge the policy.
 1. **Upstream source of truth on GitHub** via MCP (docs repos, issues, release notes, source) — add the repo with `add_repo` if out of scope.
-2. `WebSearch` for snippets/titles (search results need no fetch of the blocked site); quote only what the snippet shows.
+2. `WebSearch` (with `allowed_domains`) for snippets/titles (search results need no fetch of the blocked site); quote only what the snippet shows.
 3. Official public alternates the project itself publishes (docs site vs forum, release feed, mailing-list archive, package registry metadata) — check each with `diagnose.sh`; they are different hosts and may not be challenged.
 4. Public archives (e.g. web.archive.org) only if the host is allowed by policy; label as "archived copy, date X", lower confidence.
 5. Ask the user to paste the thread text/screenshot (their browser passes the challenge). This is the only reliable route for forum posts.
