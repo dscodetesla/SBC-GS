@@ -14,8 +14,16 @@ echo "== git proxy overrides =="; git config --get-regexp 'http\..*(proxy|sslcai
 for t in "${@:-https://github.com https://api.github.com https://raw.githubusercontent.com}"; do
   for u in $t; do
     case "$u" in http*) ;; *) u="https://$u";; esac
-    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 --cacert /root/.ccr/ca-bundle.crt "$u" 2>&1 | tail -1)
-    echo "$u -> $code"
+    hdr=$(mktemp); body=$(mktemp)
+    code=$(curl -sS -D "$hdr" -o "$body" -w '%{http_code}' --max-time 15 --cacert /root/.ccr/ca-bundle.crt "$u" 2>/dev/null); rc=$?
+    if [ "$code" = "000" ]; then
+      layer="A: egress policy (CONNECT refused) or network error - see recentRelayFailures"
+    elif [[ "$code" =~ ^(403|429|503)$ ]] && { grep -qiE 'cf-mitigated|server: cloudflare' "$hdr" || grep -qiE 'Just a moment|cf-challenge|captcha|Anubis|Attention Required' "$body"; }; then
+      layer="B: origin bot-protection (WAF/Cloudflare) - NOT fixable via environment settings; do not bypass"
+    elif [[ "$code" =~ ^[23] ]]; then layer="OK"
+    else layer="C: origin/other error"; fi
+    echo "$u -> $code  [$layer]"
+    rm -f "$hdr" "$body"
   done
 done
 echo "== recent failures (after probes) =="

@@ -1,6 +1,6 @@
 ---
 name: proxy-blocked-research
-description: Use when researching GitHub or other external sources (web, docs, package registries, raw files, APIs) and requests fail with proxy blocks (403/405/407, CONNECT denied, TLS/cert errors, connection reset, timeouts). Diagnoses the failure class, picks the sanctioned fallback path (MCP github tools, WebFetch/WebSearch, gh CLI, git clone via proxy), and reports policy denials instead of bypassing them.
+description: Use when researching GitHub or other external sources (web, docs, forums, package registries, raw files, APIs) and requests fail with proxy blocks (403/405/407, CONNECT denied, TLS/cert errors, connection reset, timeouts) or Cloudflare/bot-protection pages ("Just a moment..."). Classifies egress-policy vs site-WAF blocking. Diagnoses the failure class, picks the sanctioned fallback path (MCP github tools, WebFetch/WebSearch, gh CLI, git clone via proxy), and reports policy denials instead of bypassing them.
 ---
 
 # Proxy-blocked research
@@ -9,6 +9,15 @@ description: Use when researching GitHub or other external sources (web, docs, p
 - Never disable TLS verification, never unset `HTTPS_PROXY`, never use other proxies/tunnels/mirrors to evade policy.
 - 403/407 = org egress policy. Do **not** retry or route around: record the host, report it, continue with other sources.
 - Scope: only repos in session scope (`dscodetesla/sbc-gs` + `add_repo`-attached). Don't search outside it.
+
+## Step 0 — Classify WHO blocks (decides everything)
+| Layer | Evidence | Meaning | Fixable by user? |
+|---|---|---|---|
+| **A. Egress policy** | `curl` code `000`; status `recentRelayFailures` has `connect_rejected` (403 on CONNECT) | host not in environment Network access | YES — add domain (new session needed) |
+| **B. Origin bot-protection (WAF)** | tunnel OK, HTTP 403/429/503, body "Just a moment...", `cf-mitigated: challenge`, `server: cloudflare`, captcha/Anubis page | the *site* refuses non-browser clients | NO — not our policy; environment settings cannot fix it |
+| **C. Origin/other** | 404/5xx, DNS error, TLS error | ordinary failure | depends |
+
+`diagnose.sh` prints this classification per URL. Layer B is **explicit and final**: do not spoof User-Agent, rotate IPs, solve/replay challenges, use challenge-bypass services or headless-stealth tricks. Mark the source `BLOCKED-WAF` and use the Layer-B ladder below.
 
 ## Step 1 — Diagnose (one command, ≤1 min)
 ```
@@ -34,6 +43,14 @@ It prints proxy status, `recentRelayFailures`, git conflicts, and per-URL HTTP/C
 5. Package metadata: registries in `noProxy` (npm, PyPI, crates, Go proxy) are direct — use them for package docs.
 6. Ask the user to paste/upload the content or request an allowlist; run `read_documentation` topic `environment.network` for the exact setting.
 
+### Layer-B ladder (site's own bot-protection, e.g. Cloudflare on forums)
+1. **Upstream source of truth on GitHub** via MCP (docs repos, issues, release notes, source) — add the repo with `add_repo` if out of scope.
+2. `WebSearch` for snippets/titles (search results need no fetch of the blocked site); quote only what the snippet shows.
+3. Official public alternates the project itself publishes (docs site vs forum, release feed, mailing-list archive, package registry metadata) — check each with `diagnose.sh`; they are different hosts and may not be challenged.
+4. Public archives (e.g. web.archive.org) only if the host is allowed by policy; label as "archived copy, date X", lower confidence.
+5. Ask the user to paste the thread text/screenshot (their browser passes the challenge). This is the only reliable route for forum posts.
+Record result as `BLOCKED-WAF` + what was used instead; findings from those sources get confidence `unverified` unless confirmed by a primary source.
+
 ## Step 3 — Control quality while researching
 - **Focus**: write the research question + success criterion in 2 lines first; re-read before each new source. Drop sources that don't answer it.
 - **Hallucination**: every claim cites a fetched source (URL/`file:line`/commit). Unfetched = "unverified". Never invent API names, versions, or file contents when a fetch failed — say it failed.
@@ -42,7 +59,7 @@ It prints proxy status, `recentRelayFailures`, git conflicts, and per-URL HTTP/C
 - **Delegation**: broad sweeps over many files/sources → `Explore` agent (read-only); multi-source synthesis → `general-purpose` agents in parallel, each with one source class and a one-line deliverable; give each the Hard rules above. Verify their claims against cited sources before relying on them.
 
 ## Roles / domains to activate
-Network/infra engineer (proxy, TLS, DNS) · Security/compliance (policy denials are reported, not bypassed) · Git/VCS specialist · Research analyst (source triage, citation) · Technical writer (concise report). Cross-domain: security×network (why blocked), research×VCS (where truth lives: commits/PRs/issues).
+Network/infra engineer (proxy, TLS, DNS, WAF/CDN behaviour) · Security/compliance (policy denials are reported, not bypassed) · Git/VCS specialist · Research analyst (source triage, citation) · Technical writer (concise report). Cross-domain: security×network (why blocked), research×VCS (where truth lives: commits/PRs/issues).
 
 ## Output format
-`Question → Sources used (cited) → Blocked hosts + reason + fallback → Findings (verified/unverified) → Open items needing user/admin`.
+`Question → Source status table (host | layer A/B/C | fallback | confidence) → Sources used (cited) → Blocked hosts + reason + fallback → Findings (verified/unverified) → Open items needing user/admin`.
