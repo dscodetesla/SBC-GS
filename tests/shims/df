@@ -1,4 +1,7 @@
 #!/bin/bash
+# plain "df <dir>": numeric KB columns (Avail from $SHIM_ROOT/df.avail_kb, default 29000000); with -h: human readable
 echo "df $*" >> "$SHIM_LOG"
-echo "Filesystem Type Size Used Avail Use% Mounted on"
-echo "/dev/sda1 exfat 29G 1.0G 28G 4% /Videos"
+case " $* " in
+	*" -hT "*|*" -h "*) echo "Filesystem Type Size Used Avail Use% Mounted on"; echo "/dev/sda1 exfat 29G 1.0G 28G 4% /Videos" ;;
+	*) echo "Filesystem 1K-blocks Used Available Use% Mounted on"; echo "/dev/sda1 30000000 1000 $(cat "$SHIM_ROOT/df.avail_kb" 2>/dev/null || echo 29000000) 4% /Videos" ;;
+esac

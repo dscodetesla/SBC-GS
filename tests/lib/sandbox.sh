@@ -7,7 +7,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Shims: special ones live as files in tests/shims/ (copied into the sandbox PATH dir); the names below are
 # generic log-only shims (log argv to $SHIM_LOG, succeed)
-LOGONLY="chroot mount reboot modprobe poweroff systemd-run umount iptables ip hwclock fsck.exfat wfb_rx sgdisk resize2fs mkfs.exfat dtc setfont sync"
+LOGONLY="chroot mount reboot modprobe poweroff systemd-run umount iptables ip hwclock fsck.exfat wfb_rx sgdisk resize2fs mkfs.exfat dtc setfont sync gst-launch-1.0 msposd wfb-ng-osd fbi jq yq"
 
 sb_new() {
 	ROOT="$(mktemp -d)"
@@ -36,8 +36,14 @@ conf_set() { sed -i "s#^$1=.*#$1='$2'#" "$ROOT/etc/gs.conf"; }
 dtbo()     { : > "$ROOT/boot/dtbo/$1"; }
 
 # rewrite /etc /boot /media /config /sys /proc /run /gs /home /tmp when NOT preceded by a path character
+# shellcheck disable=SC2154
 sb_rewrite() {
 	sed -E "s#(^|[^A-Za-z0-9_./-])/(etc|boot|media|config|sys|proc|run|gs|home|tmp)/#\1$ROOT/\2/#g" "$1" > "$2"
+	# case option rewrite_extra=(/dev/shm ...): more absolute prefixes to move into the sandbox
+	local x
+	for x in ${rewrite_extra[@]+"${rewrite_extra[@]}"}; do
+		mkdir -p "$ROOT$x"; sed -i -E "s#(^|[^A-Za-z0-9_./-])$x([^A-Za-z0-9_]|\$)#\1$ROOT$x\2#g" "$2"
+	done
 	# case option rewrite_console=1: gs-init.sh tees to /dev/ttyFIQ0 and /dev/tty1; keep that off the real /dev
 	if [ "${rewrite_console:-0}" = 1 ]; then
 		mkdir -p "$ROOT/dev"; sed -i -E "s#(^|[^A-Za-z0-9_./-])/dev/(ttyFIQ0|tty1)([^A-Za-z0-9_]|\$)#\1$ROOT/dev/\2\3#g" "$2"
