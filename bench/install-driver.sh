@@ -9,14 +9,6 @@ need_root "$@"
 log "kernel $(uname -r), arch $(uname -m)"
 run apt-get install -y dkms git build-essential bc
 
-if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
-	warn "no headers for $(uname -r); trying Raspberry Pi header packages (names are NOT verified for every release)"
-	for pkg in linux-headers-rpi-v8 raspberrypi-kernel-headers; do
-		if apt-cache show "$pkg" >/dev/null 2>&1; then run apt-get install -y "$pkg" && break; fi
-	done
-	[ -e "/lib/modules/$(uname -r)/build" ] || die "still no /lib/modules/$(uname -r)/build: update+reboot so the running kernel matches the installed headers"
-fi
-
 src=/opt/gs-bench/src; run mkdir -p "$src"
 case "$DRIVER" in
 	8812au)
@@ -27,12 +19,28 @@ case "$DRIVER" in
 		warn "8812eu is not pinned to a commit; record 'git rev-parse HEAD' of $src/rtl8812eu for reproducibility"
 		opts='options 8812eu rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0' ;;
 	8814au)
-		url=https://github.com/morrownr/8814au.git
+		# In-kernel rtw88_8814au: no out-of-tree code. File exists in mainline from v6.15
+		# (404 at v6.14); monitor/injection behaviour is NOT documented: test it yourself.
 		warn "8814au: wfb-ng officially supports only 8812au/8812eu ('8814au ... not supported by author', wfb-ng wiki WiFi-hardware)"
-		warn "this clones morrownr/8814au UNPINNED and untested for injection; the adapter is NOT auto-detected by wfb-ng: set WFB_NICS in env"
+		modinfo rtw88_8814au >/dev/null 2>&1 || die "kernel $(uname -r) has no rtw88_8814au (needs >= 6.15 and the module enabled)"
+		log "using in-kernel rtw88_8814au; set WFB_NICS in env: wfb-ng does not auto-detect this adapter"
+		log "validate injection with the A/B loss test in docs/BENCH-HARDWARE.md before trusting it"
+		exit 0 ;;
+	8814au-morrownr)
+		[ "${ALLOW_UNPINNED:-0}" = 1 ] || die "8814au-morrownr clones UNPINNED third-party code and builds it as root. The README at morrownr/8814au/main belongs to fork joseguzman1337/8814au (provenance unclear). Re-run with ALLOW_UNPINNED=1 only after you reviewed the source."
+		url=https://github.com/morrownr/8814au.git
+		warn "unpinned build of morrownr/8814au: record 'git rev-parse HEAD' of $src/rtl8814au-morrownr"
 		opts='# 8814au: no module options set by this script' ;;
-	*) die "DRIVER must be 8812au, 8812eu or 8814au" ;;
+	*) die "DRIVER must be 8812au, 8812eu, 8814au (in-kernel) or 8814au-morrownr" ;;
 esac
+if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
+	warn "no headers for $(uname -r); trying Raspberry Pi header packages (names are NOT verified for every release)"
+	for pkg in linux-headers-rpi-v8 raspberrypi-kernel-headers; do
+		if apt-cache show "$pkg" >/dev/null 2>&1; then run apt-get install -y "$pkg" && break; fi
+	done
+	[ -e "/lib/modules/$(uname -r)/build" ] || die "still no /lib/modules/$(uname -r)/build: update+reboot so the running kernel matches the installed headers"
+fi
+
 dir="$src/rtl$DRIVER"
 [ -d "$dir/.git" ] || run git clone "$url" "$dir"
 if [ "$DRIVER" = 8812au ]; then
@@ -52,7 +60,7 @@ blacklist 88XXau
 blacklist 8812au
 blacklist rtl8812au
 blacklist rtl88x2bs
-$([ "$DRIVER" = 8814au ] && echo blacklist rtw88_8814au)
+$([ "$DRIVER" = 8814au-morrownr ] && echo blacklist rtw88_8814au)
 $opts
 EOT
 fi

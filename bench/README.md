@@ -88,7 +88,7 @@ sudo systemctl start bench-video-src bench-fc
 | `ENCODER=v4l2h264enc` | апаратне кодування (**експериментально**, не перевірено) |
 | `FC_SERIAL=ttyACM0` | реальний FC по USB: `[drone_mavlink] peer = serial:ttyACM0:115200`, `fake_fc` не встановлюється |
 | `GS_FORWARD_IP=<хост>` | GS пересилає відео та MAVLink на хост по LAN; декодує хост |
-| `DRIVER=8814au` | RTL8814AU на GS: **не підтримується wfb-ng**, `WFB_NICS` вручну, не перевірено |
+| `DRIVER=8814au` | RTL8814AU на GS (вбудований `rtw88_8814au`, ядро ≥ 6.15): **не підтримується wfb-ng**, `WFB_NICS` вручну, не перевірено; `8814au-morrownr` лише з `ALLOW_UNPINNED=1` |
 
 `gs_mav.py --rc ...` тепер вимагає `--confirm-props-off`: з реальним FC лише без гвинтів і без батареї/ESC.
 
