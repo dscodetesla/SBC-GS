@@ -37,10 +37,12 @@ if [ "$1" = air ]; then
 		units="$units bench-fc"
 	else
 		log "FC_SERIAL=$FC_SERIAL: real FC is wired through wfb-ng; fake_fc service not installed"
+		run systemctl disable --now bench-fc 2>/dev/null || true   # retire a unit left from the emulation loop
 	fi
 else
 	if [ -n "$GS_FORWARD_IP" ]; then
 		log "GS_FORWARD_IP=$GS_FORWARD_IP: the host decodes; no local video service"
+		run systemctl disable --now bench-video-rx 2>/dev/null || true   # retire a unit left from the emulation loop
 		units=""
 	else
 		mk_unit bench-video-rx "Bench: GS video receiver" wifibroadcast@gs.service "$BENCH_DIR/video-rx.sh"

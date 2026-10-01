@@ -36,6 +36,8 @@ def main():
     ap.add_argument("--duration", type=float, default=0, help="0 = until Ctrl+C")
     ap.add_argument("--confirm-props-off", action="store_true",
                     help="REQUIRED with --rc sweep|hold: you confirm no propellers are fitted and no battery/ESC is connected")
+    ap.add_argument("--real-fc", action="store_true",
+                    help="real flight controller: override ONLY channels 1-4 (5-8 = 65535 = ignore) and disable the RTT token")
     ap.add_argument("--selftest", action="store_true",
                     help="exit 1 unless heartbeat (and RC echo if --rc on) was seen")
     a = ap.parse_args()
@@ -65,7 +67,10 @@ def main():
                     ch = [int(1500 + 400 * math.sin(ph + i)) for i in range(4)]
                 else:
                     ch = [1500] * 4
-                m.mav.rc_channels_override_send(target, 1, *ch, 1500, 1500, 1500, token(time.time()))
+                if a.real_fc:   # 65535 = ignore field (ArduPilot docs); keeps mode/aux channels untouched
+                    m.mav.rc_channels_override_send(target, 1, *ch, 65535, 65535, 65535, 65535)
+                else:
+                    m.mav.rc_channels_override_send(target, 1, *ch, 1500, 1500, 1500, token(time.time()))
             while True:
                 msg = m.recv_match(blocking=False)
                 if msg is None:
@@ -90,7 +95,7 @@ def main():
     finally:
         if a.rc != "off" and target is not None:
             for _ in range(5):          # release channels
-                m.mav.rc_channels_override_send(target, 1, 0, 0, 0, 0, 0, 0, 0, 0)
+                m.mav.rc_channels_override_send(target, 1, 0, 0, 0, 0, 0, 0, 0, 0)   # 0 = release
                 time.sleep(0.05)
 
     if a.selftest:

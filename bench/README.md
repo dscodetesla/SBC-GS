@@ -1,6 +1,6 @@
-# Стендовий прототип: «повітряний» вузол + GS на двох Raspberry Pi 4
+# Стендовий прототип: «повітряний» вузол (Pi 4) + GS (Pi 4 або Pi 5)
 
-Мета: фізично зібрати на столі повний ланцюжок з `docs/CHAINS.md` і зняти вимірювання, які закриють відкриті питання.
+Мета: фізично зібрати на столі повний ланцюжок з `docs/CHAINS.md` і зняти вимірювання, які закриють відкриті питання. Лінійний покроковий шлях від нуля: `../docs/GUIDE.md`.
 
 ```
 Pi 4 «AIR» (емуляція дрона)                              Pi 4 «GS» (наземна станція)
@@ -46,7 +46,7 @@ cd bench && cp env.example env && nano env      # обов'язково WFB_REGI
 sudo ./bench.sh setup gs        # пакети, venv, драйвер DKMS → ПЕРЕЗАВАНТАЖЕННЯ
 sudo reboot
 sudo ./bench.sh finish gs       # wfb-ng, ключі, конфіг, сервіси, перевірка
-scp /etc/drone.key root@<AIR-IP>:/etc/drone.key
+sudo cat /etc/drone.key | ssh <user>@<AIR-IP> 'sudo tee /etc/drone.key >/dev/null'
 ```
 
 **2. AIR**:
@@ -73,7 +73,7 @@ sudo systemctl start bench-video-src bench-fc
 | T4 | `$VENV/bin/python gs_mav.py --rc off` | HEARTBEAT ~1 Гц, ATTITUDE ~10 Гц, `sysid=1` |
 | T5 | `gs_mav.py --rc sweep --confirm-props-off` | на AIR (`journalctl -u bench-fc`) видно значення каналів; RTT у виводі |
 | T6 | зупинити `gs_mav.py` | на AIR: «RC override lost» через ≈3 с і «GCS failsafe» через ≈5 с |
-| T7 | `sudo systemctl stop wifibroadcast@drone` потім `start` | відео й MAVLink зникають і відновлюються без втручання |
+| T7 (на AIR) | `sudo systemctl stop wifibroadcast@drone` потім `start` | відео й MAVLink зникають і відновлюються без втручання |
 | T8 | порівняти `DECODER=avdec_h264` і `DECODER=v4l2h264dec` (так само h265: `avdec_h265` / `v4l2slh265dec`), `top` | записати завантаження CPU і чи йде картинка |
 
 Результати T1–T8 впишіть у `RESULTS.md` і передайте мені: за ними я зніму позначки HW/SNIP у `docs/`.

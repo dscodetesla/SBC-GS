@@ -37,10 +37,10 @@ case "$1" in
 			log "generating keys (wfb_keygen) in /etc"
 			run bash -c 'cd /etc && wfb_keygen'
 		fi
-		log "copy the drone key to the AIR node:  scp /etc/drone.key root@<air-ip>:/etc/drone.key"
+		log "copy the drone key to the AIR node:  sudo cat /etc/drone.key | ssh <user>@<air-ip> 'sudo tee /etc/drone.key >/dev/null'"
 		;;
 	air)
-		[ -f /etc/drone.key ] || die "/etc/drone.key missing. On the GS run: scp /etc/drone.key root@<this-node>:/etc/drone.key"
+		[ -f /etc/drone.key ] || die "/etc/drone.key missing. On the GS run: sudo cat /etc/drone.key | ssh <user>@<this-node> 'sudo tee /etc/drone.key >/dev/null'"
 		;;
 esac
 log "wfb-ng installed. next: sudo ./configure-wfb.sh $1"

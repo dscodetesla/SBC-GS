@@ -12,7 +12,7 @@
  (UART◄─ ELRS RX)      │ [OpenIPC-емуляція]                  │
                        └─────────────────────────────────────┘                  ~~~
                                                                                  ▼
- Хост (Linux/Win) ◄──LAN── UDP 5600 (відео) + UDP 14550 (MAVLink) ◄── Pi 5 «GS» ──USB── RTL8814
+ Хост (Linux/Win) ◄──LAN── UDP 5600 (відео) + UDP 14550 (MAVLink) ◄── Pi 5 «GS» ──USB── RTL8812
    ├─ декодування відео (gst-launch / VLC / QGC)
    ├─ gs_mav.py / QGC / MAVProxy
    └─ TX12 MKII + ES900TX ~~~ 900 МГц (ELRS) ~~~► ELRS RX ──UART(CRSF)──► FC   ← основний RC, минає GS

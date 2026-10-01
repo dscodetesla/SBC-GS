@@ -42,6 +42,8 @@
 - `rtw88_8814au` у mainline з v6.15 (файл відсутній у v6.14). `aircrack-ng/rtl8812au` застарілий. Готового FPV-форка 8814 не знайдено.
 - `morrownr/8814au` `main`: README належить форку `joseguzman1337` («Codex (GPT-5)»); походження неясне, не збирати без перевірки.
 - Pi 5: ядро `kernel_2712` 16K; USB 1.6 А лише від БЖ 5 А, інакше 600 мА (SRC raspberrypi/documentation).
+- Пакети заголовків ядра є в Bookworm і Trixie (`archive.raspberrypi.com`, перечитано мною): `linux-headers-rpi-v8` (Pi 4) і `linux-headers-rpi-2712` (Pi 5); версії за звітом агента: Bookworm 6.12.109, Trixie 6.18.50. Застарілий `raspberrypi-kernel-headers` є лише в Bookworm (версія 2023) і ядро 6.12 не супроводжує. Відповідність пакета моделі за суфіксом: INF.
+- Pi OS: поточний реліз на Debian Trixie, попередній на Bookworm (SRC documentation `rpi-os-introduction.adoc`). Imager налаштовує hostname, користувача, Wi-Fi, SSH, часовий пояс (SRC `install.adoc`). EEPROM: `sudo rpi-eeprom-update`, `-a` для застосування (SRC `boot-eeprom.adoc`). `kernel_2712.img` типовий на Pi 5, інакше `kernel8.img` (SRC `boot.adoc`). `usb_max_current_enable`, `get_throttled`, `getconf PAGESIZE`, dtoverlay для вимкнення Wi-Fi: НЕПІДТВЕРДЖЕНО документацією.
 
 **ArduPilot / MAVLink (SRC ardupilot.org)**
 - `RC_OVERRIDE_TIME` типово 3 с; `RC_FS_TIMEOUT` 1 с; `FS_GCS_TIMEOUT` 5 с; «RC_OVERRIDES are lost if using a GCS only». Відкрита помилка безпеки ArduPilot#32862 (застарілі значення RC після override).
@@ -79,6 +81,8 @@
 - У контейнері можна ставити apt-пакети (shellcheck, GStreamer) і venv з pymavlink: тест без заліза через `./bench.sh loopback` (PY= шлях до python з pymavlink).
 - shellcheck запускати з каталогу `bench/`, інакше `source` не знаходить `lib.sh`.
 - Тестувати «на місці» знаходить реальні помилки (пропущені плагіни, `num-buffers`); код без запуску вважати непевним.
+- Скрипти установки мають бути **ідемпотентними при зміні конфігурації**: після `FC_SERIAL`/`GS_FORWARD_IP` застарілі systemd-сервіси продовжували працювати (`Restart=always`); тепер `install-services.sh` їх вимикає. Незалежний агент-рецензент гайда знайшов 7 суттєвих помилок (ключ під `root@`, T7 на не тому вузлі, `gs_mav.py` на GS після пересилання, RTT на реальному FC, небезпечне «відключити антену» тощо): рецензію чергувати з написанням.
+- Для реального FC `gs_mav.py --real-fc` змінює лише канали 1–4 (`65535` = ігнорувати за документацією ArduPilot), RTT вимкнено.
 - Субагентам давати: чітку межу, «кожне твердження з URL, інакше UNVERIFIED», без обходу блокувань.
 
 ## 6. Відкриті питання (потрібне залізо або доступ)
