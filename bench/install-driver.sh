@@ -6,7 +6,8 @@
 . "$(dirname "$0")/lib.sh"
 need_root "$@"
 
-log "kernel $(uname -r), arch $(uname -m)"
+KREL="$(uname -r)"
+log "kernel $KREL, arch $(uname -m)"
 run apt-get install -y dkms git build-essential bc
 
 src=/opt/gs-bench/src; run mkdir -p "$src"
@@ -34,11 +35,15 @@ case "$DRIVER" in
 	*) die "DRIVER must be 8812au, 8812eu, 8814au (in-kernel) or 8814au-morrownr" ;;
 esac
 if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
-	warn "no headers for $(uname -r); trying Raspberry Pi header packages (names are NOT verified for every release)"
-	for pkg in linux-headers-rpi-v8 raspberrypi-kernel-headers; do
+	# Raspberry Pi OS kernels are named like 6.12.109+rpt-rpi-v8 (Pi 4) or ...-rpi-2712 (Pi 5);
+	# the matching header meta-package is linux-headers-rpi-<flavour> (exists in bookworm and trixie).
+	flavour="${KREL##*-rpi-}"
+	if [ "$flavour" != "$KREL" ]; then candidates="linux-headers-rpi-$flavour"; else candidates="linux-headers-rpi-v8 linux-headers-rpi-2712"; fi
+	warn "no headers for $KREL; trying: $candidates"
+	for pkg in $candidates; do
 		if apt-cache show "$pkg" >/dev/null 2>&1; then run apt-get install -y "$pkg" && break; fi
 	done
-	[ -e "/lib/modules/$(uname -r)/build" ] || die "still no /lib/modules/$(uname -r)/build: update+reboot so the running kernel matches the installed headers"
+	[ -e "/lib/modules/$KREL/build" ] || die "still no /lib/modules/$KREL/build: update+reboot so the running kernel matches the installed headers"
 fi
 
 dir="$src/rtl$DRIVER"

@@ -4,7 +4,7 @@
 . "$(dirname "$0")/lib.sh"
 role_check "${1:-}"; need_root "$@"
 
-pkgs=(git curl gnupg ca-certificates iw ethtool python3-venv python3-pip socat
+pkgs=(git curl gnupg ca-certificates iw ethtool python3-venv python3-pip socat v4l-utils
       gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-x)
 
