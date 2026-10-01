@@ -14,6 +14,7 @@ docs) a few times.
 """
 import argparse
 import math
+import signal
 import statistics
 import sys
 import time
@@ -44,6 +45,7 @@ def main():
     if a.rc != "off" and not a.confirm_props_off:
         ap.error("--rc sweep|hold sends RC overrides: add --confirm-props-off (bench only, propellers removed)")
 
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))   # run the release-channels cleanup on SIGTERM too
     m = mavutil.mavlink_connection(a.conn, source_system=255, source_component=190)
     t0 = time.monotonic()
     counts, rtts = {}, []

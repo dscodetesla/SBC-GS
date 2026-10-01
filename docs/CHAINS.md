@@ -51,7 +51,7 @@
 ## 2. Керування: TX12 MKII ↔ ELRS ↔ FC ↔ MAVLink ↔ wfb-ng ↔ GS ↔ хост
 
 ```
-TX12 MKII (EdgeTX) ──ELRS 2.4 ГГц (RF)──► ELRS RX ──CRSF──► FC (ArduPilot)      ← ОСНОВНИЙ канал керування
+TX12 MKII (EdgeTX) ──ELRS (RF; у нашому стенді ES900, 868/915 МГц)──► ELRS RX ──CRSF──► FC (ArduPilot)      ← ОСНОВНИЙ канал керування
 FC (MAVLink2 UART) ◄──► wfb_tx/rx (0x10/0x90) ◄──RF──► GS ◄──UDP 14550──► маршрутизатор ◄──► QGC / MAVProxy / pymavlink
 хост ◄──USB HID / BLE-джойстик──► TX12                                           ← необов'язковий експериментальний резерв
 ```
@@ -68,7 +68,7 @@ FC (MAVLink2 UART) ◄──► wfb_tx/rx (0x10/0x90) ◄──RF──► GS �
 
 ### Незалежність каналів і відмови (SRC з ardupilot.org; цитати перечитано)
 
-- Канал ELRS (2.4 ГГц) і канал wfb-ng (WiFi у монітор-режимі) не ділять ні апаратуру, ні ефір, доки обидва не заходять в один UART/хост (висновок з архітектури).
+- Канал ELRS (для ES900 це 868/915 МГц) і канал wfb-ng (WiFi у монітор-режимі) не ділять ні апаратуру, ні ефір, доки обидва не заходять в один UART/хост (висновок з архітектури).
 - `RC_OVERRIDE_TIME`: «Timeout in seconds after which RC overrides will no longer be used, and regular RC input will resume. Default is 3 seconds.» ([joystick](https://ardupilot.org/copter/docs/common-joystick.html)). Значення `0` і `-1` не підтверджені.
 - Радіо-failsafe: спрацьовує після `RC_FS_TIMEOUT` (типово 1 с); «RC_OVERRIDES are lost if using a GCS only is being used» ([radio-failsafe](https://ardupilot.org/copter/docs/radio-failsafe.html)). Для лагу телеметрії документація радить збільшити `RC_FS_TIMEOUT` ([mavlink-rcinput](https://ardupilot.org/dev/docs/mavlink-rcinput.html)).
 - GCS-failsafe: за heartbeat, `FS_GCS_TIMEOUT` типово 5 с; після відновлення зв'язку апарат лишається у failsafe і не повертається в попередній режим ([gcs-failsafe](https://ardupilot.org/copter/docs/gcs-failsafe.html)). Типове значення `FS_GCS_ENABLE` не підтверджене.

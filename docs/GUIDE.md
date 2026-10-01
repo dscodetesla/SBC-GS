@@ -119,7 +119,7 @@ sudo ./bench.sh finish air      # потребує /etc/drone.key
 | T5 | `gs_mav.py --rc sweep --confirm-props-off` (емулятор FC) | RTT у виводі, на AIR (`journalctl -u bench-fc`) видно канали |
 | T6 | зупинити `gs_mav.py` | на AIR «RC override lost» через ≈3 с, «GCS failsafe» через ≈5 с |
 | T7 (на AIR) | `sudo systemctl stop wifibroadcast@drone`, потім `start` | відео й MAVLink зникають і відновлюються самі |
-| T8 (на GS) | `DECODER=avdec_h264 ./video-rx.sh`, потім `DECODER=v4l2h264dec ./video-rx.sh` (h265: `avdec_h265` / `v4l2slh265dec`), `top` | записати CPU і чи йде картинка (Pi 5 має апаратний лише HEVC, SNIP) |
+| T8 (на GS) | спершу `sudo systemctl stop bench-video-rx` (обидва слухають UDP 5600), потім `DECODER=avdec_h264 ./video-rx.sh`, потім `DECODER=v4l2h264dec ./video-rx.sh` (h265: `avdec_h265` / `v4l2slh265dec`), `top` | записати CPU і чи йде картинка (Pi 5 має апаратний лише HEVC, SNIP) |
 
 **Контрольна точка 6:** T1–T8 пройдені (запишіть у `bench/RESULTS.md`). Python з pymavlink на Pi: `/opt/gs-bench/venv/bin/python`.
 
