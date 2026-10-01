@@ -5,27 +5,23 @@
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# command shims: log argv to $SHIM_LOG and succeed (sleep is a silent no-op)
-SHIMMED="chroot mount reboot systemctl nmcli sleep modprobe uname hostname mkdir"
+# Shims: special ones live as files in tests/shims/ (copied into the sandbox PATH dir); the names below are
+# generic log-only shims (log argv to $SHIM_LOG, succeed)
+LOGONLY="chroot mount reboot modprobe poweroff systemd-run umount iptables ip hwclock fsck.exfat"
 
 sb_new() {
 	ROOT="$(mktemp -d)"
 	export SHIM_LOG="$ROOT/shim.log"; : > "$SHIM_LOG"
 	mkdir -p "$ROOT"/{etc/kernel,etc/default,etc/samba,etc/systemd/network,etc/network/interfaces.d,media/root-ro/etc,boot/dtbo,config,sys/class/net,shims}
 	local n
-	for n in $SHIMMED; do
-		case "$n" in
-		sleep)  # no-op; if SLEEP_LIMIT>0 the Nth call terminates the calling script (ends daemon loops)
-			printf '%s\n' '#!/bin/bash' 'c="$SHIM_ROOT/sleep.count"; n=$(( $(cat "$c" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$c"' \
-				'if [ "${SLEEP_LIMIT:-0}" -gt 0 ] && [ "$n" -ge "$SLEEP_LIMIT" ]; then kill -TERM "$PPID"; fi' 'exit 0' > "$ROOT/shims/$n" ;;
-		uname)    printf '#!/bin/bash\necho "6.1.0-test"\n' > "$ROOT/shims/$n" ;;
-		hostname) printf '#!/bin/bash\necho "gs-test"\n' > "$ROOT/shims/$n" ;;
-		mkdir)    # like configfs: creating a mass_storage function also creates its lun.0
-			printf '%s\n' '#!/bin/bash' '/bin/mkdir "$@" || exit $?' \
-				'for a in "$@"; do case "$(basename "$a")" in mass_storage.*) /bin/mkdir -p "$a/lun.0";; esac; done' > "$ROOT/shims/$n" ;;
-		*) printf '#!/bin/bash\necho "%s $*" >> "$SHIM_LOG"\nexit 0\n' "$n" > "$ROOT/shims/$n" ;;
-		esac
-		chmod +x "$ROOT/shims/$n"
+	for n in $LOGONLY; do
+		printf '#!/bin/bash\necho "%s $*" >> "$SHIM_LOG"\nexit 0\n' "$n" > "$ROOT/shims/$n"; chmod +x "$ROOT/shims/$n"
+	done
+	cp "$REPO/tests/shims/"* "$ROOT/shims/"
+	# stubs for the other scripts of the product, so cross-script calls are logged and never run for real
+	mkdir -p "$ROOT/gs"
+	for n in otg-gadget.sh channel-scan.sh stream.sh gs-applyconf.sh fan.sh wfb.sh button.sh; do
+		printf '%s\n' '#!/bin/bash' 'echo "stub ${BASH_SOURCE[0]##*/} $*" >> "$SHIM_LOG"' > "$ROOT/gs/$n"; chmod +x "$ROOT/gs/$n"
 	done
 	export SHIM_ROOT="$ROOT"
 	# baseline target state (Radxa defaults taken from the repo)
@@ -39,26 +35,33 @@ sb_new() {
 conf_set() { sed -i "s#^$1=.*#$1='$2'#" "$ROOT/etc/gs.conf"; }
 dtbo()     { : > "$ROOT/boot/dtbo/$1"; }
 
-# rewrite /etc /boot /media /config /sys /proc /run when NOT preceded by a path character
+# rewrite /etc /boot /media /config /sys /proc /run /gs when NOT preceded by a path character
 sb_rewrite() {
-	sed -E "s#(^|[^A-Za-z0-9_./-])/(etc|boot|media|config|sys|proc|run)/#\1$ROOT/\2/#g" "$1" > "$2"
+	sed -E "s#(^|[^A-Za-z0-9_./-])/(etc|boot|media|config|sys|proc|run|gs)/#\1$ROOT/\2/#g" "$1" > "$2"
 }
 
-# invocation=sourced   : like gs.sh:11 / gs-init.sh:186 (gs.conf already loaded in the caller)  [default]
-# invocation=standalone: like button.sh:138 (separate process; gs.conf variables are NOT inherited)
+# shellcheck disable=SC2154  # script_args, sleep_limit, gpioset_limit, invocation are set by tests/run.sh / the case
+# invocation=sourced         : like gs.sh:11 / gs-init.sh:186 (gs.conf already loaded in the caller)  [default]
+# invocation=standalone      : like button.sh:138 (separate process; gs.conf variables are NOT inherited)
+# invocation=standalone_wait : standalone, run with args ("${script_args[@]}") and wait for background jobs
+#                              the script leaves behind, so the shim log is deterministic
 sb_run() {  # sb_run <script relative to repo>
 	sb_rewrite "$REPO/$1" "$ROOT/script.sh"
 	local inv="${invocation:-sourced}"
 	(
 		cd "$ROOT" || exit 99
-		export PATH="$ROOT/shims:$PATH" SLEEP_LIMIT="${sleep_limit:-0}"
-		if [ "$inv" = sourced ]; then
-			bash -c 'source "$1"; source "$2"' _ "$ROOT/etc/gs.conf" "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr"
-		else
-			bash "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr"
-		fi
+		export PATH="$ROOT/shims:$PATH" SLEEP_LIMIT="${sleep_limit:-0}" GPIOSET_LIMIT="${gpioset_limit:-0}"
+		case "$inv" in
+		sourced)
+			timeout 30 bash -c 'source "$1"; source "$2"' _ "$ROOT/etc/gs.conf" "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr" ;;
+		standalone_wait)
+			timeout 30 bash -c 'trap wait EXIT; source "$1" "${@:2}"' _ "$ROOT/script.sh" ${script_args[@]+"${script_args[@]}"} > "$ROOT/stdout" 2> "$ROOT/stderr" ;;
+		*)
+			timeout 30 bash "$ROOT/script.sh" > "$ROOT/stdout" 2> "$ROOT/stderr" ;;
+		esac
 		echo "exit=$?" > "$ROOT/exit"
 	) 2>/dev/null || true   # silences the shell's "Terminated" job message when a shim ends a daemon loop
+	pkill -f "$ROOT/script.sh" 2>/dev/null || true   # leftovers (e.g. a blinker that missed its limit)
 }
 
 sb_norm() { sed "s#$ROOT#<ROOT>#g"; }

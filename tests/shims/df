@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "df $*" >> "$SHIM_LOG"
+echo "Filesystem Type Size Used Avail Use% Mounted on"
+echo "/dev/sda1 exfat 29G 1.0G 28G 4% /Videos"

@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+reboot 
+== gs.conf changes
+== file /run/pixelpilot.msg
+Ground Station going to reboot in 2 seconds!
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

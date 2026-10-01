@@ -1,0 +1,13 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+findmnt -n -o SOURCE /
+nsenter --mount=<ROOT>/proc/1/ns/mnt mount /dev/sda1 <ROOT>/Videos
+df -hT <ROOT>/Videos
+== gs.conf changes
+== file /run/pixelpilot.msg
+/dev/sda1 exfat 29G 1.0G 28G 4% /Videos
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

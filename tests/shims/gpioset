@@ -1,0 +1,6 @@
+#!/bin/bash
+# logs the call; if GPIOSET_LIMIT>0 the Nth call terminates the calling loop (LED blinkers run forever otherwise)
+echo "gpioset $*" >> "$SHIM_LOG"
+c="$SHIM_ROOT/gpioset.count"; n=$(( $(cat "$c" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$c"
+if [ "${GPIOSET_LIMIT:-0}" -gt 0 ] && [ "$n" -ge "$GPIOSET_LIMIT" ]; then kill -TERM "$PPID"; fi
+exit 0

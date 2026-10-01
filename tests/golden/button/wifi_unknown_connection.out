@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+connection is unknow
+== shim calls
+nmcli device status
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

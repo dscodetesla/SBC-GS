@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+otg mode is unkonw
+== shim calls
+gpiofind PIN_15
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+weird

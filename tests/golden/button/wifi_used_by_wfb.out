@@ -1,0 +1,13 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+WARING: wifi0 used by wfb, can't switch wifi mode.
+== shim calls
+== gs.conf changes
+76c76
+< wfb_integrated_wnic=''
+---
+> wfb_integrated_wnic='wifi0'
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

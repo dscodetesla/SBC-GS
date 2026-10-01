@@ -16,7 +16,7 @@ for casefile in "$HERE"/cases/*/*.sh; do
 	suite="$(basename "$(dirname "$casefile")")"; name="$(basename "$casefile" .sh)"
 	[ -n "$want" ] && [ "$want" != "$suite/$name" ] && continue
 	script_under_test=""
-	invocation=sourced; sleep_limit=0; dump_baseline=1; dump_files=(); dump_trees=()
+	invocation=sourced; sleep_limit=0; gpioset_limit=0; script_args=(); dump_baseline=1; dump_files=(); dump_trees=()
 	case_setup() { :; }
 	# shellcheck disable=SC1090
 	. "$casefile"

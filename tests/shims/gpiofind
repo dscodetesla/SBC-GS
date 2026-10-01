@@ -1,0 +1,4 @@
+#!/bin/bash
+# real libgpiod v1 prints "gpiochipN line"; keep that two-word shape and log the lookup
+echo "gpiofind $*" >> "$SHIM_LOG"
+echo "gpiochip0 ${1#PIN_}"
