@@ -114,6 +114,8 @@
 4. EdgeTX: список підтримуваних радіо, AUX у TX12 MKII, рендер кирилиці на ч/б, налаштування зовнішнього модуля.
 5. `RC_OVERRIDE_TIME` = 0/-1, типове `FS_GCS_ENABLE`, підпис MAVLink2.
 6. Адаптивна лінія alink і msposd у стенді не відтворені.
+- До п. 5 (2026-10-01, SRC, `docs/MAVLINK-ROUTER.md`): `RC_OVERRIDE_TIME` типово 3 с, `0` вимикає overrides, `-1` = без таймауту (`RC_Channels_VarInfo.h`, `RC_Channel.cpp`); `FS_GCS_ENABLE` у Copter master типово 0 = вимкнено (`ArduCopter/Parameters.cpp`).
+- Override приймається лише від sysid з `MAV_GCS_SYSID` (типово 255, стара назва `SYSID_MYGCS`) / `MAV_GCS_SYSID_HI` (`GCS.cpp`); heartbeat інших sysid GCS-failsafe не живить. Лишається відкритим: підпис MAVLink2 і типові значення в конкретних стабільних релізах.
 
 ## 7. Рішення власника проєкту, що очікують
 
