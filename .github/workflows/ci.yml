@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+    paths: ['bench/**', 'gs/**', 'build/**', '.github/workflows/ci.yml']
+  push:
+    branches: [main]
+    paths: ['bench/**', 'gs/**', 'build/**', '.github/workflows/ci.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: shellcheck bench (blocking)
+        working-directory: bench
+        run: shellcheck -x -S warning *.sh
+      - name: py_compile
+        run: python3 -m py_compile bench/*.py gs/*.py
+      - name: shellcheck gs/ and build/ (informational baseline, not blocking yet)
+        continue-on-error: true
+        run: |
+          shellcheck -x -S warning gs/*.sh build/*.sh | tee /tmp/baseline.txt || true
+          echo "findings in gs/ and build/: $(grep -c '^In ' /tmp/baseline.txt)" >> "$GITHUB_STEP_SUMMARY"
+
+  loopback:
+    runs-on: ubuntu-24.04
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GStreamer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gstreamer1.0-tools gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav gstreamer1.0-x
+      - name: Python venv with pinned pymavlink
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r bench/requirements.txt
+      - name: Loopback self test (no radio, no hardware)
+        run: PY="$PWD/.venv/bin/python" bench/loopback-test.sh
