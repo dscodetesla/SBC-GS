@@ -42,11 +42,11 @@ sb_rewrite() {
 	# case option rewrite_extra=(/dev/shm ...): more absolute prefixes to move into the sandbox
 	local x
 	for x in ${rewrite_extra[@]+"${rewrite_extra[@]}"}; do
-		mkdir -p "$ROOT$x"; sed -i -E "s#(^|[^A-Za-z0-9_./-])$x([^A-Za-z0-9_]|\$)#\1$ROOT$x\2#g" "$2"
+		mkdir -p "$ROOT$x"; sed -i -E "s#(^|[^A-Za-z0-9_./-])$x([^A-Za-z0-9_]|\$)#\1$ROOT$x\2#g;s#(^|[^A-Za-z0-9_./-])$x([^A-Za-z0-9_]|\$)#\1$ROOT$x\2#g" "$2"
 	done
 	# case option rewrite_console=1: gs-init.sh tees to /dev/ttyFIQ0 and /dev/tty1; keep that off the real /dev
 	if [ "${rewrite_console:-0}" = 1 ]; then
-		mkdir -p "$ROOT/dev"; sed -i -E "s#(^|[^A-Za-z0-9_./-])/dev/(ttyFIQ0|tty1)([^A-Za-z0-9_]|\$)#\1$ROOT/dev/\2\3#g" "$2"
+		mkdir -p "$ROOT/dev"; sed -i -E "s#(^|[^A-Za-z0-9_./-])/dev/(ttyFIQ0|tty1)([^A-Za-z0-9_]|\$)#\1$ROOT/dev/\2\3#g;s#(^|[^A-Za-z0-9_./-])/dev/(ttyFIQ0|tty1)([^A-Za-z0-9_]|\$)#\1$ROOT/dev/\2\3#g" "$2"  # twice: adjacent matches share the separator
 	fi
 }
 
