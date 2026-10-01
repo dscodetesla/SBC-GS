@@ -35,7 +35,11 @@ if command -v vcgencmd >/dev/null; then
 fi
 if [ "$1" = air ]; then
 	t 'systemctl is-active --quiet bench-video-src' "bench-video-src running" "sudo systemctl start bench-video-src"
-	t 'systemctl is-active --quiet bench-fc' "bench-fc running" "sudo systemctl start bench-fc"
+	if [ -n "$FC_SERIAL" ]; then
+		t "[ -e /dev/$FC_SERIAL ]" "FC device /dev/$FC_SERIAL present" "check USB cable / dmesg (wfb-ng will not start without it)"
+	else
+		t 'systemctl is-active --quiet bench-fc' "bench-fc running" "sudo systemctl start bench-fc"
+	fi
 else
 	note "link state:    wfb-cli gs"
 	note "MAVLink + RC:  $VENV/bin/python $BENCH_DIR/gs_mav.py --rc off     (then --rc sweep)"

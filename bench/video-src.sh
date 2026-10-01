@@ -12,9 +12,21 @@ command -v gst-launch-1.0 >/dev/null || die "gst-launch-1.0 not found (run setup
 # gst: num-buffers=-1 is endless, 0 would mean "no frames"
 [ "$NUM_BUFFERS" -le 0 ] && NUM_BUFFERS=-1
 
-raw="videotestsrc is-live=true pattern=${VIDEO_PATTERN} num-buffers=${NUM_BUFFERS} \
+case "$SOURCE" in
+	test)
+		raw="videotestsrc is-live=true pattern=${VIDEO_PATTERN} num-buffers=${NUM_BUFFERS} \
  ! video/x-raw,width=${VIDEO_W},height=${VIDEO_H},framerate=${VIDEO_FPS}/1 \
- ! videoconvert"
+ ! videoconvert" ;;
+	webcam)
+		[ -e "$WEBCAM_DEV" ] || die "webcam $WEBCAM_DEV not found (list: v4l2-ctl --list-devices)"
+		case "$WEBCAM_FORMAT" in
+			jpeg) cam="image/jpeg,width=${VIDEO_W},height=${VIDEO_H},framerate=${VIDEO_FPS}/1 ! jpegdec" ;;
+			raw)  cam="video/x-raw,width=${VIDEO_W},height=${VIDEO_H},framerate=${VIDEO_FPS}/1" ;;
+			*) die "WEBCAM_FORMAT must be jpeg or raw" ;;
+		esac
+		raw="v4l2src device=${WEBCAM_DEV} num-buffers=${NUM_BUFFERS} ! ${cam} ! videoconvert" ;;
+	*) die "SOURCE must be test or webcam" ;;
+esac
 if have_gst_element timeoverlay; then
 	raw="${raw} ! timeoverlay halignment=left valignment=top ! videoconvert"
 else
@@ -23,9 +35,15 @@ fi
 
 case "$VIDEO_CODEC" in
 	h264)
+		if [ "$ENCODER" = v4l2h264enc ]; then
+			warn "v4l2h264enc is EXPERIMENTAL here: control names and Pi support were not verified"
+			enc="v4l2h264enc ! video/x-h264,profile=baseline ! h264parse config-interval=-1 \
+ ! rtph264pay config-interval=1 pt=96 mtu=1400"
+		else
 		enc="x264enc tune=zerolatency speed-preset=ultrafast bitrate=${VIDEO_BITRATE_KBPS} key-int-max=${VIDEO_FPS} \
  ! video/x-h264,profile=baseline ! h264parse config-interval=-1 \
- ! rtph264pay config-interval=1 pt=96 mtu=1400" ;;
+ ! rtph264pay config-interval=1 pt=96 mtu=1400"
+		fi ;;
 	h265)
 		warn "x265 software encoding is heavy on a Pi 4; lower resolution/fps if frames drop"
 		enc="x265enc tune=zerolatency speed-preset=ultrafast bitrate=${VIDEO_BITRATE_KBPS} key-int-max=${VIDEO_FPS} \

@@ -25,6 +25,13 @@ BENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${DECODER:=}"
 : "${SINK:=}"
 : "${VENV:=/opt/gs-bench/venv}"
+: "${SOURCE:=test}"
+: "${WEBCAM_DEV:=/dev/video0}"
+: "${WEBCAM_FORMAT:=jpeg}"
+: "${ENCODER:=x264}"
+: "${FC_SERIAL:=}"
+: "${FC_BAUD:=115200}"
+: "${GS_FORWARD_IP:=}"
 
 log()  { printf '\033[1;34m[bench]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[bench:warn]\033[0m %s\n' "$*" >&2; }

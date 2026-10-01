@@ -134,7 +134,7 @@ Reference (не форкати): `OpenHD/OpenHD-ImageBuilder` (хрут-шабл
 | 0 | shellcheck, CI-перевірка збірки Radxa, видалити мертвий блок `build.sh:16-24` | збірка Radxa відтворюється |
 | 1 | `board.conf` для Radxa; обгортки `gpio.sh` (v1/v2), `board_overlay_*`; прибрати `radxa` з коду | Radxa працює ідентично, у скриптах немає `radxa`, `rk35`, `fcc00000` |
 | 2 | розділити збірку на `common` і `boards/<id>`; модуль розмітки `gpt|mbr`; пін драйверів за SHA; CI-матриця 6.12/6.18 | `BOARD=radxa-zero3` ідентичний, `BOARD=rpi4` збирається |
-| 3 | образ Pi 4: wfb-ng + Realtek, GStreamer v4l2+kmssink, `gs-mavlink`. Стенд на двох Pi 4: `bench/` | **HW:** відео та MAVLink від реального апарата; результати в `bench/RESULTS.md` |
+| 3 | образ Pi 4: wfb-ng + Realtek, GStreamer v4l2+kmssink, `gs-mavlink`. Стенд: `bench/`, обладнання: `docs/BENCH-HARDWARE.md` | **HW:** відео та MAVLink від реального апарата; результати в `bench/RESULTS.md` |
 | 4 | Pi 3B+ і Pi 5 як варіанти (Pi 5 — експериментальний) | HW-тест кожної плати |
 | 5 | кнопки/OLED/INA226, вентилятор, overlayroot, firstboot, `/config` | HW |
 | 6 | модифікації драйвера, меш-модуль, LoRa-модуль, вимірювання затримки | HW, повторювані виміри |

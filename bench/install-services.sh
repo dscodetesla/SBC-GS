@@ -31,12 +31,23 @@ EOT
 
 if [ "$1" = air ]; then
 	mk_unit bench-video-src "Bench: synthetic video source" wifibroadcast@drone.service "$BENCH_DIR/video-src.sh"
-	mk_unit bench-fc "Bench: MAVLink flight-controller emulator" wifibroadcast@drone.service "$VENV/bin/python $BENCH_DIR/fake_fc.py --sysid $FC_SYSID --conn udpout:127.0.0.1:$MAV_PORT"
-	units="bench-video-src bench-fc"
+	units="bench-video-src"
+	if [ -z "$FC_SERIAL" ]; then
+		mk_unit bench-fc "Bench: MAVLink flight-controller emulator" wifibroadcast@drone.service "$VENV/bin/python $BENCH_DIR/fake_fc.py --sysid $FC_SYSID --conn udpout:127.0.0.1:$MAV_PORT"
+		units="$units bench-fc"
+	else
+		log "FC_SERIAL=$FC_SERIAL: real FC is wired through wfb-ng; fake_fc service not installed"
+	fi
 else
-	mk_unit bench-video-rx "Bench: GS video receiver" wifibroadcast@gs.service "$BENCH_DIR/video-rx.sh"
-	units="bench-video-rx"
+	if [ -n "$GS_FORWARD_IP" ]; then
+		log "GS_FORWARD_IP=$GS_FORWARD_IP: the host decodes; no local video service"
+		units=""
+	else
+		mk_unit bench-video-rx "Bench: GS video receiver" wifibroadcast@gs.service "$BENCH_DIR/video-rx.sh"
+		units="bench-video-rx"
+	fi
 fi
 run systemctl daemon-reload
 for u in $units; do run systemctl enable "$u"; done
-log "enabled: $units  (start now: sudo systemctl start $units)"
+[ -n "$units" ] && log "enabled: $units  (start now: sudo systemctl start $units)"
+true

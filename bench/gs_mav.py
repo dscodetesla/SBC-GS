@@ -34,9 +34,13 @@ def main():
     ap.add_argument("--rc", choices=["off", "sweep", "hold"], default="off")
     ap.add_argument("--rate", type=float, default=20.0, help="RC override rate, Hz")
     ap.add_argument("--duration", type=float, default=0, help="0 = until Ctrl+C")
+    ap.add_argument("--confirm-props-off", action="store_true",
+                    help="REQUIRED with --rc sweep|hold: you confirm no propellers are fitted and no battery/ESC is connected")
     ap.add_argument("--selftest", action="store_true",
                     help="exit 1 unless heartbeat (and RC echo if --rc on) was seen")
     a = ap.parse_args()
+    if a.rc != "off" and not a.confirm_props_off:
+        ap.error("--rc sweep|hold sends RC overrides: add --confirm-props-off (bench only, propellers removed)")
 
     m = mavutil.mavlink_connection(a.conn, source_system=255, source_component=190)
     t0 = time.monotonic()

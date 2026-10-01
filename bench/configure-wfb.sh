@@ -17,17 +17,23 @@ wifi_region = '${WFB_REGION}'
 
 EOT
 	if [ "$1" = gs ]; then
+		dest="${GS_FORWARD_IP:-127.0.0.1}"
 		cat <<EOT
 [gs_mavlink]
-peer = 'connect://127.0.0.1:${MAV_PORT}'
+peer = 'connect://${dest}:${MAV_PORT}'
 
 [gs_video]
-peer = 'connect://127.0.0.1:${GS_VIDEO_PORT}'
+peer = 'connect://${dest}:${GS_VIDEO_PORT}'
 EOT
 	else
+		if [ -n "$FC_SERIAL" ]; then
+			mav_peer="serial:${FC_SERIAL}:${FC_BAUD}"   # form from wfb-ng Setup-HOWTO; wfb-ng will not start if the device is absent
+		else
+			mav_peer="listen://0.0.0.0:${MAV_PORT}"
+		fi
 		cat <<EOT
 [drone_mavlink]
-peer = 'listen://0.0.0.0:${MAV_PORT}'
+peer = '${mav_peer}'
 
 [drone_video]
 peer = 'listen://0.0.0.0:${AIR_VIDEO_PORT}'

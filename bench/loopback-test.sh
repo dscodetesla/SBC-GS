@@ -18,7 +18,7 @@ check() { if [ "$1" = 0 ]; then log "PASS  $2"; else warn "FAIL  $2"; fail=1; fi
 # ---- MAVLink chain ----
 "$PY" "$BENCH_DIR/fake_fc.py" --duration 14 --rc-override-time 1 --gcs-timeout 2 >"$tmp/fc.log" 2>&1 & pids+=($!)
 sleep 0.7
-"$PY" "$BENCH_DIR/gs_mav.py" --rc sweep --duration 6 --selftest >"$tmp/gs.log" 2>&1
+"$PY" "$BENCH_DIR/gs_mav.py" --rc sweep --confirm-props-off --duration 6 --selftest >"$tmp/gs.log" 2>&1
 check $? "MAVLink telemetry + RC echo (gs_mav --selftest)"
 sleep 4   # let fake_fc notice the missing RC overrides and GCS heartbeats
 grep -q "RC override lost" "$tmp/fc.log"; check $? "RC override timeout detected"

@@ -71,12 +71,26 @@ sudo systemctl start bench-video-src bench-fc
 | T2 | `wfb-cli gs` | видно пакети й RSSI від AIR |
 | T3 | `sudo systemctl start bench-video-rx` | на HDMI рухомий м'яч і таймер, без розсипу |
 | T4 | `$VENV/bin/python gs_mav.py --rc off` | HEARTBEAT ~1 Гц, ATTITUDE ~10 Гц, `sysid=1` |
-| T5 | `gs_mav.py --rc sweep` | на AIR (`journalctl -u bench-fc`) видно значення каналів; RTT у виводі |
+| T5 | `gs_mav.py --rc sweep --confirm-props-off` | на AIR (`journalctl -u bench-fc`) видно значення каналів; RTT у виводі |
 | T6 | зупинити `gs_mav.py` | на AIR: «RC override lost» через ≈3 с і «GCS failsafe» через ≈5 с |
 | T7 | `sudo systemctl stop wifibroadcast@drone` потім `start` | відео й MAVLink зникають і відновлюються без втручання |
 | T8 | порівняти `DECODER=avdec_h264` і `DECODER=v4l2h264dec` (так само h265: `avdec_h265` / `v4l2slh265dec`), `top` | записати завантаження CPU і чи йде картинка |
 
 Результати T1–T8 впишіть у `RESULTS.md` і передайте мені: за ними я зніму позначки HW/SNIP у `docs/`.
+
+## Варіант з реальним обладнанням
+
+Топологія, підключення й перелік упущеного обладнання: `../docs/BENCH-HARDWARE.md`. У `env`:
+
+| Змінна | Ефект |
+|---|---|
+| `SOURCE=webcam`, `WEBCAM_DEV`, `WEBCAM_FORMAT` | відео з UVC-веб-камери замість тестового малюнка |
+| `ENCODER=v4l2h264enc` | апаратне кодування (**експериментально**, не перевірено) |
+| `FC_SERIAL=ttyACM0` | реальний FC по USB: `[drone_mavlink] peer = serial:ttyACM0:115200`, `fake_fc` не встановлюється |
+| `GS_FORWARD_IP=<хост>` | GS пересилає відео та MAVLink на хост по LAN; декодує хост |
+| `DRIVER=8814au` | RTL8814AU на GS: **не підтримується wfb-ng**, `WFB_NICS` вручну, не перевірено |
+
+`gs_mav.py --rc ...` тепер вимагає `--confirm-props-off`: з реальним FC лише без гвинтів і без батареї/ESC.
 
 ## Що змінюється вручну
 

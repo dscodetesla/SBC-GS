@@ -26,7 +26,12 @@ case "$DRIVER" in
 		url=https://github.com/svpcom/rtl8812eu.git
 		warn "8812eu is not pinned to a commit; record 'git rev-parse HEAD' of $src/rtl8812eu for reproducibility"
 		opts='options 8812eu rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0' ;;
-	*) die "DRIVER must be 8812au or 8812eu" ;;
+	8814au)
+		url=https://github.com/morrownr/8814au.git
+		warn "8814au: wfb-ng officially supports only 8812au/8812eu ('8814au ... not supported by author', wfb-ng wiki WiFi-hardware)"
+		warn "this clones morrownr/8814au UNPINNED and untested for injection; the adapter is NOT auto-detected by wfb-ng: set WFB_NICS in env"
+		opts='# 8814au: no module options set by this script' ;;
+	*) die "DRIVER must be 8812au, 8812eu or 8814au" ;;
 esac
 dir="$src/rtl$DRIVER"
 [ -d "$dir/.git" ] || run git clone "$url" "$dir"
@@ -47,6 +52,7 @@ blacklist 88XXau
 blacklist 8812au
 blacklist rtl8812au
 blacklist rtl88x2bs
+$([ "$DRIVER" = 8814au ] && echo blacklist rtw88_8814au)
 $opts
 EOT
 fi
