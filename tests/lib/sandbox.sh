@@ -23,6 +23,8 @@ sb_new() {
 	for n in otg-gadget.sh channel-scan.sh stream.sh gs-applyconf.sh fan.sh wfb.sh button.sh; do
 		printf '%s\n' '#!/bin/bash' 'echo "stub ${BASH_SOURCE[0]##*/} $*" >> "$SHIM_LOG"' > "$ROOT/gs/$n"; chmod +x "$ROOT/gs/$n"
 	done
+	# real libs and board profiles, so scripts that source /gs/lib/*.sh resolve them inside the sandbox
+	cp -r "$REPO/gs/lib" "$REPO/gs/boards" "$ROOT/gs/"
 	export SHIM_ROOT="$ROOT"
 	# baseline target state (Radxa defaults taken from the repo)
 	sed "s#^rec_dir=.*#rec_dir='$ROOT/Videos'#" "$REPO/gs/gs.conf" > "$ROOT/etc/gs.conf"

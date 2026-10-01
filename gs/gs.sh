@@ -5,6 +5,7 @@ set -x
 
 # load config
 source /etc/gs.conf
+source /gs/lib/gpio.sh
 [ "$gs_enable" == 'no' ] && exit 0
 
 # check and apply configuration in gs.conf
@@ -124,7 +125,7 @@ fi
 [ "$webui_enable" == "yes" ] && systemctl start webui
 
 # system boot complete, turn red record LED off
-gpioset -D $red_led_drive $(gpiofind PIN_${red_led_pin})=0
+gpioset -D $red_led_drive $(gpio_find "${red_led_pin}")=0
 echo "gs service start completed"
 
 exit 0

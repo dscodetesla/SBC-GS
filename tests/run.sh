@@ -50,5 +50,15 @@ if [ -z "$want" ] || [ "$want" = "static/boards" ]; then
 	else echo "DIFF     static/boards"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the GPIO helper (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/gpio" ]; then
+	out="$(mktemp)"; "$HERE/static/gpio.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/gpio.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/gpio"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/gpio"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/gpio"
+	else echo "DIFF     static/gpio"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

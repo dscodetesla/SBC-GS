@@ -1,0 +1,10 @@
+== gpio_find
+pin 22 -> gpiochip0 22
+pin 32 -> gpiochip0 32
+== shim log
+gpiofind PIN_22
+gpiofind PIN_32
+ok argv
+== failure status
+rc=3
+bad=0
