@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # case variables (invocation, sleep_limit, dump_*) are read by lib/sandbox.sh
 # Golden-output regression runner for gs/*.sh (no hardware needed).
 #   tests/run.sh                 compare against tests/golden
 #   tests/run.sh --update [case] rewrite golden output (do this ONLY on intended changes)
@@ -15,8 +16,7 @@ for casefile in "$HERE"/cases/*/*.sh; do
 	suite="$(basename "$(dirname "$casefile")")"; name="$(basename "$casefile" .sh)"
 	[ -n "$want" ] && [ "$want" != "$suite/$name" ] && continue
 	script_under_test=""
-	# shellcheck disable=SC2034  # read by sb_run/sb_dump in lib/sandbox.sh
-	invocation=sourced
+	invocation=sourced; sleep_limit=0; dump_baseline=1; dump_files=(); dump_trees=()
 	case_setup() { :; }
 	# shellcheck disable=SC1090
 	. "$casefile"

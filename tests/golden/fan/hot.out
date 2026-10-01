@@ -1,0 +1,23 @@
+== invocation: standalone
+== exit
+exit=143
+== stdout
+Using pwmchip14 channel 0 for fan
+CPU temperature: 60°
+Max temperature: 60°
+60 is greater than 53, fan speed up 5%
+------------------------------------------
+CPU temperature: 60°
+Max temperature: 60°
+60 is greater than 53, fan speed up 5%
+------------------------------------------
+== shim calls
+== gs.conf changes
+== file /sys/class/pwm/pwmchip14/pwm0/period
+40000
+== file /sys/class/pwm/pwmchip14/pwm0/duty_cycle
+12000
+== file /sys/class/pwm/pwmchip14/pwm0/enable
+1
+== file /sys/class/pwm/pwmchip14/pwm0/polarity
+normal

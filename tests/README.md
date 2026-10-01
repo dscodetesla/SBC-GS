@@ -22,4 +22,7 @@ tests/shellcheck-ratchet.sh --update # зафіксувати покращенн
 ## Правила
 - Golden «до» знято з коду без жодних змін. Зміна golden-файлу в PR = свідома зміна поведінки, пояснюйте її в описі.
 - **Мутаційні перевірки робіть на копії репозиторію, не на місці.**
-- Покрито лише `gs/gs-applyconf.sh` (13 сценаріїв). Наступні набори за планом: GPIO, OTG/udev, `gs-init.sh`, `fan.sh`.
+- Покрито (24 сценарії): `gs/gs-applyconf.sh` (13), `gs/fan.sh` (8), `gs/otg-gadget.sh` (3). Лишаються: GPIO (`button.sh`, `stream.sh`), `gs-init.sh`, `gs.sh`, правила udev.
+- Для демонів (`fan.sh`) шим `sleep` завершує скрипт після `sleep_limit` викликів (`exit=143` у golden).
+- `otg-gadget.sh` перевіряє `[ -b /dev/mmcblk1p4 ]`: на машині з eMMC/SD `mmcblk1` golden може відрізнятись (у CI й у типовому контейнері таких пристроїв немає).
+- Сценарій `otg/delete_existing_controlflow` перевіряє лише потік керування: дерево фейкове, не справжній configfs.

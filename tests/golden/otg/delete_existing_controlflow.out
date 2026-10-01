@@ -1,0 +1,29 @@
+== invocation: standalone
+== exit
+exit=0
+== stdout
+>>>>>>>>>>>>g1 is exist! delete it!
+removed './configs/c.1/ncm.usb0'
+rmdir: removing directory, 'configs/c.1/strings/0x409'
+rmdir: removing directory, 'configs/c.1'
+rmdir: removing directory, 'strings/0x409'
+rmdir: removing directory, 'functions/ncm.usb0'
+rmdir: removing directory, 'g1'
+>>>>>>>>>>>>>Delete success, Run script again to create the gadget!!
+== shim calls
+mount -t configfs none <ROOT>/sys/kernel/config
+systemctl stop serial-getty@ttyGS0.service
+modprobe -r libcomposite
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+device
+== tree /sys/kernel/config
+D .
+D ./usb_gadget
+D ./usb_gadget/g1
+F ./usb_gadget/g1/UDC: |
+D ./usb_gadget/g1/configs
+D ./usb_gadget/g1/configs/c.1
+D ./usb_gadget/g1/configs/c.1/strings
+D ./usb_gadget/g1/functions
+D ./usb_gadget/g1/strings

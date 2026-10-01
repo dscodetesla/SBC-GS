@@ -1,0 +1,25 @@
+== invocation: standalone
+== exit
+exit=143
+== stdout
+Using pwmchip14 channel 0 for fan
+CPU temperature: 75°
+Max temperature: 75°
+CATION: System is overheat! fan speed up to 100%!
+------------------------------------------
+CPU temperature: 75°
+Max temperature: 75°
+CATION: System is overheat! fan speed up to 100%!
+------------------------------------------
+== shim calls
+== gs.conf changes
+== file /sys/class/pwm/pwmchip14/pwm0/period
+40000
+== file /sys/class/pwm/pwmchip14/pwm0/duty_cycle
+40000
+== file /sys/class/pwm/pwmchip14/pwm0/enable
+1
+== file /sys/class/pwm/pwmchip14/pwm0/polarity
+normal
+== file /run/pixelpilot.msg
+System overheat!
