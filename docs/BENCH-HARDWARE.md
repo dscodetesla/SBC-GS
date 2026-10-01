@@ -148,3 +148,40 @@ GitHub-сторінки репозиторіїв і issues дали 403, том�
 | Хост-утиліта `snokvist/joystick2crsf` | Linux evdev → CRSF по UDP, може віддавати канали як MAVLink, зразок з серійним пристроєм 420000 бод; остання зміна 2026-07-11, 1 зірка; **ліцензія «Autod Personal Use License»: лише особисте некомерційне використання, без розповсюдження і без розповсюдження похідних** (SRC, прочитано). У репозиторій включати не можна |
 
 Висновок (PROPOSAL): «окремої сучасної прошивки» для TX12 MKII я не знайшов; практичний шлях — сам EdgeTX (Lua, трейнер, режими USB) та режими A/B із розділу 5. Підключення PC напряму до JR-слотового модуля потребує окремого дослідження обладнання (одно-провідний інтерфейс модуля), яке не виконано.
+
+## 11. TX12 MKII: українська прошивка і розширення (результат другого дослідження)
+
+**Висновок:** окремої «української прошивки з розширеним функціоналом» не існує. «Українська збірка» — це офіційний EdgeTX, зібраний із прапором мови `UA`. Розширення робляться через Lua або через локальну збірку з додатковими прапорами.
+
+| Пункт | Статус |
+|---|---|
+| Українська мова меню | **є**: `RADIO_LANGUAGES ... UA`, `TTS_LANGUAGES ... UA` у `radio/src/CMakeLists.txt`, `TRANSLATIONS` обирає мову; файл `translations/i18n/ua.h` (SRC, перечитано). У `ua.h` 938 з 1283 `TR_`-рядків із кирилицею (≈73%, мій підрахунок): переклад здебільшого повний, решта англійською. Автор у заголовку не вказаний (заглушка) |
+| Голосові пакети | у списку мов `edgetx-sdcard-sounds` є Ukrainian; встановлення: папка мови в `SDCARD/SOUNDS/` (SRC README) |
+| CloudBuild для TX12 MKII | ціль `tx12mk2`, версія ≥ v2.8.0, теги `stdlcd` + `bluetooth`; прапор `language` → `TRANSLATIONS` зі значенням `UA` (SRC `EdgeTX/cloudbuild/targets.json`, перечитано) |
+| Прошивання українською | за гайдом fpvua.org: buddy.edgetx.org → вкладка CloudBuild → `language: UA` → прошити по USB; потім на вкладці «SD Card content» обрати голосовий пакет. Гайд: [fpvua.org/threads/nalashtuvannya-ukrains-koho-interfeysu-na-edgetx.269/](https://fpvua.org/threads/nalashtuvannya-ukrains-koho-interfeysu-na-edgetx.269/) (SRC від агента) |
+| Ризик | у сніпеті згадано, що UA-збірка для TX12MK2 могла не завантажуватись: UNVERIFIED. Спершу на запасному радіо, з резервною копією і знанням відновлення завантажувача |
+| Рендеринг кирилиці на ч/б 128×64 | UNVERIFIED (файли шрифтів ч/б не знайдені); перевірити в Companion-симуляторі |
+| Українські ресурси fpvua.org | розділ EdgeTX, українська інструкція TX12 MK II (`threads/…tx12-mk-ii-instruktsiya…36/`), Lua-скрипт телеметрії для 128×64 (`…vb-telemetry.1492/`); сторінки відкрито лише частково |
+
+### Розширений функціонал: відкритий PR з MAVLink
+
+**[EdgeTX#7832](https://github.com/EdgeTX/edgetx/pull/7832) «MAVLink2 external rf»** (автор slik, відкритий, 2026-09-26, база `main`; SRC, перечитано): прапор `-DMAVLINK=ON` (за замовчуванням вимкнений); RC передається як `RC_CHANNELS_OVERRIDE`; телеметрія з `HEARTBEAT`, `SYS_STATUS`, `GPS_RAW_INT`, `ATTITUDE`, `VFR_HUD`, `RADIO_STATUS`; Lua-прив'язки `elrs_mav.lua` для налаштування ELRS. Для TX12 mk2 «require something to be turned off to fit, for example `-DGHOST=NO -DDSMP=NO`». Рецензент просить зробити MAVLink `sysid` налаштовуваним. Не злитий: **експериментальний**. Стосується радіо із зовнішнім ELRS-модулем у режимі MAVLink; для ES900TX умови (ESP-пара, ELRS ≥ 3.5.0) див. розділ 5.
+
+CloudBuild дає лише фіксований перелік прапорів, довільні CMake-опції (як `MAVLINK`) потребують локальної збірки (CMake, `-DPCB=X7 -DPCBREV=TX12MK2` за старою wiki: **перевірити за поточною документацією**).
+
+### Без заміни прошивки (SRC; перечитано в коді EdgeTX та manual)
+
+| Можливість | Деталі |
+|---|---|
+| Lua API (у коді `api_general.cpp`) | `crossfireTelemetryPush/Pop`, `sportTelemetryPush/Pop`, `serialWrite/Read`, `setSerialBaudrate`, `multiBuffer`; чи всі скомпільовані саме в TX12 MKII: UNVERIFIED. Довідника API в manual немає |
+| Типи скриптів | міксові (`/SCRIPTS/MIXES/`), функціональні (`/SCRIPTS/FUNCTIONS/`); сторінки телеметрійних/one-time скриптів для ч/б у manual не знайдено; ліміти пам'яті не вказані |
+| AUX-порт | варіанти: Off, **Telem Mirror**, **Telemetry In**, **SBUS Trainer**, SBUS Trn Inv., **LUA**, GPS, CLI; USB-VCP. Чи є AUX у TX12 MKII: UNVERIFIED |
+| Спеціальні функції | **Play Track**, **SD Logs** (CSV, інтервал 0–25.5 с, не стартує при <50 МБ на карті), **SetFailsafe** (потрібен кастомний failsafe), Play Value, Screenshot |
+| ELRS Lua-скрипт | Packet Rate, Telemetry Ratio, TX Power, Dynamic power, Switch Mode, Model Match, VTX Administrator, Bind Mode, WiFi Connectivity, Backpack; кнопки Bind, Set Failsafe Pos, BLE Joystick (SRC expresslrs.org/quick-start/transmitters/lua-howto/). Ім'я файлу `elrsV3.lua` не підтверджене |
+| Телеметрія ArduPilot | нативний CRSF + розширення для Yaapu («limited number» нативних сенсорів); при `RC_OPTIONS` біт 8 (passthrough) жоден SERIAL-порт не має бути `SERIALx_PROTOCOL = 10` (SRC ardupilot.org). Yaapu має варіанти для ч/б 128×64 (скріншоти в README), працездатність passthrough на ч/б не підтверджена |
+
+### Рекомендація (PROPOSAL)
+1. Лишитись на офіційному EdgeTX v2.12.x; персональні форки не перевірені.
+2. Українська: CloudBuild `language: UA` на запасному радіо; голосовий пакет `ua`; перевірити кирилицю в симуляторі.
+3. MAVLink із радіо: окрема експериментальна локальна збірка PR #7832, прив'язана до тега релізу.
+4. Решту розширень — через Lua/спецфункції, а не патчі прошивки.
