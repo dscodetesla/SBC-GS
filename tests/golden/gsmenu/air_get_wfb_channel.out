@@ -1,0 +1,8 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+149 (5745 MHz)== shim calls
+yaml-cli -i <ROOT>/tmp/gsmenu_cache/wfb.yaml -g .wireless.channel
+iw list
+== gs.conf changes

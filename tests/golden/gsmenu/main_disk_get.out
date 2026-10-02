@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+
+   Size: exfat
+   Available: 1.0G
+   Pct: 28G== shim calls
+df -h /
+== gs.conf changes

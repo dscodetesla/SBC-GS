@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+systemd-run --unit=alink /usr/local/bin/alink --config <ROOT>/etc/alink.conf
+== gs.conf changes
+229c229
+< alink_enable='no'
+---
+> alink_enable='yes'

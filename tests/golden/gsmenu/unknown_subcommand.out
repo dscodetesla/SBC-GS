@@ -1,0 +1,7 @@
+== invocation: standalone_wait
+== exit
+exit=1
+== stdout
+Unknown frobnicate the thing
+== shim calls
+== gs.conf changes

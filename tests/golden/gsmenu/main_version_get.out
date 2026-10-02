@@ -1,0 +1,6 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+1.2.3== shim calls
+== gs.conf changes

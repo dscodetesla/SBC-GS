@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+msposd --master 0.0.0.0:14551 --osd -r 20 --ahi 0 --subtitle <ROOT>/Videos
+== gs.conf changes
+42c42
+< osd_type='msposd_air'
+---
+> osd_type='msposd_gs'

@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+Hotspot connection exists. Starting it...
+== shim calls
+nmcli connection show
+nmcli con up hotspot
+== gs.conf changes

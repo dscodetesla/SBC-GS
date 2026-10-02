@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+stub wfb.sh 
+== gs.conf changes
+99c99
+< wfb_bandwidth='20'
+---
+> wfb_bandwidth='40'
