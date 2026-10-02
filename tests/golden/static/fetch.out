@@ -1,0 +1,67 @@
+== fetch_file
+fetch: ok <T>/d1 sha256=d1c45e9e0a9b1710f41918f7f12a4316812dfaf0984612f0d176eb8f84b6b019
+rc=0
+ok   correct hash accepted, file in place
+ok   uppercase hash accepted
+fetch: ERROR: sha256 MISMATCH for <T>/src.bin: expected 0000000000000000000000000000000000000000000000000000000000000000, got d1c45e9e0a9b1710f41918f7f12a4316812dfaf0984612f0d176eb8f84b6b019; file removed
+rc=1
+ok   wrong hash rejected, file removed
+ok   stale dest removed on mismatch
+ok   no .part leftovers
+fetch: ERROR: no sha256 pinned for <T>/src.bin (refusing; set GS_ALLOW_UNPINNED=1 to see the hash and pin it)
+rc=2
+ok   empty hash refused
+fetch: ERROR: not a sha256 (need 64 hex chars): 'abc123'
+rc=2
+ok   malformed hash refused
+fetch: WARNING: UNPINNED download accepted: <T>/src.bin
+fetch: WARNING: computed sha256: d1c45e9e0a9b1710f41918f7f12a4316812dfaf0984612f0d176eb8f84b6b019   (paste it into build/versions.env as the *_PIN of this component)
+rc=0
+ok   GS_ALLOW_UNPINNED=1 warns and prints the computed sha256
+ok   GS_ALLOW_UNPINNED=0 still refuses
+fetch: ERROR: download failed: <T>/src.bin
+rc=1
+ok   download failure returns non-zero, no file
+== git_pin
+commits: 47989209520f6c11a922ea0db5df22384174c820 b5da1ba55a51b241f0a76f10a55845a79f835bee
+fetch: ok <T>/g1 commit=47989209520f6c11a922ea0db5df22384174c820
+rc=0
+ok   pin to older commit (path): HEAD and content match
+fetch: ok <T>/g1 commit=47989209520f6c11a922ea0db5df22384174c820
+rc=0
+ok   pin to older commit (file://): HEAD and content match
+ok   pin to newest commit
+ok   re-run on existing checkout is idempotent
+fetch: ERROR: git fetch/checkout of 'ffffffffffffffffffffffffffffffffffffffff' from <T>/up failed
+rc=1
+ok   non-existent sha rejected
+fetch: ERROR: git ref 'main' for <T>/up is not a 40-hex commit SHA (refusing; set GS_ALLOW_UNPINNED=1 to see the SHA and pin it)
+rc=2
+ok   branch name refused
+ok   empty ref refused
+ok   abbreviated sha refused
+fetch: WARNING: UNPINNED git ref 'main' for <T>/up accepted
+fetch: WARNING: resolved commit: <C2>   (paste it into build/versions.env as the *_PIN of this component)
+rc=0
+ok   GS_ALLOW_UNPINNED=1 accepts a branch, warns, prints resolved sha
+ok   non-empty non-git dest refused
+ok   git:// transport refused
+== pin_from_manifest
+ok   manifest NAME_REPO dispatches to git_pin
+ok   manifest NAME_URL dispatches to fetch_file
+ok   manifest with empty PIN refused
+ok   manifest with both REPO and URL refused
+ok   manifest with unknown NAME refused
+ok   manifest invalid NAME refused
+ok   real versions.env: empty WFB_NG_PIN refused
+== set -e / set -x compatibility
+ok   bash -e: success path runs to the end
+ok   bash -ex: success path runs to the end
+ok   bash -euo pipefail: success path runs to the end
+ok   set -e aborts the caller on a mismatch
+ok   '|| handler' works under set -e
+ok   bash -n fetch.sh
+== static: no TLS-bypass flags in build/lib/*.sh
+ok   no -k / --insecure / -sk / --no-check-certificate / http-only proto
+ok   default fetch uses --fail --proto '=https' --tlsv1.2
+bad=0

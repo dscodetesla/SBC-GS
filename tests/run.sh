@@ -140,5 +140,15 @@ if [ -z "$want" ] || [ "$want" = "static/contract-ext" ]; then
 	else echo "DIFF     static/contract-ext"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the verified-fetch helpers build/lib/fetch.sh (M5 step 1) (no sandbox, no network)
+if [ -z "$want" ] || [ "$want" = "static/fetch" ]; then
+	out="$(mktemp)"; "$HERE/static/fetch.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/fetch.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/fetch"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/fetch"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/fetch"
+	else echo "DIFF     static/fetch"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

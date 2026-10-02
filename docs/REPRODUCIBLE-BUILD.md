@@ -1,6 +1,6 @@
 # Відтворювана збірка (M5, GAPS C3/C4)
 
-Стан: **M5a** — інвентаризація, храповик і маніфест; поведінку `build/build.sh` НЕ змінено. Номери рядків — за `build/build.sh` на момент
+Стан: **M5a** (інвентаризація, храповик, маніфест) + **M5 крок 1** (хелпери `build/lib/fetch.sh` з офлайн-тестами `static/fetch`); поведінку `build/build.sh` НЕ змінено, хелпери ним ще не підключені. Номери рядків — за `build/build.sh` на момент
 написання (**REPO**, перевірено читанням); вони зсуваються при правках, тож джерело істини — `tests/golden/static/pins.out`.
 
 ## 1. План
@@ -9,12 +9,12 @@
    зафіксувати `tests/run.sh --update static/pins`. Також входить у `tests/run.sh` (`static/pins`).
 2. **Маніфест (зроблено, не підключений):** `build/versions.env` — `NAME_REPO`/`NAME_URL`, `NAME_CUR` (що тягне збірка зараз),
    `NAME_PIN` (перевірений SHA коміту або sha256 файлу; порожньо = UNVERIFIED).
-3. **Хелпери (далі):** `build/lib/fetch.sh` (source-ується з `build.sh`): `fetch_file URL SHA256 DEST` (завантажити, `sha256sum -c`,
-   інакше вихід з помилкою; без `latest`) і `git_pin NAME` (`git init` + `git fetch --depth=1 <repo> <SHA>` + `checkout FETCH_HEAD`;
-   для `--recursive` — окремо закріпити сабмодулі). `build.sh` читає `. build/versions.env`; порожній `*_PIN` у режимі
-   `STRICT=1` (CI) = помилка, у звичайному — попередження й стара поведінка.
+3. **Хелпери (зроблено, не підключені до `build.sh`):** `build/lib/fetch.sh` (source-ується; лише функції, опцій оболонки не змінює,
+   сумісний із `set -e`/`set -x`). Деталі й приклади: розділ 5. Підключення до `build.sh` (читання `. build/versions.env`, `STRICT=1`
+   для порожнього `*_PIN` у CI, попередження й стара поведінка в звичайному режимі) — наступний крок (a). Для `--recursive`
+   сабмодулі треба закріпити окремо (хелпер їх не обробляє).
 4. **Розкатка малими PR (по одному на пункт, після кожного `tests/run.sh --update static/pins` зі зменшеними числами):**
-   (a) хелпери + підключення маніфесту без зміни джерел; (b) git-клони DKMS-драйверів; (c) wfb-ng, PixelPilot_rk, wfb-ng-osd, yaml-cli,
+   (a) підключення хелперів і маніфесту без зміни джерел (самі хелпери вже є); (b) git-клони DKMS-драйверів; (c) wfb-ng, PixelPilot_rk, wfb-ng-osd, yaml-cli,
    ядро Radxa; (d) бінарні `latest` (msposd, snander, yq), alink (прибрати API-пошук тегу), шрифти msposd; (e) ttyd sha256;
    (f) `overlayroot` по https (або `snapshot.debian.org`) + sha256; (g) `pip` з `==`/`--require-hashes`; (h) `bench/` і `gs/install.sh` (див. п. 4).
 5. Кожен пін ставити лише після прямої перевірки (`raw.githubusercontent.com`/API через проксі). Кожен PR на збірку потребує зібрати образ на залізі/CI
@@ -59,3 +59,33 @@
 - Відбиток ключа Radxa/wfb-ng; наявність офіційних `*.sha256` у релізах ttyd/yq/msposd/snander/alink.
 - Чи працює `overlayroot` по https на `ftp.cn.debian.org` (INF: дзеркало Debian зазвичай підтримує https, не перевірено).
 - Евристика `pins.sh` текстова (рядкова): багаторядкові команди й змінні URL не ловляться (див. `release.sh:46`).
+
+## 5. Хелпери `build/lib/fetch.sh` (REPO; перевірено офлайн, `tests/static/fetch.sh`)
+Підключення: `. build/lib/fetch.sh` (працює під `set -e; set -x`; помилки повертаються через `return`, діагностика в stderr).
+| Функція | Що робить | Коди |
+|---|---|---|
+| `fetch_file URL DEST SHA256` | завантажує в `DEST.part.$$` (curl: `--fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3`, без `-k`), перевіряє `sha256sum -c`, тоді `mv` у `DEST`; при розбіжності видаляє тимчасовий файл і `DEST`, пише очікуване/отримане | 0 ок; 1 збій завантаження/розбіжність; 2 порожній чи некоректний sha256 |
+| `git_pin REPO DEST SHA` | `git init` + `fetch --depth 1 origin SHA` + `checkout FETCH_HEAD`, звіряє `git rev-parse HEAD` з SHA; дозволені лише транспорти https і file (`GIT_ALLOW_PROTOCOL`); приймає локальні шляхи та `file://` (для тестів) | 0 ок; 1 збій/невідповідність; 2 не 40-hex (гілка, тег, скорочений SHA, порожньо) |
+| `pin_from_manifest NAME DEST` | бере `NAME_PIN` та `NAME_REPO` (git) або `NAME_URL` (файл) зі змінних оболонки (після `. build/versions.env`) і викликає відповідну функцію; обидва `_REPO` і `_URL` разом або жодного = код 2 | як у викликаної |
+
+Приклади:
+```bash
+. build/versions.env
+. build/lib/fetch.sh
+pin_from_manifest WFB_NG /tmp/wfb-ng                 # git: потрібен WFB_NG_PIN = 40-hex SHA
+pin_from_manifest TTYD /usr/local/bin/ttyd           # файл: потрібен TTYD_PIN = sha256
+fetch_file "$YQ_URL" /usr/local/bin/yq "$YQ_PIN" || exit 1
+```
+Змінні оточення: `GS_ALLOW_UNPINNED=1` дозволяє порожній/нестрогий пін (гучне попередження); `GS_FETCH_CMD` підміняє примітив
+завантаження (`$GS_FETCH_CMD URL DEST`; у тестах це шим `cp`, бо `--proto '=https'` відкидає `file://`).
+
+**Як отримати пін.** Запустіть з `GS_ALLOW_UNPINNED=1`: `fetch_file` надрукує `computed sha256: ...`, `git_pin` надрукує
+`resolved commit: ...`; це значення треба вставити в `NAME_PIN` у `build/versions.env`. Значення, отримане цим способом, довіряє
+тому, що віддав сервер у момент запуску (trust on first use); для сильнішої гарантії звірте його з незалежним джерелом (офіційний
+`*.sha256` релізу, підпис, другий канал). Файли по `http://` (напр. `OVERLAYROOT_URL`) `fetch_file` відхилить: спершу потрібен https-URL
+(п. 1.4 f).
+
+**Що лишається (UNVERIFIED).** Нічого не запускалось проти реальної мережі: лише `cp`-шим і локальний git-репозиторій. Доступ до GitHub
+API/raw у цій сесії заборонений проксі, тож реальні піни не заповнено (усі `*_PIN` порожні), а поведінку справжнього `curl` (TLS,
+редиректи, `--proto-redir`) на живих серверах не перевірено. `git fetch --depth 1 origin <SHA>` вимагає, щоб сервер дозволяв
+запит довільного SHA (GitHub дозволяє — INF, не перевірялось тут).
