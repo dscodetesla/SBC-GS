@@ -123,6 +123,10 @@ python tx12_bridge.py --input stdin --confirm-props-off --conn udpout:127.0.0.1:
 - Значення затискаються до 1000-2000; NaN/абсурдні вибірки відкидаються й не оновлюють dead-man; `--max-rate` обмежує кадри/с; `--lock` (типово `/run/lock/tx12_bridge.lock`) не дає запустити другий екземпляр.
 - Тест: `./tx12-bridge-test.sh` (UDP loopback, `fake_fc.py`, у CI після loopback). **UNVERIFIED на залізі:** реальний TX12/EdgeTX evdev (назви осей, діапазони, чи подія приходить у спокої: для evdev «свіжість» = пристрій живий), реальний FC, поведінка ArduPilot #32862. Не підключати до апарата з гвинтами; RC через wfb-ng не може бути єдиним каналом керування.
 
+## Маршрутизатор `gs-mavlink` між wfb-ng і клієнтами
+
+Коли QGC і міст потрібні одночасно, між wfb-ng і клієнтами стоїть `gs-mavlink` (`mavp2p`): слухає UDP від wfb-ng на `wfb_outgoing_port_mavlink` (типово 14550), клієнтам віддає інший порт (типово 14560). Файли `gs/mavlink/`, опис `docs/GS-MAVLINK.md`. **На залізі не запускався (UNVERIFIED)**; `mavp2p` не фільтрує RC, тож єдиний писач забезпечується `MAV_GCS_SYSID` на FC (`docs/MAVLINK-ROUTER.md`).
+
 ## Безпека
 
 - Це стендове обладнання. Не підключайте `gs_mav.py` або `fake_fc.py` до реального апарата з гвинтами.

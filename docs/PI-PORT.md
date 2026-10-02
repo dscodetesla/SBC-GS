@@ -105,9 +105,9 @@ Pi 5: перевірити ядро 16K сторінок (`kernel_2712`) про�
 
 Поточний стан (REPO): `wfb_rx … -u $wfb_outgoing_port_mavlink` (`gs/gs.sh:91`), `[gs_mavlink] peer = connect://…` (`gs/wfb.sh:87`). Маршрутизатора немає.
 
-- Компонент: `mavp2p` (статичний бінарник, SNIP) або `mavlink-router` зі збіркою з джерел (SNIP: готовий бінарник вимагає glibc ≥ 2.42, Bookworm має 2.36).
+- Компонент: `mavp2p` (статичний бінарник без залежності від libc, SRC README mavp2p, `docs/MAVLINK-ROUTER.md` §4; ім'я активу для arm64 за збірковим скриптом `mavp2p_${VERSION}_linux_arm64v8.tar.gz`, суфікс `arm64v8`; наявність активів на сторінці релізу UNVERIFIED, GitHub дає 403) або `mavlink-router` зі збіркою з джерел (README описує лише збірку meson/ninja, SRC). Твердження «готовий бінарник mavlink-router вимагає glibc ≥ 2.42 (Bookworm має 2.36)» **UNVERIFIED**: у README/meson не знайдено (`docs/MAVLINK-ROUTER.md` §8). Реалізація: `docs/GS-MAVLINK.md`, `gs/mavlink/`.
 - Вхід: wfb-ng UDP-пір; виходи: TCP для QGC/MAVProxy, список UDP-GCS замість multicast.
-- Окремий `sysid` GCS (wfb-ng за замовчуванням ін’єктує `sysid 3`, SRC: `master.cfg`; можлива колізія з апаратом).
+- Окремий `sysid` для RC-мосту: `MAV_GCS_SYSID` на FC має дорівнювати sysid мосту (типово 255; ArduPilot приймає `RC_CHANNELS_OVERRIDE` лише від цього sysid, SRC `GCS_Common.cpp`, `docs/MAVLINK-ROUTER.md` §6). `FS_GCS_ENABLE` типово 0 (вимкнено, Copter master), тож його треба виставити явно; heartbeat `mavp2p` (sysid 125) за типових налаштувань як GCS для failsafe не рахується (SRC там само). wfb-ng ін’єктує `sysid 3` (SRC: `master.cfg`; можлива колізія з апаратом).
 - Підпис MAVLink не обовʼязковий (канал wfb-ng уже шифрований), рішення відкладене.
 - RTK: `GPS_RTCM_DATA` (SNIP); `gpsd`/`chrony` у репо покривають лише час (REPO).
 - QGC на Pi: офіційний arm64 AppImage **не підтверджений** (SNIP, суперечливі дані). Практично: Pi пересилає UDP, GCS запущено на ноутбуці/телефоні.

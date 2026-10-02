@@ -51,7 +51,7 @@
 | Що | Статус / нотатки |
 |---|---|
 | Відео | на хості `video-rx.sh` (Linux) або еквівалентний `gst-launch`: `udpsrc port=5600 caps=application/x-rtp,...` → depay → `avdec_*` → sink. Windows: OpenIPC має приклад `gstlaunch_on_windows.md` (SRC sandbox-fpv) |
-| MAVLink | `gs_mav.py --conn udpin:0.0.0.0:14550`: wfb-ng шле на хост, відповіді йдуть на адресу відправника (SRC Setup-HOWTO про QGC-режим). Один клієнт на порт 14550: QGC і `gs_mav.py` одночасно потребують маршрутизатора |
+| MAVLink | `gs_mav.py --conn udpin:0.0.0.0:14550`: wfb-ng шле на хост, відповіді йдуть на адресу відправника (SRC Setup-HOWTO про QGC-режим). Один клієнт на порт 14550: QGC і `gs_mav.py` одночасно потребують маршрутизатора (запропоновано `gs-mavlink`, `docs/GS-MAVLINK.md`; UNVERIFIED на залізі) |
 | Брандмауер | дозволити UDP 5600 і 14550 (INF) |
 | RC-мікс: див. розділ 5 | |
 
@@ -66,6 +66,7 @@
 | **A, основний** | TX12 → ES900TX → ES900RX → FC (радіо ELRS), USB до хоста не потрібен | реалістичний RC із failsafe приймача |
 | **B, експериментальний резерв** | TX12 USB-джойстик → хост → `RC_CHANNELS_OVERRIDE` → GS → wfb-ng → Pi 4 → FC USB; ELRS мовчить | перевірка RC-через-MAVLink; ризик ArduPilot#32862 |
 
+- **Міст для режиму B:** `bench/tx12_bridge.py` (`--input evdev|stdin|sweep`; без `--confirm-props-off` або `--real-fc-armed-ok` не стартує; dead-man `--deadman-ms`; lock; `--sysid` = `MAV_GCS_SYSID` на FC, SRC `docs/MAVLINK-ROUTER.md` §6). Перевірено лише на loopback (`bench/tx12-bridge-test.sh`); реальний TX12/evdev і FC: HW/UNVERIFIED. **Гвинти знято, батарею й ESC від'єднано, FC лише від USB.** Між wfb-ng і клієнтами може стояти служба `gs-mavlink` (`docs/GS-MAVLINK.md`; не запускалась на залізі, UNVERIFIED).
 - Не змішуйте A і B в одній моделі EdgeTX. BLE-джойстик належить внутрішньому ELRS-модулю: з зовнішнім ES900TX його наявність UNVERIFIED (INF: ні).
 - Windows: радіо може визначатись лише як джойстик незалежно від вибору; на Linux/macOS/Android працює правильно (SRC).
 - Налаштування зовнішнього модуля в EdgeTX (CRSF, baud, power, Lua): сторінки дали 404, UNVERIFIED.

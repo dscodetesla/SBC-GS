@@ -106,6 +106,19 @@
 - Субагентам давати: чітку межу, «кожне твердження з URL, інакше UNVERIFIED», без обходу блокувань.
 - **Тести «зелені локально, червоні на CI»:** я працюю як root, а раннер GitHub — ні. `gs-init.sh` писав у реальний `/dev/tty1` (локально вдавалося, на CI — `Permission denied`). Причина: підстановка шляхів у `sb_rewrite` споживала роздільник і не заміняла сусідній збіг (`/dev/ttyFIQ0 /dev/tty1`). Виправлено подвійним проходом; після змін пісочниці прогонять `tests/run.sh` і під непривілейованим користувачем (`setpriv --reuid=65534 …` на копії). Побічно: пісочниця раніше торкалась реального `/dev/tty1` (SRC: CI-лог job golden, run 36917347380).
 
+## 6a. 2026-10-02: інженерні знахідки
+
+| Знахідка | Де |
+|---|---|
+| У Pi Linux `dwc2` немає debugfs `mode` (лише `params`, `hw_params`, `dr_mode`, 0444); `"mode"` 0644 є лише в `dwc3` (SRC `raspberrypi/linux` rpi-6.12.y `drivers/usb/dwc2/debugfs.c`, `dwc3/debugfs.c`) | `docs/BOARD-RPI4.md` (OTG, `OTG_CONTROLLER=none`); на залізі не підтверджено (HW) |
+| Імена ліній GPIO на Pi: `GPIO<BCM>` (SRC `bcm2711-rpi-4-b.dts`), тож `gpiofind PIN_<n>` з контракту Radxa на Pi не працює | `docs/BOARD-RPI4.md`, `gs/boards/rpi4/` |
+| `mavp2p` не має фільтрів за msgid/sysid і не переписує sysid; `mavlink-router` має `Allow/Block*` (SRC README обох) | `docs/MAVLINK-ROUTER.md` §2, §5 |
+| ArduPilot приймає `RC_CHANNELS_OVERRIDE` лише від sysid з `MAV_GCS_SYSID`(`_HI`); `FS_GCS_ENABLE` типово 0 | `docs/MAVLINK-ROUTER.md` §6; міст `bench/tx12_bridge.py` |
+| Імена активів `mavp2p` для arm64: суфікс `arm64v8` (SRC `scripts/binaries.mk`); твердження про glibc ≥ 2.42 для `mavlink-router` не знайдено в джерелах: UNVERIFIED | `docs/MAVLINK-ROUTER.md` §4, §8; `docs/PI-PORT.md` §6 |
+| Тести були зеленими під root, але червоними на непривілейованому CI (запис у реальний `/dev/tty1`): набір завжди ганяти й під `nobody` | розділ 5 вище; `tests/run.sh` |
+| У цій сесії `github.com`/`api.github.com`/raw інколи відмовляли (403), тому будь-які `*_PIN` у профілях лишаються порожніми, а непідтверджене позначено UNVERIFIED | `docs/BOARD-RPI4.md`, `docs/MAVLINK-ROUTER.md` §8 |
+| Урок щодо інструментів: `pkill -f <шаблон>` може вбити власну оболонку (шаблон збігається з командним рядком самої оболонки) | процес (INF) |
+
 ## 6. Відкриті питання (потрібне залізо або доступ)
 
 1. Ін'єкція RTL8812/8814 на Pi 4/5, 16K-ядро, DKMS на 6.12/6.18.

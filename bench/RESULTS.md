@@ -17,4 +17,5 @@
 | T8 `v4l2h264dec` працює? CPU, % | | |
 | T8 `avdec_h265` CPU, % | | |
 | T8 `v4l2slh265dec` працює? CPU, % | | |
+| T9 `tx12_bridge.py` (dead-man, sysid=`MAV_GCS_SYSID`; без гвинтів) | | |
 | `vcgencmd get_throttled` (обидва) | | |

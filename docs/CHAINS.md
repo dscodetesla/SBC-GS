@@ -86,7 +86,7 @@ FC (MAVLink2 UART) ◄──► wfb_tx/rx (0x10/0x90) ◄──RF──► GS �
 ### Мінімальна референсна схема (PROPOSAL)
 
 - ELRS CRSF — основний канал керування, wfb-ng MAVLink — телеметрія, параметри, місії.
-- На GS-хості `mavp2p` або `mavlink-router`: UDP 14550 на вході, TCP/UDP на виходах для QGC і телефону.
+- На GS-хості `mavp2p` або `mavlink-router`: порти задаються явно, у mavp2p типового порту немає (SRC `docs/MAVLINK-ROUTER.md` §1; приклад README `udps:0.0.0.0:14550`); служба `gs-mavlink` (`docs/GS-MAVLINK.md`) бере upstream 14550 від wfb-ng, а клієнтам віддає інший порт (типово 14560), TCP за потреби.
 - TX12 по USB/BLE → `RC_CHANNELS_OVERRIDE` — лише необов'язковий резерв, окремою фазою після Фази 3 з `docs/PI-PORT.md`.
 
 ## 3. Що відкрито
