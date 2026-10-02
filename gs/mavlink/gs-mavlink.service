@@ -1,0 +1,21 @@
+[Unit]
+Description=GS MAVLink router (wfb-ng upstream to GCS clients)
+After=network.target
+
+[Service]
+Type=simple
+# Installed by hand to /gs/mavlink/ (gs/install.sh does not ship it yet); config: /config/gs-mavlink.conf
+ExecStart=/gs/mavlink/gs-mavlink.sh
+Restart=on-failure
+RestartSec=2
+# Non-root: transient user; dialout only for a serial link to the FC
+DynamicUser=yes
+SupplementaryGroups=dialout
+LogsDirectory=gs-mavlink
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+== defaults
+# mavp2p has no filters: single RC writer is enforced by MAV_GCS_SYSID on the FC and by the network (docs/GS-MAVLINK.md)
+mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125
+exit=0
+== mavlink-router
+# UNVERIFIED: mavlink-router heartbeat sysid (HB_SYSID not applied), tlog dump flags, BlockMsgIdIn=70 needs a config file, none generated
+mavlink-routerd -e 192.168.1.10:14550 -t 5760 0.0.0.0:14550
+exit=0
+== two-gcs
+# mavp2p has no filters: single RC writer is enforced by MAV_GCS_SYSID on the FC and by the network (docs/GS-MAVLINK.md)
+mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 udps:0.0.0.0:14561 --hb-systemid=126 --dump --dump-path=/var/log/gs-mavlink/2006-01-02_15-04-05.tlog
+exit=0
+== tcp
+# mavp2p has no filters: single RC writer is enforced by MAV_GCS_SYSID on the FC and by the network (docs/GS-MAVLINK.md)
+mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 tcps:0.0.0.0:5761 --hb-systemid=125
+exit=0
+== serial
+# mavp2p has no filters: single RC writer is enforced by MAV_GCS_SYSID on the FC and by the network (docs/GS-MAVLINK.md)
+mavp2p serial:/dev/ttyAMA0:921600 udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125 --streamreq-disable
+exit=0
+== bad-port
+gs-mavlink: error: GCS_UDP_PORTS='70000' is not a port in 1..65535
+exit=2
+== bad-sysid
+gs-mavlink: error: HB_SYSID='255' must be an integer in 1..254 (255 is the GCS sysid)
+exit=2
+== bad-backend
+gs-mavlink: error: ROUTER='mavproxy' unknown (use mavp2p or mavlink-router)
+exit=2
+== dup-port
+gs-mavlink: error: port 14550 is used twice (upstream, GCS UDP and TCP ports must differ)
+exit=2
+== missing-file
+# mavp2p has no filters: single RC writer is enforced by MAV_GCS_SYSID on the FC and by the network (docs/GS-MAVLINK.md)
+mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125
+exit=0

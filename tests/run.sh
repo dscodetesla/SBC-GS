@@ -80,5 +80,15 @@ if [ -z "$want" ] || [ "$want" = "static/security-defaults" ]; then
 	else echo "DIFF     static/security-defaults"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the gs-mavlink command line (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/gs-mavlink" ]; then
+	out="$(mktemp)"; "$HERE/static/gs-mavlink.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/gs-mavlink.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/gs-mavlink"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/gs-mavlink"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/gs-mavlink"
+	else echo "DIFF     static/gs-mavlink"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail
