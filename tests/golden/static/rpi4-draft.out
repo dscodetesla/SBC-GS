@@ -1,0 +1,43 @@
+== validate
+ok rpi4
+ok rpi4 passes
+== mutation (copy): required key removed or emptied must be rejected
+ok 18 required keys: removal and emptying both rejected
+== every key has a src comment directly above
+ok 25 keys checked
+== required keys all defined
+ok 18 required keys present
+== UNVERIFIED values (ratchet: must not grow)
+UNVERIFIED GPIO_PIN_PREFIX: contract mismatch: Radxa <n> is a physical header pin, Pi GPIO<n> is a BCM number; gs.conf pin values such as btn_q1_pin='32' would address the wrong lines until the contract gains a numbering mode, see docs/BOARD-RPI4.md section 4
+UNVERIFIED DTBO_DIR_LOWER: overlayroot on Pi is untested: the lower-layer path of a separate FAT mount is not known; value is the plain directory
+UNVERIFIED GADGET_IFNAME: placeholder: this profile has no gadget NIC; the name rpi0 was chosen, not read from anywhere
+UNVERIFIED CONSOLE_TTY: HW: /dev/serial0 exists on Pi 4 only with enable_uart=1 in config.txt, which no image sets yet; gs-init.sh runs under set -e, tee to a missing node would fail
+UNVERIFIED PART_OVERLAY_NUM: design for the M6 spike: no image with this layout was built, overlayroot on Pi OS is untested
+UNVERIFIED PART_VIDEOS_NUM: design for the M6 spike: gs-init.sh parted mkpart videos has no logical/extended handling, untested
+UNVERIFIED THERMAL_CPU_TEMP_FILE: HW: the zone index 0 is not read from a source; check `cat /sys/class/thermal/thermal_zone*/type`
+UNVERIFIED RTC_I2C_BUS: HW: /dev/i2c-1 for the ARM i2c1 is the common name but the number is not read from a source; check `ls /dev/i2c-*`
+ok markers attached to a key = 8
+unverified=8 max=8
+== OTG 'none' sentinel (gs/lib/otg.sh)
+ok rpi4 otg_controller = none
+ok rpi4 otg_mode_file = none
+ok rpi4 otg_mass_default = none
+ok rpi4 otg_mass_alt = none
+ok rpi4 otg_supported false
+ok radxa-zero3 otg_supported true
+ok unknown board falls back to supported
+ok no board lib falls back to supported
+ok set -e safe inside if
+== hw and gpio helpers read the rpi4 profile
+hw_cpu_temp_file=/sys/class/thermal/thermal_zone0/temp
+hw_pwm_base=/sys/class/pwm/pwmchip
+hw_home_dir=/home/pi
+hw_wifi_iface=wifi0
+hw_rtc_i2c_bus=1
+gpio prefix=GPIO
+NOTE: gpio_find 7 would run 'gpiofind GPIO7' = BCM 7 (header pin 26), not physical pin 7 (contract mismatch, see docs/BOARD-RPI4.md)
+== udev templates render from the rpi4 profile
+ok 98-rename.rules has NAME="wifi0"
+ok 98-rename.rules has ID_NET_DRIVER}=="brcmfmac"
+ok 98-rename.rules has NAME="rpi0"
+bad=0

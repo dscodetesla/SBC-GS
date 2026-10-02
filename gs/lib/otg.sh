@@ -21,3 +21,8 @@ otg_mode_file() { _otg_get OTG_MODE_FILE '/sys/kernel/debug/usb/fcc00000.dwc3/mo
 # mass-storage backing device: default and the preferred alternative when it exists as a block device
 otg_mass_default() { _otg_get OTG_MASS_STORAGE_DEFAULT '/dev/mmcblk0p4'; }
 otg_mass_alt() { _otg_get OTG_MASS_STORAGE_ALT '/dev/mmcblk1p4'; }
+
+# otg_supported: exit status 0 when the board has a runtime OTG role switch, 1 when OTG_CONTROLLER is the sentinel 'none'
+# (e.g. rpi4: dwc2 has no debugfs mode file). Deliberately returns a status: call it inside `if`, not as a bare command under set -e.
+# Falls back to "supported" (Radxa behaviour) when the board lib/profile/key is unavailable. No script calls it yet.
+otg_supported() { [ "$(otg_controller)" != 'none' ]; }
