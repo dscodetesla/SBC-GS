@@ -109,6 +109,20 @@ sudo systemctl start bench-video-src bench-fc
 | `v4l2*` декодер дає чорний екран | елемент є, а відповідного пристрою ядра немає | `DECODER=avdec_h264` (або `avdec_h265`) |
 | `kmssink` не відкривається | запущено з X/Wayland-сесії або не з консолі | `SINK="autovideosink sync=false"` |
 
+## TX12 → RC_CHANNELS_OVERRIDE міст (`tx12_bridge.py`, M4, без заліза перевірено лише на loopback)
+
+Безпечний єдиний писач RC з джерела типу джойстик: `--input evdev:/dev/input/eventN` (USB-джойстик EdgeTX; `python-evdev` імпортується лише для цього входу, CI його не потребує; калібрування/deadband/reverse у `tx12_map.example.json`), `--input stdin` (рядки `ch1 .. chN` у мкс) або `--input sweep`.
+
+```bash
+python tx12_bridge.py --input stdin --confirm-props-off --conn udpout:127.0.0.1:14550 --sysid 255
+```
+
+- Старт **відмовляє** без `--confirm-props-off` (стенд без гвинтів) або `--real-fc-armed-ok` (реальний FC: лише канали 1-4, 5-8 = 65535). Семантика збігається з `gs_mav.py`.
+- `--sysid` (типово 255) **має збігатися з `MAV_GCS_SYSID` на FC**, інакше ArduPilot ігнорує override (`docs/MAVLINK-ROUTER.md`, розділ 6).
+- Dead-man (`--deadman-ms`, типово 300): без свіжого входу газ (`--throttle-ch`, типово 3) примусово `--failsafe-throttle` (1000), потім усі канали 0 (звільнення) 1 с, потім **жодних** кадрів (далі діє `RC_OVERRIDE_TIME` і приймач RC). Те саме на SIGTERM/SIGINT/виході (3 кадри газу + 5 звільнень).
+- Значення затискаються до 1000-2000; NaN/абсурдні вибірки відкидаються й не оновлюють dead-man; `--max-rate` обмежує кадри/с; `--lock` (типово `/run/lock/tx12_bridge.lock`) не дає запустити другий екземпляр.
+- Тест: `./tx12-bridge-test.sh` (UDP loopback, `fake_fc.py`, у CI після loopback). **UNVERIFIED на залізі:** реальний TX12/EdgeTX evdev (назви осей, діапазони, чи подія приходить у спокої: для evdev «свіжість» = пристрій живий), реальний FC, поведінка ArduPilot #32862. Не підключати до апарата з гвинтами; RC через wfb-ng не може бути єдиним каналом керування.
+
 ## Безпека
 
 - Це стендове обладнання. Не підключайте `gs_mav.py` або `fake_fc.py` до реального апарата з гвинтами.

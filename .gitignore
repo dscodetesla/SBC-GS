@@ -3,3 +3,4 @@ rootfs/
 *.xz
 *.7z
 bench/env
+__pycache__/
