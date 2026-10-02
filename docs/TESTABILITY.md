@@ -181,7 +181,7 @@ OBS failsafe_when_only_manual_sends=False  OBS failsafe_text_timeline=['GCS Fail
 
 ## 8. Пріоритетний список для CI
 
-1. **Вже додано в `.github/workflows/ci.yml`:** `tests/sim/*.sh` у shellcheck, `tests/sim/*.py` у `py_compile`, job `sim-smoke` (`SMOKE_STRICT=1`, шляхи `static model mavlink video router`, ≈10 с тесту + встановлення). Усі пакети перевірені на Ubuntu 24.04 цього контейнера; **на справжньому runner job не запускався** (UNVERIFIED). Якщо `setup-go` або мережа заважають, зніміть `router` зі `SMOKE_ONLY`.
+1. **Вже додано в `.github/workflows/ci.yml`:** `tests/sim/*.sh` у shellcheck, `tests/sim/*.py` у `py_compile`, job `sim-smoke` (`SMOKE_STRICT=1`, шляхи `static model mavlink video router`, ≈10 с тесту + встановлення). Пакети перевірені на Ubuntu 24.04 цього контейнера; **на справжньому GitHub runner job пройшов зеленим** (REPO, run 37043623138 на коміті `4c6069a`: `Install tools`, `setup-go`, збірка `mavp2p@v1.3.3`, venv, `Smoke test` ≈10 с, усі кроки success).
 2. **Наступним (advisory, `continue-on-error: true`):** `sudo tests/sim/wfb_veth.sh` (apt: `libsodium-dev libpcap-dev libevent-dev g++ iproute2`; потрібен `veth` у ядрі runner; UNVERIFIED) і `SMOKE_QEMU=1 tests/sim/qemu_hwsim.sh` (apt: `qemu-system-x86 busybox-static iw cpio zstd file libc6-dev`, ≈170 МБ завантаження, кеш `~/.cache/sbc-gs-sim` через `actions/cache`; UNVERIFIED).
 3. `python tests/sim/sitl_probe.py --check` раз на день або вручну: качає 7 МБ бінарник, ловить зміну семантики ArduPilot (`FS_GCS_ENABLE`, sysid), 49 с.
 4. arm64 chroot із `tests/run.sh` (`docker/setup-qemu-action` або `qemu-user-static`): 20 хв, лише за розкладом (nightly), перед віхами M3/M6; додати `python3 git` до образу.

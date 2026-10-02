@@ -61,8 +61,6 @@ jobs:
         run: PY="$PWD/.venv/bin/python" timeout 180 bench/tx12-bridge-test.sh
 
   sim-smoke:
-    # Advisory until it has run green on a real GitHub runner (the lead could only run it locally); then drop continue-on-error.
-    continue-on-error: true
     # No hardware, no root: static checks, ArduPilot-failsafe model, MAVLink + RC bridge dead-man, video RTP + latency,
     # gs-mavlink.sh against a real mavp2p. Strict: a missing tool is a failure. ~15 s of test time. See docs/TESTABILITY.md.
     runs-on: ubuntu-24.04
