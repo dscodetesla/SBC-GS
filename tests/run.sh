@@ -60,5 +60,25 @@ if [ -z "$want" ] || [ "$want" = "static/gpio" ]; then
 	else echo "DIFF     static/gpio"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the unpinned-fetch ratchet (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/pins" ]; then
+	out="$(mktemp)"; "$HERE/static/pins.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/pins.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/pins"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/pins"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/pins"
+	else echo "DIFF     static/pins"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
+# static check of insecure defaults (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/security-defaults" ]; then
+	out="$(mktemp)"; "$HERE/static/security-defaults.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/security-defaults.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/security-defaults"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/security-defaults"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/security-defaults"
+	else echo "DIFF     static/security-defaults"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

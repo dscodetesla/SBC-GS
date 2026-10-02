@@ -224,6 +224,7 @@ ln -s /config/alink.conf /etc/alink.conf
 ttyd_version="1.7.7"
 wget "https://github.com/tsl0922/ttyd/releases/download/${ttyd_version}/ttyd.aarch64" -O /usr/local/bin/ttyd
 chmod +x /usr/local/bin/ttyd
+# NOTE (known insecure default, docs/SECURITY-DEFAULTS.md): ttyd serves a login shell on port 81 and runs as root.
 cat > /etc/systemd/system/ttyd.service << EOF
 [Unit]
 Description=TTYD
@@ -284,10 +285,24 @@ cat > /etc/NetworkManager/conf.d/00-gs-unmanaged.conf << EOF
 unmanaged-devices=interface-name:eth0;unmanaged-devices=interface-name:eth1;interface-name:br0;interface-name:usb0;interface-name:dummy0;interface-name:radxa0;interface-name:wlx*
 EOF
 
-# set root password to root
-echo "root:root" | chpasswd
-# permit root login over ssh
-sed -i "s/#PermitRootLogin.*/PermitRootLogin yes/" /etc/ssh/sshd_config
+# >>> root-login (M5b, see docs/SECURITY-DEFAULTS.md)
+# Safe by default: no "root:root", no root password login over ssh.
+# GS_LEGACY_ROOT_LOGIN=1 restores the old insecure behaviour; GS_ROOT_PASSWORD=<pw> sets a build-time root password
+# (console only, ssh stays prohibit-password). Both must be exported into the chroot environment (sudo -E).
+if [ "${GS_LEGACY_ROOT_LOGIN:-0}" = "1" ]; then
+	# set root password to root
+	echo "root:root" | chpasswd
+	# permit root login over ssh
+	sed -i "s/#PermitRootLogin.*/PermitRootLogin yes/" /etc/ssh/sshd_config
+else
+	set +x # xtrace must stay off while the password is expanded (the test itself would be traced too)
+	if [ -n "${GS_ROOT_PASSWORD:-}" ]; then
+		echo "root:${GS_ROOT_PASSWORD}" | chpasswd
+	fi
+	set -x
+	sed -i "s/#PermitRootLogin.*/PermitRootLogin prohibit-password/" /etc/ssh/sshd_config
+fi
+# <<< root-login
 # sync mount /config
 sed -i 's/\(UUID=\S*\s*\/config\s*vfat\s*defaults,x-systemd.automount\)/\1,sync/' /etc/fstab
 # set gpsd not listen on ipv6
