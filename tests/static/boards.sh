@@ -11,6 +11,7 @@ echo "$out"
 [ $rc -eq 0 ] && echo "ok radxa-zero3 passes" || { echo "FAIL radxa-zero3 rejected"; bad=1; }
 echo "== negative"
 for d in "$REPO"/tests/fixtures/boards/*/; do
+	[ -f "$d/VALID" ] && continue   # positive fixture (used by static/udev-render)
 	n="$(basename "$d")"
 	out="$("$V" "${d%/}" 2>&1)"; rc=$?
 	echo "$out" | sed "s#$REPO#<REPO>#g"

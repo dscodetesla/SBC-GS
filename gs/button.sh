@@ -3,6 +3,7 @@
 set -e
 source /etc/gs.conf
 source /gs/lib/gpio.sh
+source /gs/lib/otg.sh
 
 # Exit if gs service is not enable
 [ -e /etc/systemd/system/multi-user.target.wants/gs.service ] || exit 0
@@ -50,7 +51,8 @@ function change_wifi_mode() {
 # change usb otg mode between host and device
 function change_otg_mode() {
 	local otg_mode_LED_PIN_info=$(gpio_find "${!otg_mode_led_pin}")
-	local otg_mode_file="/sys/kernel/debug/usb/fcc00000.dwc3/mode"
+	local otg_mode_file
+	otg_mode_file="$(otg_mode_file)"
 	local otg_mode=$(cat $otg_mode_file)
 	if [ "$otg_mode" == "host" ]; then
 		echo device > $otg_mode_file

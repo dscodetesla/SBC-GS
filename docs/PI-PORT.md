@@ -37,6 +37,8 @@
 | OTG | `gs/otg-gadget.sh:4`, `gs/button.sh:52` | `fcc00000.dwc3` debugfs |
 | Користувач | `gs/gs.sh:57-71`, `build/build.sh:207-209` | `/home/radxa` |
 
+Стан M3b (REPO): OTG-значення беруться з профілю через `gs/lib/otg.sh` (запасні Radxa-літерали збережено); udev-правила мають шаблони `gs/98-rename.rules.in`, `gs/99-GS.rules.in` і генератор `gs/boards/render-udev.sh <плата> <каталог>`. Наступний крок розгортання (ще НЕ зроблено): `install.sh` викликає генератор замість `cp 99-GS.rules 98-rename.rules`, після чого поточні `.rules` стають згенерованими. Ім'я `radxa0` у `gs-init.sh`, `gs-applyconf.sh` і `build/build.sh:285` поки літерал (потрібне підключення профілю в цих скриптах).
+
 Побічно: у `build/build.sh:16` опечатка `xface4`, тож блок очищення мертвий (не «виправляти», а видалити).
 
 ## 3. Шарова архітектура (PROPOSAL)

@@ -1,0 +1,29 @@
+== radxa-zero3 profile
+otg_controller=fcc00000.dwc3
+otg_mode_file=/sys/kernel/debug/usb/fcc00000.dwc3/mode
+otg_mass_default=/dev/mmcblk0p4
+otg_mass_alt=/dev/mmcblk1p4
+ok profile otg_controller = fcc00000.dwc3
+ok profile otg_mode_file = /sys/kernel/debug/usb/fcc00000.dwc3/mode
+ok profile otg_mass_default = /dev/mmcblk0p4
+ok profile otg_mass_alt = /dev/mmcblk1p4
+== fallbacks (lib copied without board.sh)
+ok fallback otg_controller = fcc00000.dwc3
+ok fallback otg_mode_file = /sys/kernel/debug/usb/fcc00000.dwc3/mode
+ok fallback otg_mass_default = /dev/mmcblk0p4
+ok fallback otg_mass_alt = /dev/mmcblk1p4
+== fallbacks (unknown BOARD)
+ok unknown-board otg_controller = fcc00000.dwc3
+ok unknown-board otg_mode_file = /sys/kernel/debug/usb/fcc00000.dwc3/mode
+ok unknown-board otg_mass_default = /dev/mmcblk0p4
+ok unknown-board otg_mass_alt = /dev/mmcblk1p4
+== other profile is honoured
+ok board x otg_controller = ctl.x
+ok board x otg_mode_file = /m/x
+ok board x otg_mass_default = /dev/a
+ok board x otg_mass_alt = /dev/b
+== set -e safe
+survived
+== scripts use the helper, no hard-coded controller left
+ok no literals in otg-gadget.sh/button.sh
+bad=0

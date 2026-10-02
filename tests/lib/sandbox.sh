@@ -25,6 +25,8 @@ sb_new() {
 	done
 	# real libs and board profiles, so scripts that source /gs/lib/*.sh resolve them inside the sandbox
 	cp -r "$REPO/gs/lib" "$REPO/gs/boards" "$ROOT/gs/"
+	# the OTG role-switch file lives under /sys: point the sandbox copies (lib fallback + profile) at the sandbox /sys too
+	sed -i -E "s#(^|[^A-Za-z0-9_./-])/sys/#\1$ROOT/sys/#g" "$ROOT/gs/lib/otg.sh" "$ROOT"/gs/boards/*/board.conf
 	export SHIM_ROOT="$ROOT"
 	# baseline target state (Radxa defaults taken from the repo)
 	sed "s#^rec_dir=.*#rec_dir='$ROOT/Videos'#" "$REPO/gs/gs.conf" > "$ROOT/etc/gs.conf"

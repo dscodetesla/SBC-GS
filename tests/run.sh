@@ -90,5 +90,25 @@ if [ -z "$want" ] || [ "$want" = "static/gs-mavlink" ]; then
 	else echo "DIFF     static/gs-mavlink"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the OTG helper (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/otg" ]; then
+	out="$(mktemp)"; "$HERE/static/otg.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/otg.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/otg"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/otg"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/otg"
+	else echo "DIFF     static/otg"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
+# static check of the udev template renderer (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/udev-render" ]; then
+	out="$(mktemp)"; "$HERE/static/udev-render.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/udev-render.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/udev-render"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/udev-render"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/udev-render"
+	else echo "DIFF     static/udev-render"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail
