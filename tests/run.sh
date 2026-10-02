@@ -110,5 +110,15 @@ if [ -z "$want" ] || [ "$want" = "static/udev-render" ]; then
 	else echo "DIFF     static/udev-render"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the hardware path helpers (M3d) (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/paths" ]; then
+	out="$(mktemp)"; "$HERE/static/paths.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/paths.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/paths"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/paths"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/paths"
+	else echo "DIFF     static/paths"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

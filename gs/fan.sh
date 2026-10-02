@@ -1,8 +1,9 @@
 #!/bin/bash
 
 source /etc/gs.conf
+source /gs/lib/hw.sh
 
-pwmchip_path="/sys/class/pwm/pwmchip${fan_pwm_chip}"
+pwmchip_path="$(hw_pwm_base)${fan_pwm_chip}"
 if [ ! -d $pwmchip_path ]; then
 	echo "Need enale pwmchip${fan_pwm_chip} channel $fan_pwm_channel in rsetup!"
 elif [ ! -d ${pwmchip_path}/pwm${fan_pwm_channel} ]; then
@@ -24,7 +25,7 @@ echo $fan_pwm_polarity > polarity
 sleep 10
 
 while true; do
-	temp_cpu=$(cat /sys/class/thermal/thermal_zone0/temp)
+	temp_cpu=$(cat "$(hw_cpu_temp_file)")
 	temp_max=${temp_cpu:0:-3}
 	echo "CPU temperature: ${temp_max}°"
 	if [[ "$monitor_8812eu_temperature" == "yes" && -d /proc/net/rtl88x2eu && $(ls /proc/net/rtl88x2eu | wc -l) -gt 10 ]]; then
