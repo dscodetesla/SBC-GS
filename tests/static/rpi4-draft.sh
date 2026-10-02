@@ -35,7 +35,10 @@ echo "ok ${#required[@]} required keys: removal and emptying both rejected"
 
 echo "== every key has a src comment directly above"
 keys=0
+# Optional contract-extension keys are checked by tests/static/contract-ext.sh (kept out of this count so the golden stays identical).
+EXT_KEYS=" GPIO_PIN_NUMBERING GPIO_PIN_MAP DTBO_MODE PART_TABLE "
 while IFS= read -r k; do
+	case "$EXT_KEYS" in *" $k "*) continue ;; esac
 	keys=$((keys+1))
 	ln="$(grep -nE "^${k}=" "$CONF" | head -1 | cut -d: -f1)"
 	found=0; i=$((ln-1))

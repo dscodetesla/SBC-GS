@@ -30,6 +30,23 @@ for d in "${dirs[@]}"; do
 		v="$(unset "$k"; . "$conf" >/dev/null 2>&1; printf '%s' "${!k:-}")"
 		if [ -z "$v" ]; then echo "FAIL $name: empty key $k"; pbad=1; fi
 	done
+	# Optional keys with a fixed set of values: absent is fine (library default = Radxa behaviour), a bad value is not.
+	for spec in GPIO_PIN_NUMBERING:physical,bcm DTBO_MODE:rename,config-txt PART_TABLE:gpt,mbr; do
+		k="${spec%%:*}"
+		grep -Eq "^[[:space:]]*${k}=" "$conf" || continue
+		# shellcheck disable=SC1090
+		v="$(unset "$k"; . "$conf" >/dev/null 2>&1; printf '%s' "${!k:-}")"
+		case ",${spec#*:}," in *",$v,"*) ;; *) echo "FAIL $name: bad value $k='$v' (allowed: ${spec#*:})"; pbad=1 ;; esac
+	done
+	# GPIO_PIN_MAP is a file name relative to the board dir: no absolute path, no "..", and the file must exist.
+	if grep -Eq '^[[:space:]]*GPIO_PIN_MAP=' "$conf"; then
+		# shellcheck disable=SC1090
+		v="$(unset GPIO_PIN_MAP; . "$conf" >/dev/null 2>&1; printf '%s' "${GPIO_PIN_MAP:-}")"
+		case "$v" in
+			''|/*|*..*) echo "FAIL $name: bad GPIO_PIN_MAP '$v' (relative file name without '..' required)"; pbad=1 ;;
+			*) [ -f "$d/$v" ] || { echo "FAIL $name: GPIO_PIN_MAP file '$v' not found"; pbad=1; } ;;
+		esac
+	fi
 	if [ "$pbad" = 0 ]; then echo "ok $name"; else bad=1; fi
 done
 exit $bad

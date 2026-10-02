@@ -130,5 +130,15 @@ if [ -z "$want" ] || [ "$want" = "static/paths" ]; then
 	else echo "DIFF     static/paths"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the optional board-contract extensions (GPIO_PIN_NUMBERING/MAP, DTBO_MODE, PART_TABLE) (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/contract-ext" ]; then
+	out="$(mktemp)"; "$HERE/static/contract-ext.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/contract-ext.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/contract-ext"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/contract-ext"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/contract-ext"
+	else echo "DIFF     static/contract-ext"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

@@ -8,7 +8,7 @@ ok 25 keys checked
 == required keys all defined
 ok 18 required keys present
 == UNVERIFIED values (ratchet: must not grow)
-UNVERIFIED GPIO_PIN_PREFIX: contract mismatch: Radxa <n> is a physical header pin, Pi GPIO<n> is a BCM number; gs.conf pin values such as btn_q1_pin='32' would address the wrong lines until the contract gains a numbering mode, see docs/BOARD-RPI4.md section 4
+UNVERIFIED GPIO_PIN_PREFIX: gpio_find maps physical pin -> BCM via GPIO_PIN_MAP, but the pin table is third-party (see pinmap.conf), the gpiochip/line names on a real Pi 4 are unchecked (HW), and gs.conf pin values reach gpio_find only after the M3c wiring
 UNVERIFIED DTBO_DIR_LOWER: overlayroot on Pi is untested: the lower-layer path of a separate FAT mount is not known; value is the plain directory
 UNVERIFIED GADGET_IFNAME: placeholder: this profile has no gadget NIC; the name rpi0 was chosen, not read from anywhere
 UNVERIFIED CONSOLE_TTY: HW: /dev/serial0 exists on Pi 4 only with enable_uart=1 in config.txt, which no image sets yet; gs-init.sh runs under set -e, tee to a missing node would fail

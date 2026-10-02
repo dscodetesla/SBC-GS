@@ -24,3 +24,7 @@ hw_home_dir() { _hw_get HOME_DIR '/home/radxa'; }
 hw_wifi_iface() { _hw_get WIFI_ONBOARD_IFACE 'wifi0'; }
 # I2C bus number of the external RTC (Radxa: 4, i.e. /dev/i2c-4)
 hw_rtc_i2c_bus() { _hw_get RTC_I2C_BUS '4'; }
+# overlay enabling mechanism: rename (Radxa: *.dtbo.disabled <-> *.dtbo) or config-txt (Pi: dtoverlay= line in CONFIG_TXT)
+hw_dtbo_mode() { _hw_get DTBO_MODE 'rename'; }
+# partition table type: gpt (Radxa) or mbr (Pi OS images)
+hw_part_table() { _hw_get PART_TABLE 'gpt'; }

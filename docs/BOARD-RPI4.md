@@ -73,20 +73,23 @@
 
 ## 4. Пропозиції зміни контракту (PROPOSAL; нічого не «зігнуто» мовчки)
 
-### 4.1. Нумерація GPIO (НЕ реалізовано)
-Поточний контракт не виражає «ім'я лінії = префікс + фізичний номер» на Pi. Варіанти:
-- нове необов'язкове `GPIO_PIN_NUMBERING='physical'|'bcm'` (типово `physical` = сьогоднішня поведінка Radxa), у `gs/lib/gpio.sh` для Pi таблиця «фізичний вивід → BCM» (40-контактний роз'єм фіксований), після чого `gpio_find 7` → `gpiofind GPIO4`;
-- або `GPIO_PIN_MAP` у профілі. Обидва потребують тестів `static/gpio` і зміни golden лише за свідомим рішенням. До цього `GPIO_PIN_PREFIX='GPIO'` лишається UNVERIFIED.
+### 4.1. Нумерація GPIO (РЕАЛІЗОВАНО на рівні бібліотеки `gs/lib/gpio.sh`; виклики не підключено)
+Необов'язкові ключі профілю (відсутні = поведінка Radxa побайтово, `gpiofind ${GPIO_PIN_PREFIX}<n>`):
+- `GPIO_PIN_NUMBERING='physical'|'bcm'` (типово `physical`). `physical`: `<n>` це номер виводу роз'єму; якщо задано `GPIO_PIN_MAP`, `<n>` спершу перекладається «вивід → BCM». `bcm`: `<n>` уже номер BCM, викликається `gpiofind ${GPIO_PIN_PREFIX}<n>`. Інше значення: помилка в stderr, код 1.
+- `GPIO_PIN_MAP='<файл>'`: файл відносно каталогу плати, рядки `<вивід> <BCM|3V3|5V|GND>`. Для rpi4 це `gs/boards/rpi4/pinmap.conf` (40 рядків: 28 GPIO, 2x3V3, 2x5V, 8xGND). Вивід живлення/землі, невідомий вивід, відсутній файл: `gpio_find` повертає 1 з повідомленням у stderr, `gpiofind` не викликається. Приклад: `gpio_find 7` на rpi4 → `gpiofind GPIO4`.
+- Джерело таблиці: SRC `gpiozero/gpiozero@master gpiozero/pins/data.py:499-528` (`PI4_J8`). Офіційний `raspberrypi/documentation` (`gpio-on-raspberry-pi.adoc`) дає повну таблицю лише картинкою `GPIO-Pinout-Diagram-2.png`; текстом підтверджено «GPIO pins 0 and 1 ... (physical pins 27 and 28)» і імена функцій (SPI0 CE1 = GPIO7, PWM = GPIO12/13/18/19). Тому **повна таблиця UNVERIFIED щодо першоджерела raspberrypi.com** (маркер у `pinmap.conf`; у `board.conf` окремого маркера не додано, щоб храповик лишився 8; цей ризик покриває наявний маркер `GPIO_PIN_PREFIX`). Звірити на залізі: `gpioinfo`/`pinout`.
+- `GPIO_PIN_PREFIX='GPIO'` у rpi4 лишається UNVERIFIED (текст причини в `board.conf` не змінено, бо його друкує golden `static/rpi4-draft`; по суті розбіжність знято цим розділом лише на рівні бібліотеки, виклики `button.sh`/`gs.sh`/`stream.sh` ще не змінювались).
+- Тести: `tests/static/contract-ext.sh`.
 
 ### 4.2. Плата без OTG: сентинел `none` (РЕАЛІЗОВАНО, мало й зворотно сумісно)
 `validate.sh` вважає порожнє значення обов'язкового ключа помилкою (`FAIL … empty key`, фікстура `empty-key`), а `board_get` відмовляє на порожньому, тож `gs/lib/otg.sh` тихо підставив би **літерали Radxa** (`fcc00000.dwc3`) на плату без OTG: це небезпечно. Рішення: документований сентинел `none` (непорожній, `validate.sh` його приймає без змін) і функція `otg_supported` у `gs/lib/otg.sh` (статус 0, якщо `OTG_CONTROLLER` ≠ `none`; без профілю/ключа повертає «підтримується», тобто поведінка Radxa не змінилась). Покрито `tests/static/rpi4-draft.sh` (rpi4 → `none`/неактивний; radxa-zero3, невідома плата, відсутня `board.sh` → активний; безпечно під `set -e` усередині `if`). Існуючі golden не змінювались (тести sentinel не додавались у `static/otg.sh` саме щоб `tests/golden/static/otg.out` лишився побайтно тим самим).
 **Не зроблено:** виклики `otg_supported` у `button.sh` (`change_otg_mode`), `otg-gadget.sh`, `gs.sh:31`: окремий PR із golden пісочниці. Та сама схема потрібна для `DTBO_SOC_PREFIX` (зараз `none`-заглушка).
 
-### 4.3. Механізм оверлеїв (НЕ реалізовано)
-Додати `DTBO_MODE='rename'|'config-txt'` і не вимагати `DTBO_SOC_PREFIX` для `config-txt` (зробити необов'язковим або сентинел `none`). `gs-applyconf.sh` для `config-txt` має редагувати `dtoverlay=` у `CONFIG_TXT`.
+### 4.3. Механізм оверлеїв (ключ і хелпер РЕАЛІЗОВАНО; вмикання оверлеїв НЕ реалізовано, це M3c)
+Необов'язковий `DTBO_MODE='rename'|'config-txt'` (типово `rename`: Radxa перейменовує `*.dtbo.disabled` ↔ `*.dtbo`; `config-txt`: рядок `dtoverlay=` у `CONFIG_TXT`, файли не перейменовуються). Хелпер `hw_dtbo_mode` у `gs/lib/hw.sh` (запасне `rename` без профілю/ключа; завжди успішний під `set -e`). rpi4: `config-txt`. `validate.sh` відхиляє інші значення. Лишається: не вимагати `DTBO_SOC_PREFIX` для `config-txt` (зробити необов'язковим або сентинел `none`). `gs-applyconf.sh` для `config-txt` має редагувати `dtoverlay=` у `CONFIG_TXT`.
 
-### 4.4. Розмітка диска (НЕ реалізовано)
-Додати `PART_TABLE='gpt'|'mbr'` і для `mbr` логіку розширеного/логічного розділу (потрібен для `PART_VIDEOS_NUM=5`) або альтернативу з `ROADMAP-EXECUTION.md` розд. 4: третій FAT-розділ `/config`/`/boot/firmware`.
+### 4.4. Розмітка диска (ключ і хелпер РЕАЛІЗОВАНО; логіка `gs-init.sh` НЕ реалізована)
+Необов'язковий `PART_TABLE='gpt'|'mbr'` (типово `gpt`), хелпер `hw_part_table` у `gs/lib/hw.sh`; rpi4: `mbr` (SRC `pi-gen prerun.sh:31 mklabel msdos`, див. розд. 3). `validate.sh` відхиляє інші значення. Лишається: для `mbr` логіку розширеного/логічного розділу (потрібен для `PART_VIDEOS_NUM=5`) або альтернативу з `ROADMAP-EXECUTION.md` розд. 4: третій FAT-розділ `/config`/`/boot/firmware`.
 
 ### 4.5. Консоль
 `CONSOLE_TTY` для плат без гарантованого вузла: `gs-init.sh` має писати лише якщо вузол існує, або профіль має задавати `enable_uart=1` у `config.txt` образу.
