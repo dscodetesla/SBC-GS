@@ -40,8 +40,8 @@ rank,parameter,provenance,mu_star,sigma,share_pct
 1,latency.encode_frames,UNMEASURED,44.18,2.829,15.3
 2,power.devices.rtl8812_tx_a,UNMEASURED,36.64,63.46,12.7
 3,timing.catchup_ms_per_s,UNMEASURED,29.01,50.24,10.0
-4,latency.capture_frames,UNMEASURED,25.4,4.452e-14,8.8
-5,latency.display_queue_frames,UNMEASURED,25.4,2.775e-14,8.8
+4,latency.capture_frames,UNMEASURED,25.4,0,8.8
+5,latency.display_queue_frames,UNMEASURED,25.4,0,8.8
 6,timing.queue_max_ms,UNMEASURED,23.25,40.27,8.0
 7,latency.panel_ms,UNMEASURED,15.93,3.071,5.5
 8,timing.stall_rate_per_h,SYNTH,11.58,20.06,4.0
@@ -51,9 +51,9 @@ rank,parameter,provenance,mu_star,sigma,share_pct
 1,usb.drop_v_scale,SYNTH,0.3125,0.5413,11.8
 2,rf.path_loss_exponent,INF,0.2604,0.3253,9.8
 3,power.tx_peak_factor,UNMEASURED,0.2083,0.3608,7.8
-4,rf.misc_loss_db,UNMEASURED,0.2083,0.1804,7.8
-5,rf.rx_antenna_gain_dbi,UNMEASURED,0.2083,0.3608,7.8
-6,rf.implementation_loss_db,UNMEASURED,0.2083,0.2387,7.8
+4,rf.implementation_loss_db,UNMEASURED,0.2083,0.2387,7.8
+5,rf.misc_loss_db,UNMEASURED,0.2083,0.1804,7.8
+6,rf.rx_antenna_gain_dbi,UNMEASURED,0.2083,0.3608,7.8
 7,power.devices.rtl8812_tx_a,UNMEASURED,0.1562,0.2706,5.9
 8,rf.noise_figure_db,UNMEASURED,0.1562,0.2706,5.9
 
@@ -63,10 +63,10 @@ rank,parameter,provenance,mu_star,sigma,share_pct
 2,usb.drop_v_scale,SYNTH,140.6,243.6,14.5
 3,hw.ant_body_prob,SYNTH,125,216.5,12.9
 4,hw.ant_null_mean_db,SYNTH,125,216.5,12.9
-5,hw.multi24_tx_dbm,UNMEASURED,78.13,135.3,8.1
+5,hw.multi24_tx_dbm,UNMEASURED,78.12,135.3,8.1
 6,rf.ge_mean_burst_frames,UNMEASURED,78.12,135.3,8.1
 7,rf.implementation_loss_db,UNMEASURED,46.88,46.88,4.8
-8,latency.usb_rx_ms,UNMEASURED,31.25,54.13,3.2
+8,latency.encode_frames,UNMEASURED,31.25,54.13,3.2
 
 ## measure first (UNMEASURED/SYNTH parameters ranked by summed share over 6 outputs)
 rank,parameter,provenance,summed_share_pct

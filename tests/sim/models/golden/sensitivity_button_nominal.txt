@@ -7,8 +7,8 @@ rank,parameter,provenance,mu_star,sigma,share_pct
 1,gpio.single_hold_s,SYNTH,0.1606,0.1531,15.1
 2,gpio.long_hold_mu_s,SYNTH,0.1519,0.09939,14.3
 3,gpio.rp1_filter_us,UNMEASURED,0.08681,0.1251,8.2
-4,gpio.bounce_total_ms,SYNTH,0.08247,0.115,7.8
-5,gpio.bounce_count_mean,SYNTH,0.08247,0.1395,7.8
+4,gpio.bounce_count_mean,SYNTH,0.08247,0.1395,7.8
+5,gpio.bounce_total_ms,SYNTH,0.08247,0.115,7.8
 6,gpio.glitch_rate_per_s,SYNTH,0.07812,0.09973,7.3
 7,gpio.mon_start_ms,UNMEASURED,0.07812,0.1093,7.3
 8,gpio.get_ms,UNMEASURED,0.07378,0.07257,6.9
@@ -60,8 +60,8 @@ rank,parameter,provenance,mu_star,sigma,share_pct
 ## output long_missed (noise std 0.006804)
 rank,parameter,provenance,mu_star,sigma,share_pct
 1,gpio.rp1_filter_us,UNMEASURED,0.01736,0.0269,40.0
-2,gpio.exit_ms,UNMEASURED,0.008681,0.02126,20.0
-3,gpio.bounce_total_ms,SYNTH,0.008681,0.02126,20.0
+2,gpio.bounce_total_ms,SYNTH,0.008681,0.02126,20.0
+3,gpio.exit_ms,UNMEASURED,0.008681,0.02126,20.0
 4,gpio.mon_start_ms,UNMEASURED,0.008681,0.02126,20.0
 5,gpio.action_ms,UNMEASURED,0,0,0.0
 6,gpio.bounce_count_mean,SYNTH,0,0,0.0

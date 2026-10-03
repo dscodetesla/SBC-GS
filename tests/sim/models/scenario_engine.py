@@ -179,6 +179,10 @@ def morris(eng, r, seed, outputs):
             mu_star = sum(abs(v) for v in e) / len(e)
             m = sum(e) / len(e)
             sig = math.sqrt(sum((v - m) ** 2 for v in e) / max(len(e) - 1, 1))
+            # snap platform-dependent floating-point noise (libm/rounding differ between machines): equal effects must tie
+            # (then ordered by key) and a sigma that is only rounding error is exactly 0, so the golden files are portable
+            mu_star = float("%.9g" % mu_star)
+            sig = 0.0 if sig < 1e-9 * max(1.0, mu_star) else float("%.9g" % sig)
             rows.append((mu_star, sig, key, sp.prov_of[key]))
         rows.sort(key=lambda t: (-t[0], t[2]))
         table[o] = rows
