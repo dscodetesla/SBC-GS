@@ -20,7 +20,7 @@ ok no leftovers = 0
 ok replaced by rename (new inode)
 == owner and mode are carried over
 ok rc = 0
-ok mode and owner unchanged = 600 65534:65534
+ok mode and owner unchanged = same
 == nothing to change: no rewrite
 ok same value rc = 0
 ok same value keeps the inode

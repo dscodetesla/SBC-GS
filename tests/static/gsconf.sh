@@ -43,7 +43,7 @@ fresh
 if [ "$(id -u)" = 0 ]; then chown 65534:65534 "$R"; fi
 chmod 600 "$R"; before="$(st "$R")"
 g gsconf_set_quoted "$C" rec_fps 75 >/dev/null 2>&1; want "rc" 0 $?
-want "mode and owner unchanged" "$before" "$(st "$R")"
+after="$(st "$R")"; want "mode and owner unchanged" "same" "$([ "$before" = "$after" ] && echo same || echo "changed: $before -> $after")"   # ids are not printed: they differ per user (root, nobody, CI runner)
 
 echo "== nothing to change: no rewrite"
 fresh; ino0="$(stat -c %i "$R")"

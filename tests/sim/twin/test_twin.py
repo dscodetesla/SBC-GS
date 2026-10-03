@@ -162,6 +162,7 @@ class TestPlan(unittest.TestCase):
         o2 = [o for o in p2["outages"] if o["m0"] == 50.0][0]
         self.assertAlmostEqual((o1["r1"] - o1["r0"]) / 2.0, o2["r1"] - o2["r0"], places=3)
         self.assertLess(p2["real_s"], p1["real_s"])
+        self.assertAlmostEqual(p1["real_s"] / 2.0, p2["real_s"], places=3)   # the whole plan (every window, the warm-up too) is compressed, not just one outage
 
     def test_speed_bounds(self):
         with self.assertRaises(ValueError):

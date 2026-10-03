@@ -219,6 +219,12 @@ def analyze(trace, plan, P):
                      "extra": [(k, round(t, 3)) for k, t in extra], "max_dt": max([abs(a - b) for _k, a, b in pairs] or [0.0])}
     # ---- gap-based explicit checks
     tol_hi = 0.45
+    # the hub tap and the FC log are stamped by different processes: on a loaded runner their clocks/queues skew by more than 0.1 s (seen on CI:
+    # an expiry at 2.09 s judged spurious by the gap rule). An event is NOT spurious when the oracle (the model replayed on the frames that
+    # were actually delivered) expects the same event within this window; the gap rule alone stays at its tight bound.
+    tol_lo = 0.1
+    tol_or = 0.25
+    exp_t = lambda prefix: [te for te, xe in exp if xe.startswith(prefix)]  # noqa: E731
     gcs, spur_g = [], []
     if P["fs_gcs_enable"]:
         for a, b in gaps(d_hb, t_end):
@@ -229,7 +235,8 @@ def analyze(trace, plan, P):
                 gcs.append({"gap_start": round(a, 3), "gap_len": round(end - a, 3), "want_by": round(want + tol_hi, 3), "got": round(got[0], 3) if got else None})
     for t, x in ev:
         if x.startswith("GCS Failsafe") and not x.startswith("GCS Failsafe Cleared"):
-            if not any(a + P["fs_gcs_timeout_real"] - 0.1 <= t for a, _b in gaps(d_hb, t_end) if t <= (_b or t_end + 1) + 0.2):
+            if not any(a + P["fs_gcs_timeout_real"] - tol_lo <= t for a, _b in gaps(d_hb, t_end) if t <= (_b or t_end + 1) + 0.2) \
+                    and not any(abs(t - te) <= tol_or for te in exp_t("GCS Failsafe")):
                 spur_g.append(round(t, 3))
     res["gcs_failsafe"] = {"required": gcs, "spurious": spur_g}
     exp_cls = {(f["t_out"]): f["cls"] for f in br if not f["dropped"] and f["t_out"] is not None}
@@ -243,8 +250,8 @@ def analyze(trace, plan, P):
     rel_t = [f["t_out"] for f in br if f["cls"] == "RELEASE" and not f["dropped"] and f["t_out"] is not None]
     for t, x in ev:
         if x.startswith("RC override expired"):
-            ok = any(a + P["rc_override_time_real"] - 0.1 <= t <= (b if b is not None else t_end + 1) + 0.3 for a, b in gaps(d_rc, t_end)) \
-                or any(0 <= t - r <= 0.2 for r in rel_t)
+            ok = any(a + P["rc_override_time_real"] - tol_lo <= t <= (b if b is not None else t_end + 1) + 0.3 for a, b in gaps(d_rc, t_end)) \
+                or any(0 <= t - r <= 0.2 for r in rel_t) or any(abs(t - te) <= tol_or for te in exp_t("RC override expired"))
             if not ok:
                 spur_e.append(round(t, 3))
     res["override_expiry"] = {"required": exp_list, "spurious": spur_e}
