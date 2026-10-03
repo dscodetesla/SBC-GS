@@ -87,10 +87,9 @@ jobs:
 
   sim-layers:
     # Offline --check of every simulation layer (models, validate, twin, fuzz, bio, dkms): ~40 s, stdlib + pymavlink.
-    # Advisory until it has been green on a real runner; then drop continue-on-error. See docs/SIM-SCENARIOS.md.
+    # Blocking: green on a real runner twice in a row (3c7cd89, 9872efd). See docs/SIM-SCENARIOS.md.
     runs-on: ubuntu-24.04
     needs: lint
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Python venv with pinned pymavlink
