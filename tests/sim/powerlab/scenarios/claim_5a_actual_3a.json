@@ -1,0 +1,57 @@
+{
+ "schema": "sbc-gs-powerlab-scenario/1",
+ "name": "claim_5a_actual_3a",
+ "description": "Operator claims a 5 A supply; the bootloader negotiated 3 A, USB limit 0.6 A, thin cable: undervoltage and trips although the claim says it cannot happen.",
+ "board": "pi5",
+ "t0_utc": "2026-10-06T11:00:00Z",
+ "boot_offset_s": 300,
+ "psu_a": 3.0,
+ "claim_psu_a": 5.0,
+ "usb_max_current": false,
+ "claim_usb_max_current": 1,
+ "limiter": true,
+ "devices": [
+  {
+   "id": "rtl8812",
+   "kind": "rtl8812",
+   "bus_port": "1-1",
+   "vid_pid": "0bda:8812"
+  },
+  {
+   "id": "fc",
+   "kind": "fc",
+   "bus_port": "1-2",
+   "vid_pid": "0483:5740"
+  }
+ ],
+ "truth": {
+  "power.cable_resistance_ohm": 0.24,
+  "power.psu_nominal_v": 5.05,
+  "power.devices.rtl8812_tx_a": 1.1,
+  "power.usb_reenum_s": 3.1
+ },
+ "phases": [
+  {
+   "name": "rx",
+   "dur_s": 20,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "rx",
+   "label": "rtl8812:rx"
+  },
+  {
+   "name": "tx",
+   "dur_s": 60,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "tx",
+   "label": "rtl8812:tx"
+  }
+ ]
+}

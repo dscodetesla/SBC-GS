@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# date shim: `date -u +%FT%TZ` returns the simulated snapshot time ($POWERLAB_FIXTURE/now_utc); everything else is the real date.
+set -u
+if [ "$*" = "-u +%FT%TZ" ] && [ -f "${POWERLAB_FIXTURE:-/nonexistent}/now_utc" ]; then cat "$POWERLAB_FIXTURE/now_utc"; exit 0; fi
+for d in /usr/bin/date /bin/date; do [ -x "$d" ] && exec "$d" "$@"; done
+exit 127

@@ -1,0 +1,203 @@
+{
+ "schema": "sbc-gs-ingest-rules/1",
+ "note": "Constants of bench/ingest.py, kept out of the code (hardcode ratchet, docs/CONFIG.md). Tags: SRC = read from the first-party source in 'source'; SNIP = sample output read from third-party files; INF = engineering choice of this tool, not a fact about hardware; UNVERIFIED = no source found.",
+ "throttled_bits": {
+  "0": "Undervoltage detected",
+  "1": "Arm frequency capped",
+  "2": "Currently throttled",
+  "3": "Soft temperature limit active",
+  "16": "Undervoltage has occurred",
+  "17": "Arm frequency capping has occurred",
+  "18": "Throttling has occurred",
+  "19": "Soft temperature limit has occurred",
+  "tag": "SRC",
+  "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/os/graphics-utilities.adoc (section get_throttled)"
+ },
+ "throttled_roles": {
+  "uv_now": 0,
+  "capped_now": 1,
+  "throttled_now": 2,
+  "soft_now": 3,
+  "uv_ever": 16,
+  "capped_ever": 17,
+  "throttled_ever": 18,
+  "soft_ever": 19,
+  "tag": "INF",
+  "note": "names of the bit positions above for the code"
+ },
+ "units": {
+  "A": 1.0,
+  "mA": 0.001,
+  "V": 1.0,
+  "mV": 0.001,
+  "W": 1.0,
+  "mW": 0.001,
+  "uW": 1e-06,
+  "mdegC": 0.001,
+  "tag": "SRC",
+  "source": "https://raw.githubusercontent.com/torvalds/linux/master/Documentation/ABI/testing/sysfs-class-hwmon (in: millivolt, curr: milliampere, temp: millidegree Celsius, power: microWatt)",
+  "note": "the thermal zone value is divided by 1000 (SRC overclocking.adoc: cat /sys/class/thermal/thermal_zone0/temp)",
+  "ms": 0.001
+ },
+ "hwmon_scale": {
+  "in": 0.001,
+  "curr": 0.001,
+  "temp": 0.001,
+  "power": 1e-06,
+  "fan": 1.0,
+  "tag": "SRC"
+ },
+ "kernel_patterns": {
+  "uv_detected": "[Uu]nder-?voltage detected",
+  "uv_normalised": "[Vv]oltage normali[sz]ed",
+  "usb_disconnect": "usb (\\S+): USB disconnect, device number (\\d+)",
+  "usb_new": "usb (\\S+): (new|reset) (\\S+) USB device number (\\d+) using (\\S+)",
+  "usb_found": "usb (\\S+): New USB device found, idVendor=([0-9a-fA-F]+), idProduct=([0-9a-fA-F]+)",
+  "usb_overcurrent": "over-current (condition|change)",
+  "usb_enum_fail": "(device descriptor read/\\w+, error -?\\d+|unable to enumerate USB device|device not accepting address \\d+, error -?\\d+|connect-debounce failed|Cannot enable\\. Maybe the USB cable is bad\\?|disabled by hub \\(EMI\\?\\), re-enabling)",
+  "tag": "SRC",
+  "source": "https://raw.githubusercontent.com/torvalds/linux/master/drivers/usb/core/hub.c (dev_info/dev_err strings); https://raw.githubusercontent.com/torvalds/linux/master/drivers/hwmon/raspberrypi-hwmon.c ('Undervoltage detected!' dev_crit, 'Voltage normalised' dev_info)",
+  "note": "device-name prefixes (usb 1-1:, hwmon hwmon1:) are the dev_printk convention (INF); the older firmware driver text 'Under-voltage detected!' is accepted by the optional hyphen (UNVERIFIED which kernels print it)"
+ },
+ "kernel_time": {
+  "bracket": "^\\[\\s*(\\d+\\.\\d+)\\]",
+  "dmesg_T": "^\\[(\\w{3} \\w{3}\\s+\\d+ \\d+:\\d+:\\d+ \\d{4})\\]",
+  "dmesg_T_format": "%a %b %d %H:%M:%S %Y",
+  "iso": "^(\\d{4}-\\d\\d-\\d\\dT\\d+:\\d+:\\d+[.,]?\\d*(?:Z|[+-]\\d\\d:?\\d\\d)?)",
+  "tag": "SRC",
+  "source": "util-linux dmesg(1) default '[secs.usecs]' and -T forms; journalctl -o short-iso; format of -T/ISO lines UNVERIFIED here, parsed best-effort",
+  "dmesg_T_is_local_time": "dmesg -T prints local time; this tool assumes UTC and says so in the report (INF)"
+ },
+ "vcgencmd_patterns": {
+  "throttled": "throttled=(0x[0-9a-fA-F]+)",
+  "temp": "temp=(-?[0-9.]+)'C",
+  "pmic": "^\\s*(\\w+)\\s+(current|volt)\\((\\d+)\\)=(-?[0-9.eE+-]+)([AV])\\s*$",
+  "arm_clock": "frequency\\((\\d+)\\)=(\\d+)",
+  "get_config": "^(\\w+)=(-?\\d+)\\s*$",
+  "tag": "SNIP",
+  "source": "sample outputs: https://raw.githubusercontent.com/geerlingguy/jeffgeerling-com/f448c239f7fbe72c16e79feb30e0ae4eb708d068/content/blog/2023/10/overclocking-and-underclocking-raspberry-pi-5/index.md (throttled=0x0, temp=39.5'C, pmic_read_adc rail lines); https://github.com/ebaauw/homebridge-rpi README (frequency(48)=..., temp=52.5'C); the output is produced by closed VideoCore firmware, vcgencmd.c only prints the reply (SRC https://raw.githubusercontent.com/raspberrypi/utils/master/vcgencmd/vcgencmd.c)",
+  "note": "the get_config reply format 'key=value' is UNVERIFIED for usb_max_current_enable (the docs only name the command)"
+ },
+ "pmic": {
+  "ext5v": "EXT5V_V",
+  "tag": "SRC",
+  "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/config_txt/overclocking.adoc (vcgencmd pmic_read_adc EXT5V_V); power-supplies.adoc: USB current bypasses the PMIC and is not visible",
+  "accuracy": "UNVERIFIED: ADC accuracy and sampling are not documented"
+ },
+ "dt_chosen_power": {
+  "names": [
+   "max_current",
+   "usb_max_current_enable",
+   "usb_over_current_detected",
+   "reset_event"
+  ],
+  "max_current_unit": "mA",
+  "tag": "SRC (names and meaning); UNVERIFIED (binary encoding)",
+  "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc (section 'Power supplies and Raspberry Pi OS')",
+  "note": "values are read as big-endian integers (device-tree cells, INF); a length other than 4 bytes is reported raw and not interpreted",
+  "cell_hex_len": 8
+ },
+ "thresholds": {
+  "undervolt_v": 4.63,
+  "undervolt_tol_frac": 0.05,
+  "undervolt_tag": "SRC",
+  "undervolt_source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc ('drops below 4.63 V (+-5%)')",
+  "soft_temp_lo_c": 80,
+  "soft_temp_hi_c": 85,
+  "soft_temp_tag": "SRC",
+  "soft_temp_source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/config_txt/overclocking.adoc ('between 80 and 85 C the Arm cores will be throttled back'); the Pi 3 B+ soft limit is 60 C by default (same file)",
+  "psu_full_budget_a": 5.0,
+  "usb_budget_full_a": 1.6,
+  "usb_budget_weak_a": 0.6,
+  "usb_budget_tag": "SRC",
+  "usb_budget_source": "power-supplies.adoc: Pi 5 gives 1.6 A to USB with a 5 A (25 W) supply, otherwise 600 mA",
+  "min_points_r": 3,
+  "min_delta_i_a": 0.3,
+  "window_trim_frac": 0.2,
+  "align_tol_s": 1.0,
+  "cause_window_s": 5.0,
+  "min_peak_rate_hz": 40.0,
+  "min_current_for_r_a": 0.2,
+  "z95": 1.96,
+  "meter_over_pmic_tol_v": 0.05,
+  "bracket_max_width_v": 0.3,
+  "bracket_max_width_c": 5.0,
+  "min_soak_h": 1.0,
+  "seconds_per_hour": 3600.0,
+  "epoch_min_s": 1000000000,
+  "min_samples": 5,
+  "pct_lo": 0.05,
+  "pct_hi": 0.95,
+  "pct_peak": 0.99,
+  "soft_temp_pi3bp_c": 60,
+  "usb_budget_pi4_a": 1.2,
+  "usb_budget_pi3bp_a": 1.2,
+  "tag": "INF",
+  "note": "analysis limits chosen by the author of this tool (INF), not hardware facts; change them here, not in the code",
+  "steady_delta_c": 1.0
+ },
+ "board_models": {
+  "pi5": "Raspberry Pi 5",
+  "pi4": "Raspberry Pi 4",
+  "pi3bp": "Raspberry Pi 3 Model B Plus",
+  "tag": "SNIP",
+  "note": "substrings of /proc/device-tree/model; the exact strings are UNVERIFIED here"
+ },
+ "board_recommended_psu_a": {
+  "pi5": 5.0,
+  "pi4": 3.0,
+  "pi3bp": 2.5,
+  "tag": "SRC",
+  "source": "power-supplies.adoc table"
+ },
+ "radio_hints": {
+  "drivers": [
+   "rtl88xxau",
+   "rtl88x2eu",
+   "rtl8812au",
+   "88XXau",
+   "rtw88",
+   "rtl8xxxu"
+  ],
+  "vid_pid": [
+   "0bda:8812",
+   "0bda:881a"
+  ],
+  "tag": "INF",
+  "note": "hints only; the radio may be pointed at explicitly with --radio-path"
+ },
+ "wfb_stats": {
+  "ports": "stats_port (msgpack, wfb-cli) and api_port (JSON lines) of the wfb-ng profile",
+  "tag": "SRC",
+  "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/protocols.py (StatisticsJSONProtocol: one JSON object per line; rx: packets{all,out,session,fec_rec,lost,dec_err,bad,data,uniq,all_bytes,out_bytes}=[delta,total], rx_ant_stats[{ant,freq,mcs,bw,pkt_recv,rssi_*,snr_*}]; tx: packets{injected,incoming,fec_timeouts,dropped,truncated}, tx_ant_stats); https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/cli.py (wfb-cli is a curses UI over the msgpack stream, its screen is not parseable)",
+  "rf_temperature": "/proc/net/<rtl88x2eu|rtl88x2cu>/<wlan>/thermal_state lines 'rf_path:N, temperature:T' (SRC protocols.py RFTempMeter); AU drivers: UNVERIFIED"
+ },
+ "keys": {
+  "dev_idle": "power.devices.rtl8812_idle_a",
+  "dev_rx": "power.devices.rtl8812_rx_a",
+  "dev_tx": "power.devices.rtl8812_tx_a",
+  "fc": "power.devices.fc_usb_a",
+  "webcam": "power.devices.webcam_a",
+  "fan": "power.devices.fan_a",
+  "peak": "power.tx_peak_factor",
+  "r_path": "power.cable_resistance_ohm",
+  "v_nominal": "power.psu_nominal_v",
+  "r_usb": "usb.cable_r_ohm",
+  "uv_thr": "power.undervolt_threshold_v",
+  "usb_dropout": "power.usb_dropout_v",
+  "reenum": "power.usb_reenum_s",
+  "drop_rate": "usb.drop_rate_per_h",
+  "soc_rise": "hw.soc_rise_c",
+  "soft_limit": "hw.soc_soft_limit_c",
+  "ambient": "ext.ambient_c",
+  "board_fmt": "power.boards.%s.board_%s_a",
+  "tag": "REPO",
+  "source": "tests/sim/models/params.json, params.degrade.json"
+ },
+ "fmt": {
+  "sig": "%.4g",
+  "t": "%.3f",
+  "tag": "INF"
+ },
+ "hwmon_rail_label": "(?i)5v|vbus"
+}

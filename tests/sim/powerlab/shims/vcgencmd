@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Virtual vcgencmd for tests/sim/powerlab: replays recorded replies from $POWERLAB_FIXTURE/vcgencmd/<args joined by _>.
+# A command without a fixture file fails like an unsupported command (no output, status 1). Read-only, never touches hardware.
+set -u
+dir="${POWERLAB_FIXTURE:?POWERLAB_FIXTURE is not set}/vcgencmd"
+name="$(printf '%s' "$*" | tr ' ' '_')"
+if [ -f "$dir/$name" ]; then cat "$dir/$name"; exit 0; fi
+echo "powerlab vcgencmd shim: no fixture for '$*'" >&2
+exit 1

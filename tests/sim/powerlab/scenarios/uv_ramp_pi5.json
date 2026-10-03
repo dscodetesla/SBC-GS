@@ -1,0 +1,69 @@
+{
+ "schema": "sbc-gs-powerlab-scenario/1",
+ "name": "uv_ramp_pi5",
+ "description": "Bench PSU lowered slowly with the dongle attached (docs/SIM-MODELS.md pw-sag): undervoltage flag and USB drop thresholds, then the voltage is restored and the dongle re-enumerates. No supply claim is made: the bench supply is lowered on purpose.",
+ "board": "pi5",
+ "t0_utc": "2026-10-06T10:00:00Z",
+ "boot_offset_s": 600,
+ "psu_a": 5.0,
+ "usb_max_current": true,
+ "limiter": false,
+ "pmic_period_s": 0.2,
+ "devices": [
+  {
+   "id": "rtl8812",
+   "kind": "rtl8812",
+   "bus_port": "1-1",
+   "vid_pid": "0bda:8812"
+  },
+  {
+   "id": "fc",
+   "kind": "fc",
+   "bus_port": "1-2",
+   "vid_pid": "0483:5740"
+  }
+ ],
+ "truth": {
+  "power.cable_resistance_ohm": 0.2,
+  "power.psu_nominal_v": 5.1,
+  "power.undervolt_threshold_v": 4.63,
+  "power.usb_dropout_v": 4.4,
+  "power.usb_reenum_s": 3.4
+ },
+ "phases": [
+  {
+   "name": "hold",
+   "dur_s": 15,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "rx"
+  },
+  {
+   "name": "down",
+   "dur_s": 120,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "rx",
+   "v_ramp": [
+    5.1,
+    4.1
+   ]
+  },
+  {
+   "name": "restore",
+   "dur_s": 30,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "rx"
+  }
+ ]
+}

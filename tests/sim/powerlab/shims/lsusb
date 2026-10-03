@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Virtual lsusb: `lsusb -t` prints lsusb_t.txt, plain `lsusb` prints lsusb.txt (both from $POWERLAB_FIXTURE).
+set -u
+f="${POWERLAB_FIXTURE:?POWERLAB_FIXTURE is not set}"
+if [ "${1:-}" = "-t" ]; then cat "$f/lsusb_t.txt"; else cat "$f/lsusb.txt"; fi

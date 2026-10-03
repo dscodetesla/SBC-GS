@@ -1,0 +1,39 @@
+{
+ "schema": "sbc-gs-powerlab-scenario/1",
+ "name": "hot_soc",
+ "description": "Closed case in the sun, no cooler: the SoC crosses the soft temperature limit slowly (bit 3).",
+ "board": "pi5",
+ "t0_utc": "2026-10-06T12:00:00Z",
+ "boot_offset_s": 3600,
+ "psu_a": 5.0,
+ "claim_psu_a": 5.0,
+ "usb_max_current": true,
+ "claim_usb_max_current": 1,
+ "limiter": false,
+ "ambient_c": 42.0,
+ "devices": [
+  {
+   "id": "rtl8812",
+   "kind": "rtl8812",
+   "bus_port": "1-1",
+   "vid_pid": "0bda:8812"
+  }
+ ],
+ "truth": {
+  "hw.soc_rise_c": 48.0,
+  "hw.soc_soft_limit_c": 80.0
+ },
+ "phases": [
+  {
+   "name": "soak",
+   "dur_s": 100,
+   "load": "load",
+   "devices": [
+    "rtl8812"
+   ],
+   "adapter": "rx",
+   "label": "soc:load"
+  }
+ ],
+ "soc_tau_s": 8.0
+}

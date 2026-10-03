@@ -197,6 +197,7 @@ bench/video-rx.sh 1
 bench/video-src.sh 0
 bench/fake_fc.py 28
 bench/gs_mav.py 3
+bench/ingest.py 0
 bench/tx12_bridge.py 16
 gs/mavlink/gs-mavlink.sh 7
 tests/sim/air_relay.py 9
