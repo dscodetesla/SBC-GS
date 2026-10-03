@@ -30,7 +30,7 @@ jobs:
       - name: shellcheck ratchet for gs/ and build/ (no new findings allowed)
         run: tests/shellcheck-ratchet.sh
       - name: shellcheck the test harness
-        run: shellcheck -x -S warning tests/*.sh tests/lib/*.sh tests/static/*.sh tests/sim/*.sh tests/sim/dkms/*.sh tests/sim/netfetch/*.sh tests/sim/powerlab/*.sh tests/sim/models/*.sh tests/sim/models/validate/*.sh tests/sim/fuzz/*.sh tests/sim/twin/*.sh tests/sim/virt/*.sh tests/sim/virt/guest/*.sh build/lib/*.sh
+        run: shellcheck -x -S warning tests/*.sh tests/lib/*.sh tests/static/*.sh tests/sim/*.sh tests/sim/dkms/*.sh tests/sim/netfetch/*.sh tests/sim/powerlab/*.sh tests/sim/evdev/*.sh tests/sim/models/*.sh tests/sim/models/validate/*.sh tests/sim/fuzz/*.sh tests/sim/twin/*.sh tests/sim/virt/*.sh tests/sim/virt/guest/*.sh build/lib/*.sh
 
   golden:
     runs-on: ubuntu-24.04

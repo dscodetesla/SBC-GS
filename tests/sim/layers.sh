@@ -2,7 +2,7 @@
 # Offline "--check" of every simulation layer in one go (no hardware, no network, no root, no QEMU).
 #   tests/sim/layers.sh            run all, one summary line each, exit 1 if any layer fails
 #   LAYERS="models twin" tests/sim/layers.sh     only the named layers
-# Layers: models validate twin fuzz bio netfetch powerlab dkms. (virt needs QEMU/kernel packages: tests/sim/virt/run.sh, opt-in.)
+# Layers: models validate twin fuzz bio netfetch powerlab evdev dkms. (virt needs QEMU/kernel packages: tests/sim/virt/run.sh, opt-in.)
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="${PY:-python3}"
@@ -17,9 +17,10 @@ declare -A CMD=(
 	[bio]="$HERE/bio/run.sh --check"
 	[netfetch]="$HERE/netfetch/run.sh --check"
 	[powerlab]="$HERE/powerlab/run.sh --check"
+	[evdev]="$HERE/evdev/run.sh --check"
 	[dkms]="$HERE/dkms/run.sh --check"
 )
-want=${LAYERS:-"models validate twin fuzz bio netfetch powerlab dkms"}
+want=${LAYERS:-"models validate twin fuzz bio netfetch powerlab evdev dkms"}
 fail=0
 for l in $want; do
 	if [ -z "${CMD[$l]:-}" ]; then

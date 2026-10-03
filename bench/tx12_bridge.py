@@ -2,7 +2,8 @@
 """Safe single-writer RC bridge: joystick-like source -> MAVLink RC_CHANNELS_OVERRIDE.
 
 Inputs: --input evdev:/dev/input/eventN (EdgeTX USB joystick; python-evdev is
-imported lazily), --input stdin ('ch1 ch2 ... chN' in microseconds per line),
+imported lazily; also evdev:id=VVVV:PPPP or evdev:name=<exact name>, refused when the
+selector is ambiguous), --input stdin ('ch1 ch2 ... chN' in microseconds per line),
 --input sweep (synthetic, bench only).
 
 Safety model (all of it is exercised by bench/tx12-bridge-test.sh):
@@ -14,7 +15,9 @@ Safety model (all of it is exercised by bench/tx12-bridge-test.sh):
     expires and the RC receiver takes over again);
   * values clamped to 1000-2000; NaN / absurd samples are dropped (and so do
     not refresh the dead-man timer); sending rate is capped by --max-rate;
-  * SIGTERM / SIGINT / normal exit: throttle failsafe frames, then release x5.
+  * SIGTERM / SIGINT / normal exit: throttle failsafe frames, then release x5;
+  * evdev: a removed/failed input device is detected at once (not after --deadman-ms), the dead-man runs, and after the release
+    hold the bridge exits with rc 4 (it never reopens an event path by itself: a new device may have taken the old eventN).
 
 The sysid (--sysid, default 255) MUST match the FC's MAV_GCS_SYSID (see
 docs/MAVLINK-ROUTER.md, section 6), otherwise ArduPilot silently ignores the
@@ -148,12 +151,18 @@ def load_map(path):
     axes = d.get("axes")
     if not isinstance(axes, dict) or not axes:
         raise ValueError("mapping file needs a non-empty 'axes' object")
+    used = {}
     for name, cfg in axes.items():
+        if not isinstance(name, str) or not name.startswith("ABS_"):
+            raise ValueError(f"axis {name!r}: the name must be an evdev ABS_* code (ABS_X, ABS_RX, ...)")
         if not isinstance(cfg, dict):
             raise ValueError(f"axis {name}: must be an object with channel/min/max")
         ch = cfg.get("channel")
-        if not isinstance(ch, int) or not 1 <= ch <= NCH:
+        if isinstance(ch, bool) or not isinstance(ch, int) or not 1 <= ch <= NCH:
             raise ValueError(f"axis {name}: channel must be an integer 1-{NCH}")
+        if ch in used:
+            raise ValueError(f"axis {name}: channel {ch} is already driven by {used[ch]} (two axes would fight for one channel)")
+        used[ch] = name
         if "min" not in cfg or "max" not in cfg:
             raise ValueError(f"axis {name}: min and max are required")
         nums = {}
@@ -169,13 +178,46 @@ def load_map(path):
             raise ValueError(f"axis {name}: center must be within min..max")
         if "deadband" in nums and not 0.0 <= nums["deadband"] < 1.0:
             raise ValueError(f"axis {name}: deadband must be 0 <= deadband < 1")
+    load_device_filter(d)
     return axes
+
+
+def load_device_filter(d):
+    """Optional 'device' guard of the mapping file: {"vendor": "0x1209", "product": "0x4f54", "name": "..."} (any subset). The opened
+    evdev device must match every given field or the bridge refuses to start (a wrong eventN must not drive the aircraft channels).
+    d is the parsed mapping (or a path). Returns {} when absent; raises ValueError when malformed."""
+    if isinstance(d, str):
+        with open(d, encoding="utf-8") as f:
+            d = json.load(f)
+    dev = d.get("device") if isinstance(d, dict) else None
+    if dev is None:
+        return {}
+    if not isinstance(dev, dict) or not dev or set(dev) - {"vendor", "product", "name"}:
+        raise ValueError("'device' must be an object with vendor/product/name (at least one)")
+    out = {}
+    for k in ("vendor", "product"):
+        if k in dev:
+            v = dev[k]
+            try:
+                v = int(v, 0) if isinstance(v, str) else v
+            except ValueError:
+                raise ValueError(f"device.{k}: not a number: {v!r}")
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 0xFFFF:  # cfg-ok: USB id range
+                raise ValueError(f"device.{k}: must be 0..0xFFFF")
+            out[k] = v
+    if "name" in dev:
+        if not isinstance(dev["name"], str) or not dev["name"]:
+            raise ValueError("device.name must be a non-empty string")
+        out["name"] = dev["name"]
+    return out
 
 
 # ---------------------------------------------------------------- input sources
 
 class Source:
-    """poll() -> (values or None, monotonic timestamp of last valid sample or None)."""
+    """poll() -> (values or None, monotonic timestamp of last valid sample or None). .lost: the source is permanently gone."""
+
+    lost = False
 
     def poll(self):
         raise NotImplementedError
@@ -239,24 +281,84 @@ class StdinSource(Source):
             return self.vals, self.ts
 
 
-class EvdevSource(Source):
-    """EdgeTX USB joystick via python-evdev. Freshness = device is alive: evdev
-    emits events only on change, so a still stick must not trip the dead-man;
-    unplugging (read error) or a stalled reader does."""
+def _evdev_paths(evdev):
+    try:
+        return sorted(evdev.list_devices(writable=False))     # python-evdev >= 1.6: also read-only nodes
+    except TypeError:
+        return sorted(evdev.list_devices())
 
-    def __init__(self, path, mapping):
+
+def resolve_evdev(spec, evdev):
+    """'/dev/input/eventN' (or any path, e.g. a /dev/input/by-id symlink) -> itself; 'id=VVVV:PPPP' (hex) or 'name=<exact>' -> the ONE
+    matching event node. No match or more than one match is a refusal (SystemExit), never a guess: with two identical radios (or a
+    radio plus a decoy with the same name) driving the aircraft channels from the wrong one is the worse failure."""
+    if spec.startswith("/"):
+        return spec
+    if spec.startswith("id="):
+        try:
+            vid, pid = (int(x, 16) for x in spec[3:].split(":"))  # cfg-ok: parsing
+        except ValueError:
+            raise SystemExit(f"bad selector {spec!r}: expected id=VVVV:PPPP (hex)")
+        want, what = (lambda d: d.info.vendor == vid and d.info.product == pid), f"id={vid:04x}:{pid:04x}"
+    elif spec.startswith("name="):
+        name = spec[5:]  # cfg-ok: parsing
+        want, what = (lambda d: d.name == name), f"name={name!r}"
+    else:
+        raise SystemExit(f"bad evdev selector {spec!r}: use /dev/input/eventN, id=VVVV:PPPP or name=<exact name>")
+    hits, skipped = [], []
+    for path in _evdev_paths(evdev):
+        try:
+            d = evdev.InputDevice(path)
+        except OSError as e:
+            skipped.append(f"{path}: {e.strerror or e}")
+            continue
+        try:
+            if want(d):
+                hits.append(path)
+        finally:
+            try:
+                d.close()
+            except OSError:
+                pass
+    if len(hits) > 1:
+        raise SystemExit(f"selector {what} is ambiguous: {', '.join(hits)}; use an explicit /dev/input/by-id/... path or eventN")
+    if not hits:
+        raise SystemExit(f"no input device matches {what}" + (f" (could not open: {'; '.join(skipped)})" if skipped else ""))
+    return hits[0]
+
+
+class EvdevSource(Source):
+    """EdgeTX USB joystick via python-evdev. Freshness = device is alive: evdev emits events only on change, so a still stick
+    must not trip the dead-man; a lost device (read error such as ENODEV) is reported at once (poll() -> (None, None), .lost),
+    a stalled reader trips it through the timestamp.
+
+    Axis values are committed at SYN_REPORT (one kernel packet = one consistent stick state). After SYN_DROPPED (client buffer
+    overrun: the kernel discarded events, possibly the last change of a still axis) everything up to the next SYN_REPORT is
+    discarded and the state is re-read with EVIOCGABS, as libevdev does."""
+
+    def __init__(self, path, mapping, device_filter=None):
         try:
             import evdev                      # lazy: not needed by CI or other inputs
         except ImportError:
             raise SystemExit("python-evdev is not installed (pip install evdev); only --input evdev needs it")
         self.ecodes = evdev.ecodes
+        path = resolve_evdev(path, evdev)
         try:
             self.dev = evdev.InputDevice(path)
         except OSError as e:
             raise SystemExit(f"cannot open {path}: {e}")
+        self.path = path
+        bad = [f"{k} {getattr(self.dev.info, k, None) if k != 'name' else self.dev.name!r} != {v!r}"
+               for k, v in (device_filter or {}).items()
+               if (self.dev.name if k == "name" else getattr(self.dev.info, k, None)) != v]
+        if bad:
+            self.dev.close()
+            raise SystemExit(f"device {path} is not the expected one ('device' guard of the mapping file): {'; '.join(bad)}")
         self.mapping = mapping
         self.lock = threading.Lock()
         self.raw = {}
+        self.lost = False
+        self._stop = False
         caps = dict(self.dev.capabilities(absinfo=True)).get(self.ecodes.EV_ABS, [])
         self.codes = {}
         for name in mapping:
@@ -271,23 +373,53 @@ class EvdevSource(Source):
         if missing:
             raise SystemExit(f"device {path} has no axes: {missing}")
         self.ts = time.monotonic()
-        threading.Thread(target=self._run, daemon=True).start()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _resync(self):
+        """Current axis values from the kernel (EVIOCGABS) after SYN_DROPPED."""
+        return {code: self.dev.absinfo(code).value for code in self.codes}
 
     def _run(self):
+        ec = self.ecodes
+        pending, dropped, last_drop_log = {}, False, 0.0
         try:
-            while True:
+            while not self._stop:
                 r, _, _ = select.select([self.dev.fd], [], [], EVDEV_POLL_S)
                 if r:
-                    for ev in self.dev.read():
-                        if ev.type == self.ecodes.EV_ABS and ev.code in self.codes:
-                            with self.lock:
-                                self.raw[ev.code] = ev.value
+                    try:
+                        events = list(self.dev.read())
+                    except BlockingIOError:        # readable but nothing to read (EAGAIN): not a device failure
+                        events = []
+                    for ev in events:
+                        if ev.type == ec.EV_ABS:
+                            if ev.code in self.codes and not dropped:
+                                pending[ev.code] = ev.value
+                        elif ev.type == ec.EV_SYN:
+                            if ev.code == ec.SYN_DROPPED:
+                                dropped = True
+                                pending.clear()
+                                if time.monotonic() - last_drop_log > 1.0:  # cfg-ok: log rate limit (a 10 kHz storm must not flood the log)
+                                    last_drop_log = time.monotonic()
+                                    log("evdev SYN_DROPPED (client buffer overrun): resync at the next SYN_REPORT")
+                            elif ev.code == ec.SYN_REPORT:
+                                if dropped:
+                                    pending = self._resync()
+                                    dropped = False
+                                if pending:
+                                    with self.lock:
+                                        self.raw.update(pending)
+                                    pending = {}
                 with self.lock:
                     self.ts = time.monotonic()
-        except OSError as e:
-            log(f"evdev device lost: {e}")
+        except Exception as e:                      # OSError (ENODEV after unplug, EIO), or anything else unexpected: never silent
+            if not self._stop:
+                log(f"evdev device lost: {e!r}")
+                self.lost = True
 
     def poll(self):
+        if self.lost:
+            return None, None                       # not fresh: the dead-man acts now, not deadman-ms later
         with self.lock:
             vals = [None] * NCH
             for code, name in self.codes.items():
@@ -295,6 +427,14 @@ class EvdevSource(Source):
                 vals[cfg["channel"] - 1] = map_axis(self.raw[code], cfg)
             ts = self.ts
         return sanitize(vals), ts
+
+    def close(self):
+        self._stop = True
+        self.thread.join(timeout=1.0)  # cfg-ok: reader exits within one select() period
+        try:
+            self.dev.close()
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------- lock
@@ -375,7 +515,11 @@ def main(argv=None):
     for s in (signal.SIGTERM, signal.SIGINT):
         signal.signal(s, lambda *_: stop.append(1))
 
-    lock_fd = take_lock(a.lock)
+    try:
+        lock_fd = take_lock(a.lock)
+    except OSError as e:
+        print(f"[tx12_bridge] REFUSED: cannot take the single-writer lock {a.lock}: {e}", file=sys.stderr)
+        return 3  # cfg-ok: exit code (lock)
     if lock_fd is None:
         print(f"[tx12_bridge] REFUSED: another instance holds {a.lock} (single writer)", file=sys.stderr)
         return 3
@@ -390,7 +534,12 @@ def main(argv=None):
         except (OSError, ValueError) as e:
             print(f"[tx12_bridge] bad mapping {a.map}: {e}", file=sys.stderr)
             return 2
-        src = EvdevSource(a.input[6:], mapping)
+        try:
+            guard = load_device_filter(a.map)
+        except (OSError, ValueError) as e:
+            print(f"[tx12_bridge] bad mapping {a.map}: {e}", file=sys.stderr)
+            return 2  # cfg-ok: exit code
+        src = EvdevSource(a.input[6:], mapping, guard)
     else:
         print("[tx12_bridge] --input must be evdev:<dev>, stdin or sweep", file=sys.stderr)
         return 2
@@ -429,6 +578,7 @@ def main(argv=None):
         f"throttle_ch={a.throttle_ch} failsafe={a.failsafe_throttle} "
         f"mode={'real-fc (ch1-4 only)' if a.real_fc_armed_ok else 'bench'}")
     t0 = time.monotonic()
+    rc = 0
     state = "WAIT"          # WAIT -> ACTIVE -> RELEASE -> SILENT -> ACTIVE ...
     t_rel = 0.0
     rel_n = 0
@@ -454,6 +604,10 @@ def main(argv=None):
             if now - last_tick >= 1.0 / a.rate:
                 last_tick = now
                 vals, ts = src.poll()
+                if src.lost and state in ("WAIT", "SILENT"):
+                    log("input device lost and the release is done: exiting (re-plug, then restart the bridge)")
+                    rc = 4  # cfg-ok: exit code (input device lost)
+                    break
                 fresh = vals is not None and ts is not None and now - ts <= a.deadman_ms / 1000.0
                 if state in ("WAIT", "SILENT", "RELEASE") and fresh and target is not None:
                     log(f"input fresh: sending sticks (was {state})")
@@ -485,7 +639,7 @@ def main(argv=None):
             trace.close()
         src.close()
         os.close(lock_fd)
-    return 0
+    return rc
 
 
 if __name__ == "__main__":
