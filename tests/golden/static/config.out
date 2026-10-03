@@ -202,6 +202,7 @@ tests/sim/simcfg.py 0
 tests/sim/sitl_probe.py 58
 tests/sim/udp_probe.py 6
 tests/sim/video_latency.py 9
+tests/sim/layers.sh 0
 tests/sim/qemu_hwsim.sh 5
 tests/sim/smoke.sh 52
 tests/sim/wfb_veth.sh 21

@@ -85,3 +85,16 @@
 
 ## 6. Повторення стану
 Відновити контекст у новій сесії: `CLAUDE.md` → `docs/KNOWLEDGE.md` → `docs/ROADMAP-EXECUTION.md` → цей файл. PR #1 (https://github.com/dscodetesla/SBC-GS/pull/1) ще відкритий; його гілка містить усе описане.
+
+## 7. Шари симуляції на 2026-10-03 (REPO, усе пройшло `tests/sim/layers.sh` та, де можливо, як `nobody`)
+
+| Шар | Тести | Мутації | Доків |
+|---|---|---|---|
+| models (RF/живлення/затримки/рушій сценаріїв) | 118 | 14/14 | `SIM-SCENARIOS.md` |
+| validate (інваріанти, збіжність, back-test) | 70 | 22/22 | `SIM-VALIDATION.md` |
+| twin (події рушія -> реальні міст/реле/модель FC) | 66 | 20/20 | `SIM-TWIN.md` |
+| fuzz (диф. fuzz, відмови реальних скриптів) | 77 | 23/23 | `SIM-FUZZ.md` |
+| virt (QEMU: gpio-sim, usbip, hwsim; опційно) | 96 PASS | 3/3 | `SIM-VIRT-DEVICES.md` |
+| bio, dkms | 17, 21 пунктів | | `SIM-BIOMIMETIC.md`, `SIM-DKMS.md` |
+
+Знайдено й НЕ виправлено: 6 дефектів у віртуальному шарі (udev-імена, `OTG_MODE_FILE=none` на rpi4, `mavp2p` не завершується при втраті FC тощо), 22 дефекти fuzz (D14 виконання `custom.conf` як shell від root, D17 `fan.sh` падає на порожній температурі), 13 невідповідностей моделей. Рішення про виправлення за власником. Усі числа моделей SYNTH/UNMEASURED.

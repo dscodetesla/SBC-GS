@@ -84,3 +84,18 @@ jobs:
           .venv/bin/pip install -r bench/requirements.txt
       - name: Smoke test
         run: PATH="$PWD/.bin:$PATH" PY="$PWD/.venv/bin/python" SMOKE_STRICT=1 SMOKE_ONLY="static model mavlink video router" tests/sim/smoke.sh
+
+  sim-layers:
+    # Offline --check of every simulation layer (models, validate, twin, fuzz, bio, dkms): ~40 s, stdlib + pymavlink.
+    # Advisory until it has been green on a real runner; then drop continue-on-error. See docs/SIM-SCENARIOS.md.
+    runs-on: ubuntu-24.04
+    needs: lint
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python venv with pinned pymavlink
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r bench/requirements.txt
+      - name: Simulation layers
+        run: PY="$PWD/.venv/bin/python" tests/sim/layers.sh
