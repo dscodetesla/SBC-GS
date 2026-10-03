@@ -1,0 +1,24 @@
+# DES vs apm_model cross-check on shared event streams (tolerance 0.011 s = one 0.01 s apm tick)
+A_stop_noRX            AGREE des=[(15.3, 'Radio Failsafe')] mode=RTL
+B_stop_RX              AGREE des=[] mode=STABILIZE
+C_kill_noRX            AGREE des=[(14.0, 'Radio Failsafe'), (15.0, 'GCS Failsafe')] mode=RTL
+D_kill_RX              AGREE des=[(15.0, 'GCS Failsafe')] mode=RTL
+E_kill_noRX_LAND       AGREE des=[(14.0, 'Radio Failsafe'), (15.0, 'GCS Failsafe')] mode=LAND
+F_kill_resume_early    AGREE des=[] mode=STABILIZE
+G_kill_resume_late     AGREE des=[(14.0, 'Radio Failsafe'), (15.0, 'GCS Failsafe'), (16.0, 'GCS Failsafe Cleared'), (16.0, 'Radio Failsafe Cleared')] mode=RTL
+H_wrong_sysid          AGREE des=[] mode=STABILIZE
+I_stop_noRX_fsgcs0     AGREE des=[(15.3, 'Radio Failsafe')] mode=RTL
+all agree: True
+# bridge state machine facts (stick source stops at 10.000 s)
+first_frame_after_stop_s = 10.05
+heartbeats_after_stop = 20
+last_frame_s = 11.3
+release_frames = 17
+throttle_fs_frames = 3
+# time from control loss to failsafe (s)
+alink_fallback_after_gs_silence_s = 1.0
+bridge_killed_GCS_fs = 5.0
+bridge_killed_noRX_radio_fs = 4.0
+elrs_loss_to_fc_radio_fs_SYNTH = 2.0
+sticks_stop_GCS_fs_fires = False
+sticks_stop_noRX_radio_fs = 5.3
