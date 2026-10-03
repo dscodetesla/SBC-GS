@@ -160,5 +160,15 @@ if [ -z "$want" ] || [ "$want" = "static/release-env" ]; then
 	else echo "DIFF     static/release-env"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the layered configuration, the gs-mavlink S1 fix and the hardcode ratchet (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/config" ]; then
+	out="$(mktemp)"; "$HERE/static/config.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/config.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/config"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/config"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/config"
+	else echo "DIFF     static/config"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail

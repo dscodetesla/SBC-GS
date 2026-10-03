@@ -14,8 +14,11 @@ export PYTHONDONTWRITEBYTECODE=1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 BENCH="$ROOT/bench"
-STRICT="${SMOKE_STRICT:-0}"
-ONLY="${SMOKE_ONLY:-static model mavlink video router wfb qemu}"
+# shellcheck source=../../config/load.sh
+. "$ROOT/config/load.sh"
+sbc_cfg_load sim   # SMOKE_*, WFB_NG_REF, ... : layered configuration, docs/CONFIG.md
+STRICT="$SMOKE_STRICT"
+ONLY="$SMOKE_ONLY"
 
 PY="${PY:-}"
 if [ -z "$PY" ]; then
@@ -99,9 +102,9 @@ p_mavlink() {
 	local d="$tmp/mav"; mkdir -p "$d"
 	# A: telemetry + RC echo + documented timeouts (fake_fc <-> gs_mav)
 	(
-		"$PY" "$BENCH/fake_fc.py" --conn udpout:127.0.0.1:15553 --duration 11 --rc-override-time 1 --gcs-timeout 2 >"$d/fc.log" 2>&1 &
+		"$PY" "$BENCH/fake_fc.py" --conn udpout:127.0.0.1:$SMOKE_PORT_FC --duration 11 --rc-override-time 1 --gcs-timeout 2 >"$d/fc.log" 2>&1 &
 		sleep 0.7
-		"$PY" "$BENCH/gs_mav.py" --conn udpin:127.0.0.1:15553 --rc sweep --confirm-props-off --duration 4 --selftest >"$d/gs.log" 2>&1
+		"$PY" "$BENCH/gs_mav.py" --conn udpin:127.0.0.1:$SMOKE_PORT_FC --rc sweep --confirm-props-off --duration 4 --selftest >"$d/gs.log" 2>&1
 		ok $? mavlink "telemetry + RC echo (gs_mav --selftest vs fake_fc)"
 		sleep 3.5
 		grep -q "RC override lost" "$d/fc.log"; ok $? mavlink "fake_fc: RC override timeout detected"
@@ -109,10 +112,10 @@ p_mavlink() {
 	) &
 	# B: real tx12_bridge (sweep) vs ArduPilot-semantics FC: start, expiry after exit, failsafes
 	(
-		"$PY" "$HERE/apm_fc.py" --conn udpin:127.0.0.1:15550 --duration 9 --rc-override-time 1 --rc-fs-timeout 1 \
+		"$PY" "$HERE/apm_fc.py" --conn udpin:127.0.0.1:$SMOKE_PORT_APM_A --duration 9 --rc-override-time 1 --rc-fs-timeout 1 \
 			--fs-gcs-enable 1 --fs-gcs-timeout 2 >"$d/apmA.log" 2>&1 &
 		sleep 0.7
-		"$PY" "$BENCH/tx12_bridge.py" --input sweep --conn udpout:127.0.0.1:15550 --confirm-props-off --duration 3 \
+		"$PY" "$BENCH/tx12_bridge.py" --input sweep --conn udpout:127.0.0.1:$SMOKE_PORT_APM_A --confirm-props-off --duration 3 \
 			--lock "$d/lockA" >"$d/brA.log" 2>&1
 		ok $? mavlink "tx12_bridge sweep exits 0 (releases channels on exit)"
 		sleep 6.2
@@ -123,23 +126,23 @@ p_mavlink() {
 	) &
 	# C: dead-man: stdin input stops, the bridge must stop sending sticks and release (override expires)
 	(
-		"$PY" "$HERE/apm_fc.py" --conn udpin:127.0.0.1:15551 --duration 7 --rc-override-time 3 >"$d/apmB.log" 2>&1 &
+		"$PY" "$HERE/apm_fc.py" --conn udpin:127.0.0.1:$SMOKE_PORT_APM_B --duration 7 --rc-override-time 3 >"$d/apmB.log" 2>&1 &
 		sleep 0.7
 		{ for _ in $(seq 30); do echo "1600 1500 1300 1500 1500 1500 1500 1500"; sleep 0.05; done; sleep 4; } |
-			"$PY" "$BENCH/tx12_bridge.py" --input stdin --conn udpout:127.0.0.1:15551 --confirm-props-off --deadman-ms 300 \
+			"$PY" "$BENCH/tx12_bridge.py" --input stdin --conn udpout:127.0.0.1:$SMOKE_PORT_APM_B --confirm-props-off --deadman-ms "$SMOKE_DEADMAN_MS" \
 				--duration 6 --lock "$d/lockB" >"$d/brB.log" 2>&1
 		sleep 1.5
 		s="$(evt "$d/apmB.log" 'RC override started')"; e="$(evt "$d/apmB.log" 'RC override expired')"
 		# input lasts 1.5 s; dead-man 0.3 s; release follows. RC_OVERRIDE_TIME is 3 s, so an expiry within
 		# 3 s of the start proves the BRIDGE released the channels instead of waiting for the FC timeout.
-		[ -n "$s" ] && [ -n "$e" ] && awk -v s="$s" -v e="$e" 'BEGIN{d=e-s; exit !(d>=0.2 && d<=3.0)}'
+		[ -n "$s" ] && [ -n "$e" ] && awk -v s="$s" -v e="$e" -v m="$SMOKE_DEADMAN_RELEASE_MAX_S" 'BEGIN{d=e-s; exit !(d>=0.2 && d<=m)}'
 		ok $? mavlink "dead-man: bridge releases channels ${s:+$(awk -v s="$s" -v e="${e:-0}" 'BEGIN{printf "%.1f s after start (<3 s FC timeout)", e-s}')}"
 	) &
 	# D: a non-GCS sysid must not be able to drive the FC (single RC writer rule)
 	(
-		"$PY" "$HERE/apm_fc.py" --conn udpin:127.0.0.1:15552 --duration 4.5 >"$d/apmC.log" 2>&1 &
+		"$PY" "$HERE/apm_fc.py" --conn udpin:127.0.0.1:$SMOKE_PORT_APM_C --duration 4.5 >"$d/apmC.log" 2>&1 &
 		sleep 0.7
-		"$PY" "$BENCH/tx12_bridge.py" --input sweep --sysid 77 --conn udpout:127.0.0.1:15552 --confirm-props-off --duration 2 \
+		"$PY" "$BENCH/tx12_bridge.py" --input sweep --sysid 77 --conn udpout:127.0.0.1:$SMOKE_PORT_APM_C --confirm-props-off --duration 2 \
 			--lock "$d/lockC" >"$d/brC.log" 2>&1
 		sleep 1.2
 		grep -q "sysid 77 ignored" "$d/apmC.log" && [ -z "$(evt "$d/apmC.log" 'RC override started')" ]
@@ -154,11 +157,11 @@ p_video() {
 	local d="$tmp/vid"; mkdir -p "$d"
 	gst-inspect-1.0 x264enc >/dev/null 2>&1 && gst-inspect-1.0 avdec_h264 >/dev/null 2>&1 || { skip video "x264enc/avdec_h264 missing (plugins-ugly, libav)"; return; }
 	(
-		VIDEO_CODEC=h264 VIDEO_W=640 VIDEO_H=360 SINK_PORT=15600 timeout 10 "$BENCH/video-src.sh" >"$d/src.log" 2>&1 &
+		VIDEO_CODEC=h264 VIDEO_W=640 VIDEO_H=360 SINK_PORT=$SMOKE_PORT_VIDEO timeout 10 "$BENCH/video-src.sh" >"$d/src.log" 2>&1 &
 		sleep 1.2
-		VIDEO_CODEC=h264 LISTEN_PORT=15600 SINK=fakesink PROGRESS=1 timeout 6 "$BENCH/video-rx.sh" >"$d/rx.log" 2>&1
+		VIDEO_CODEC=h264 LISTEN_PORT=$SMOKE_PORT_VIDEO SINK=fakesink PROGRESS=1 timeout 6 "$BENCH/video-rx.sh" >"$d/rx.log" 2>&1
 		n="$(grep -c progressreport "$d/rx.log")"
-		[ "$n" -ge 3 ]; ok $? video "bench/video-src.sh -> udp -> bench/video-rx.sh (h264, fakesink): $n progress reports"
+		[ "$n" -ge "$SMOKE_VIDEO_MIN_PROGRESS" ]; ok $? video "bench/video-src.sh -> udp -> bench/video-rx.sh (h264, fakesink): $n progress reports"
 	) &
 	(
 		if [ -z "$GST_PY" ]; then skip video "latency: python3-gi + gir1.2-gstreamer-1.0 missing"; exit 0; fi
@@ -179,12 +182,12 @@ p_router() {
 	local r d="$tmp/rt"; mkdir -p "$d"
 	r="$(command -v mavp2p || true)"
 	[ -n "$r" ] || { skip router "mavp2p not installed (go install github.com/bluenviron/mavp2p@v1.3.3 or mavlink-routerd)"; return; }
-	printf "ROUTER='mavp2p'\nUPSTREAM_PORT='15560'\nGCS_UDP_PORTS='15561'\nHB_SYSID='125'\n" >"$d/gs-mavlink.conf"
+	printf "ROUTER='mavp2p'\nUPSTREAM_PORT='%s'\nGCS_UDP_PORTS='%s'\nHB_SYSID='125'\n" "$SMOKE_PORT_ROUTER_UP" "$SMOKE_PORT_ROUTER_GCS" >"$d/gs-mavlink.conf"
 	GS_MAVLINK_CONF="$d/gs-mavlink.conf" "$ROOT/gs/mavlink/gs-mavlink.sh" >"$d/router.log" 2>&1 & local rp=$!
 	sleep 1
-	"$PY" "$BENCH/fake_fc.py" --conn udpout:127.0.0.1:15560 --duration 8 >"$d/fc.log" 2>&1 & local fp=$!
+	"$PY" "$BENCH/fake_fc.py" --conn udpout:127.0.0.1:$SMOKE_PORT_ROUTER_UP --duration 8 >"$d/fc.log" 2>&1 & local fp=$!
 	sleep 1
-	"$PY" "$BENCH/gs_mav.py" --conn udpout:127.0.0.1:15561 --duration 4 --selftest >"$d/gs.log" 2>&1
+	"$PY" "$BENCH/gs_mav.py" --conn udpout:127.0.0.1:$SMOKE_PORT_ROUTER_GCS --duration 4 --selftest >"$d/gs.log" 2>&1
 	ok $? router "gs-mavlink.sh starts real mavp2p; telemetry fake_fc -> router -> gs_mav"
 	kill "$rp" "$fp" 2>/dev/null; pkill -P "$rp" 2>/dev/null
 	wait "$rp" "$fp" 2>/dev/null

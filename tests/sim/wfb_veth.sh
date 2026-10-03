@@ -8,7 +8,9 @@
 # Does NOT prove: RF, driver, monitor-mode injection, real radiotap/MCS/rssi, USB, antenna diversity timing.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WFB_NG_REF="${WFB_NG_REF:-2fe252b2f451c1ccfb16968e064fe1cdb18baaa0}"
+# shellcheck source=../../config/load.sh
+. "$HERE/../../config/load.sh"
+sbc_cfg_load sim   # WFB_NG_REF, WFB_VETH_*, SIM_UDP_* defaults: docs/CONFIG.md
 PY="${PY:-python3}"
 skip() { echo "SKIP wfb_veth: $*"; exit 77; }
 
@@ -46,8 +48,8 @@ for pair in "wtx0 air0" "air1 wrx0"; do
 done
 
 # start the two wfb-ng ends (video-style stream, radio port 0, default FEC 8/12)
-$SUDO env LD_PRELOAD="$tmp/pcapshim.so" "$src/wfb_rx" -p 0 -c 127.0.0.1 -u 15700 -K "$tmp/gs.key" wrx0 >"$tmp/rx.log" 2>&1 & pids+=($!)
-$SUDO "$src/wfb_tx" -p 0 -u 15702 -K "$tmp/drone.key" wtx0 >"$tmp/tx.log" 2>&1 & pids+=($!)
+$SUDO env LD_PRELOAD="$tmp/pcapshim.so" "$src/wfb_rx" -p 0 -c 127.0.0.1 -u "$WFB_VETH_RX_PORT" -K "$tmp/gs.key" wrx0 >"$tmp/rx.log" 2>&1 & pids+=($!)
+$SUDO "$src/wfb_tx" -p 0 -u "$WFB_VETH_TX_PORT" -K "$tmp/drone.key" wtx0 >"$tmp/tx.log" 2>&1 & pids+=($!)
 sleep 0.5
 
 fail=0
@@ -56,7 +58,7 @@ scenario() {  # name, relay args..., then expected-condition awk on PROBE line (
 	$SUDO "$PY" "$HERE/air_relay.py" --src air0 --dst air1 "$@" >"$tmp/relay.log" 2>&1 & local rp=$!
 	sleep 0.5
 	local out rc=0
-	out="$("$PY" "$HERE/udp_probe.py" --send-to 127.0.0.1:15702 --listen 127.0.0.1:15700 --count 200 --rate 100 --min-delivery "$mind")" || rc=$?
+	out="$("$PY" "$HERE/udp_probe.py" --send-to "127.0.0.1:$WFB_VETH_TX_PORT" --listen "127.0.0.1:$WFB_VETH_RX_PORT" --min-delivery "$mind")" || rc=$?
 	$SUDO kill "$rp" 2>/dev/null; wait "$rp" 2>/dev/null
 	echo "  $out"
 	echo "  $(cat "$tmp/relay.log")"
@@ -66,7 +68,7 @@ scenario "clean air, >=99% delivered" 0.99
 scenario "10% frame loss, FEC 8/12 recovers (>=90%)" 0.90 --loss 0.10 --seed 7
 # negative control: 60% loss must NOT pass a 90% threshold, otherwise the relay does not impair anything
 $SUDO "$PY" "$HERE/air_relay.py" --src air0 --dst air1 --loss 0.6 --seed 3 >"$tmp/relay.log" 2>&1 & rp=$!; sleep 0.5
-if "$PY" "$HERE/udp_probe.py" --send-to 127.0.0.1:15702 --listen 127.0.0.1:15700 --count 200 --rate 100 --min-delivery 0.90 >"$tmp/neg.out"; then
+if "$PY" "$HERE/udp_probe.py" --send-to "127.0.0.1:$WFB_VETH_TX_PORT" --listen "127.0.0.1:$WFB_VETH_RX_PORT" --min-delivery 0.90 >"$tmp/neg.out"; then
 	echo "FAIL  negative control: 60% loss still delivered >=90% ($(cat "$tmp/neg.out"))"; fail=1
 else echo "PASS  negative control: 60% loss is visible ($(cat "$tmp/neg.out"))"; fi
 $SUDO kill "$rp" 2>/dev/null; wait "$rp" 2>/dev/null

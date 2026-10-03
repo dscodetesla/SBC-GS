@@ -11,7 +11,9 @@
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE="${SIM_CACHE:-$HOME/.cache/sbc-gs-sim}"
-WFB_NG_REF="${WFB_NG_REF:-2fe252b2f451c1ccfb16968e064fe1cdb18baaa0}"
+# shellcheck source=../../config/load.sh
+. "$HERE/../../config/load.sh"
+sbc_cfg_load sim   # WFB_NG_REF: docs/CONFIG.md
 skip() { echo "SKIP qemu_hwsim: $*"; exit 77; }
 for t in qemu-system-x86_64 cpio gzip zstd gcc make git apt-get dpkg-deb; do command -v "$t" >/dev/null || skip "$t not installed"; done
 BB="$(command -v busybox || true)"; [ -n "$BB" ] || skip "busybox-static not installed"

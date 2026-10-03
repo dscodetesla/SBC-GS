@@ -12,27 +12,52 @@ Default connection matches wfb-ng drone_mavlink `listen://0.0.0.0:14550`:
 this process sends to 127.0.0.1:14550 and wfb-ng replies to our source port.
 """
 import argparse
+import importlib.util
 import math
+import os
+import sys
 import time
 
 from pymavlink import mavutil
 
 MAV = mavutil.mavlink
+IGNORE = 65535   # cfg-ok: ArduPilot: field is ignored
 
 
-def parse_args():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--conn", default="udpout:127.0.0.1:14550")
-    ap.add_argument("--sysid", type=int, default=1, help="avoid 3 (wfb-ng injects sysid 3)")
-    ap.add_argument("--rc-override-time", type=float, default=3.0, help="RC_OVERRIDE_TIME (docs default 3 s)")
-    ap.add_argument("--gcs-timeout", type=float, default=5.0, help="FS_GCS_TIMEOUT (docs default 5 s)")
+def _load_cfg_module():
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.path.join(here, "..", "config"), os.path.join(here, "config")):
+        p = os.path.join(d, "load.py")
+        if os.path.isfile(p):
+            spec = importlib.util.spec_from_file_location("sbc_gs_load", p)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    raise SystemExit("config/load.py not found (expected ../config next to bench/)")
+
+
+CFGLIB = _load_cfg_module()
+
+
+def parse_args(argv=None):
+    cfg = CFGLIB.load(["fake_fc"], argv=sys.argv[1:] if argv is None else argv)
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0] + "\nDefaults come from config/registry.tsv (FAKEFC_*, FC_SYSID; docs/CONFIG.md).")
+    ap.add_argument("--conn", default=cfg["FAKEFC_CONN"])
+    ap.add_argument("--sysid", type=int, default=cfg["FC_SYSID"], help="avoid 3 (wfb-ng injects sysid 3)")
+    ap.add_argument("--rc-override-time", type=float, default=cfg["FAKEFC_RC_OVERRIDE_TIME_S"], help="RC_OVERRIDE_TIME (docs default 3 s)")
+    ap.add_argument("--gcs-timeout", type=float, default=cfg["FAKEFC_GCS_TIMEOUT_S"], help="FS_GCS_TIMEOUT (docs default 5 s)")
     ap.add_argument("--duration", type=float, default=0, help="stop after N seconds (0 = run forever)")
-    return ap.parse_args()
+    a = ap.parse_args(argv)
+    a.cfg = cfg
+    return a
 
 
 def main():
     a = parse_args()
-    m = mavutil.mavlink_connection(a.conn, source_system=a.sysid, source_component=1)
+    cfg = a.cfg
+    gcs_sysid, slow_s, fast_s = cfg["FAKEFC_GCS_SYSID"], cfg["FAKEFC_SLOW_PERIOD_S"], cfg["FAKEFC_FAST_PERIOD_S"]
+    report_s, loop_sleep = cfg["FAKEFC_REPORT_PERIOD_S"], cfg["FAKEFC_LOOP_SLEEP_S"]
+    m = mavutil.mavlink_connection(a.conn, source_system=a.sysid, source_component=cfg["FAKEFC_COMPONENT_ID"])
     t0 = time.monotonic()
     ms = lambda: int((time.monotonic() - t0) * 1000) & 0xFFFFFFFF
 
@@ -52,12 +77,12 @@ def main():
             break
 
         # --- telemetry ---
-        if now - last_slow >= 1.0:
+        if now - last_slow >= slow_s:
             last_slow = now
             m.mav.heartbeat_send(MAV.MAV_TYPE_QUADROTOR, MAV.MAV_AUTOPILOT_ARDUPILOTMEGA,
                                  MAV.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, 0, MAV.MAV_STATE_ACTIVE)
             m.mav.sys_status_send(0, 0, 0, 100, 15800, 1200, 87, 0, 0, 0, 0, 0, 0)
-        if now - last_fast >= 0.1:
+        if now - last_fast >= fast_s:
             last_fast = now
             ph = now - t0
             m.mav.attitude_send(ms(), 0.3 * math.sin(ph), 0.2 * math.sin(ph * 0.7),
@@ -81,10 +106,10 @@ def main():
                 if not rc_active:
                     print("[fake_fc] RC override started", flush=True)
                 rc_active = True
-                m.mav.rc_channels_send(ms(), 8, *rc, *([65535] * 10), 255)
+                m.mav.rc_channels_send(ms(), 8, *rc, *([IGNORE] * 10), 255)
             elif t == "MANUAL_CONTROL":
                 counts["manual_control"] += 1
-            elif t == "HEARTBEAT" and msg.get_srcSystem() == 255:
+            elif t == "HEARTBEAT" and msg.get_srcSystem() == gcs_sysid:
                 counts["gcs_hb"] += 1
                 last_gcs_hb = time.monotonic()
                 if gcs_fs:
@@ -101,10 +126,10 @@ def main():
             m.mav.statustext_send(MAV.MAV_SEVERITY_WARNING, b"GCS failsafe")
             gcs_fs = True
 
-        if now - last_report >= 5.0:
+        if now - last_report >= report_s:
             last_report = now
             print(f"[fake_fc] rx counts {counts} rc={rc if rc_active else 'inactive'}", flush=True)
-        time.sleep(0.005)
+        time.sleep(loop_sleep)
 
 
 if __name__ == "__main__":

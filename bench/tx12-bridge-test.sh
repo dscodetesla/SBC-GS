@@ -108,11 +108,12 @@ nextport; start_sniff 9 "$tmp/s4.log"
 	sleep 4
 } | "$PY" "$BR" --input stdin --confirm-props-off --conn "$(CONNARG)" --lock "$tmp/l4" --deadman-ms 300 --duration 7 >"$tmp/b4.log" 2>&1
 wait "${pids[-1]}" 2>/dev/null || true
-"$PY" - "$tmp" <<'EOF'
+"$PY" - "$tmp" "$TXT_DEADMAN_LAT_MIN_S" "$TXT_DEADMAN_LAT_MAX_S" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 from an import load
 tmp = sys.argv[1]
+lat_lo, lat_hi = float(sys.argv[2]), float(sys.argv[3])
 fr, end = load(tmp + "/s4.log")
 t_last = float(open(tmp + "/t_last").read())
 ok = lambda v: v == 0 or v == 65535 or 1000 <= v <= 2000
@@ -130,7 +131,7 @@ zero = [t for t, vs in after if vs == [0] * 8]
 check("throttle failsafe frame sent after dead-man", len(fs) >= 1)
 d = fs[0] - t_last
 print("dead-man latency from last input to first failsafe frame: %.3f s" % d)
-check("dead-man fires within 0.20..0.60 s (deadman 0.3 s)", 0.20 <= d <= 0.60)
+check("dead-man fires within %.2f..%.2f s (deadman 0.3 s)" % (lat_lo, lat_hi), lat_lo <= d <= lat_hi)
 check("no stick frames after the failsafe frame", all(vs == [0, 0, 1000, 0, 0, 0, 0, 0] or vs == [0] * 8 for t, vs in after if t >= fs[0]))
 check("release (all 0) frames follow", len(zero) >= 10)
 span = zero[-1] - fs[0]
@@ -154,13 +155,14 @@ check $? "lock is free again after the first instance exited"
 # ---- 6. exit releases (SIGTERM and SIGINT), sweep, rate and gap guard ----
 for sig in TERM INT; do
 	nextport; start_sniff 8 "$tmp/s6$sig.log"
-	"$PY" "$BR" --input sweep --confirm-props-off --conn "$(CONNARG)" --lock "$tmp/l6" --max-rate 20 --duration 30 >"$tmp/b6$sig.log" 2>&1 & bp=$!; pids+=("$bp")
+	"$PY" "$BR" --input sweep --confirm-props-off --conn "$(CONNARG)" --lock "$tmp/l6" --max-rate 20 --duration 30 \
+		--tx-trace "$tmp/tr6$sig.log" >"$tmp/b6$sig.log" 2>&1 & bp=$!; pids+=("$bp")
 	sleep 3.5
 	kill -"$sig" "$bp"; t_kill="$(date +%s.%N)"
 	wait "$bp"; rc=$?
 	t_end="$(date +%s.%N)"
 	wait "${pids[-2]}" 2>/dev/null || true
-	"$PY" - "$tmp" "s6$sig.log" "$t_kill" "$t_end" "$rc" <<'EOF'
+	"$PY" - "$tmp" "s6$sig.log" "$t_kill" "$t_end" "$rc" "$tmp/tr6$sig.log" "$TXT_GAP_TOLERANCE" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 from an import load
@@ -170,11 +172,20 @@ tail = [vs for _, _, vs in fr[-8:]]
 sticks = [t for t, _, vs in fr if vs[0] not in (0,) and vs[0] != 65535]
 gaps = [b[0] - a[0] for a, b in zip(fr, fr[1:])]
 rate = (len(sticks) - 1) / (sticks[-1] - sticks[0])
-print("exit rc=%d, exit took %.2f s, tail=%s, stick rate=%.1f Hz, min gap=%.3f s" % (rc, t_end - t_kill, tail[-1], rate, min(gaps)))
+# The --max-rate limiter lives in the SENDER, so the gap is measured there (--tx-trace: monotonic time of every frame sent,
+# including the failsafe+release frames after the signal). The receiver-side gaps above carry loopback/scheduler jitter
+# (the sniffer is a Python process: a delayed read delivers two datagrams back to back, which the old 0.035 s receiver
+# bound mistook for a limiter failure in 2 of 6 runs, audit 2026-10-02); they are only printed, and bounded through the rate.
+trace = [float(x) for x in open(sys.argv[6])]
+tol = float(sys.argv[7])
+sgaps = [b - a for a, b in zip(trace, trace[1:])]
+print("exit rc=%d, exit took %.2f s, tail=%s, stick rate=%.1f Hz, min gap sender=%.4f s (receiver %.3f s, informational), frames traced=%d"
+      % (rc, t_end - t_kill, tail[-1], rate, min(sgaps), min(gaps), len(trace)))
 assert rc == 0 and t_end - t_kill < 2.0
 assert tail[:3] == [[0, 0, 1000, 0, 0, 0, 0, 0]] * 3 and tail[3:] == [[0] * 8] * 5   # fs x3 then release x5
 assert 15 <= rate <= 25
-assert min(gaps) >= 0.035   # --max-rate 20 guard (50 ms) minus socket jitter
+assert len(trace) >= len(fr) and len(trace) > 20                 # the trace covers every frame the receiver saw
+assert min(sgaps) >= tol / 20.0, "limiter violated: %.4f s < %.4f s" % (min(sgaps), tol / 20.0)   # --max-rate 20: 50 ms, tol = clock slack
 EOF
 	check $? "SIG$sig: throttle failsafe x3 + release x5, clean exit, ~20 Hz, --max-rate gap held"
 done

@@ -15,8 +15,14 @@ What it cannot prove: Pi hardware decoders (v4l2*), kmssink/vsync, radio/FEC/jit
 """
 import argparse
 import statistics
+import os
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import simcfg  # noqa: E402
+
+CFG = simcfg.load(["sim"])   # SIM_LAT_* keys, docs/CONFIG.md
 
 import gi
 
@@ -24,10 +30,10 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 ENC = {
-    "h264": ("x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000 key-int-max=30 ! h264parse"
+    "h264": ("x264enc tune=zerolatency speed-preset=ultrafast bitrate={kbps} key-int-max={fps} ! h264parse"
              " ! rtph264pay config-interval=1 pt=96 mtu=1400",
              "rtph264depay ! h264parse ! avdec_h264", "H264"),
-    "h265": ("x265enc tune=zerolatency speed-preset=ultrafast bitrate=2000 key-int-max=30 ! h265parse"
+    "h265": ("x265enc tune=zerolatency speed-preset=ultrafast bitrate={kbps} key-int-max={fps} ! h265parse"
              " ! rtph265pay config-interval=1 pt=96 mtu=1400",
              "rtph265depay ! h265parse ! avdec_h265", "H265"),
 }
@@ -36,16 +42,17 @@ ENC = {
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--codec", choices=sorted(ENC), default="h264")
-    ap.add_argument("--port", type=int, default=15600)
-    ap.add_argument("--frames", type=int, default=90)
-    ap.add_argument("--fps", type=int, default=30)
-    ap.add_argument("--size", default="640x360")
-    ap.add_argument("--max-p95-ms", type=float, default=500.0)
-    ap.add_argument("--max-lost", type=int, default=3, help="tolerated missing frames at the tail (encoder flush)")
+    ap.add_argument("--port", type=int, default=CFG["SIM_LAT_PORT"])
+    ap.add_argument("--frames", type=int, default=CFG["SIM_LAT_FRAMES"])
+    ap.add_argument("--fps", type=int, default=CFG["SIM_LAT_FPS"])
+    ap.add_argument("--size", default=CFG["SIM_LAT_SIZE"])
+    ap.add_argument("--max-p95-ms", type=float, default=CFG["SIM_LAT_MAX_P95_MS"])
+    ap.add_argument("--max-lost", type=int, default=CFG["SIM_LAT_MAX_LOST"], help="tolerated missing frames at the tail (encoder flush)")
     a = ap.parse_args()
     w, h = a.size.split("x")
     Gst.init(None)
     enc, dec, name = ENC[a.codec]
+    enc = enc.format(kbps=CFG["SIM_LAT_BITRATE_KBPS"], fps=a.fps)
     tx = Gst.parse_launch(
         f"videotestsrc is-live=true num-buffers={a.frames} pattern=ball ! video/x-raw,width={w},height={h},"
         f"framerate={a.fps}/1 ! videoconvert name=stamp_in ! {enc} ! udpsink host=127.0.0.1 port={a.port} sync=false")

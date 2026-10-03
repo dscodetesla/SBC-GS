@@ -21,9 +21,14 @@ docs/MAVLINK-ROUTER.md, section 6), otherwise ArduPilot silently ignores the
 overrides.
 Do NOT connect this to a real aircraft with propellers fitted. RC over wfb-ng
 must never be the only control channel.
+
+Every tunable (dead-man, rates, clamp range, failsafe throttle, sysid, ...) is a registry key TX12_* in
+config/registry.tsv (docs/CONFIG.md): CLI flag > environment SBC_GS_TX12_* > /config/sbc-gs.env > profile > default.
+Keys flagged SAFETY have hard bounds; going beyond them needs --i-know (or SBC_GS_I_KNOW=1) and is logged loudly.
 """
 import argparse
 import fcntl
+import importlib.util
 import json
 import math
 import os
@@ -34,13 +39,40 @@ import tempfile
 import threading
 import time
 
-NCH = 8
-IGNORE = 65535     # ArduPilot: field is ignored
+
+
+def _load_cfg_module():
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.path.join(here, "..", "config"), os.path.join(here, "config")):
+        p = os.path.join(d, "load.py")
+        if os.path.isfile(p):
+            spec = importlib.util.spec_from_file_location("sbc_gs_load", p)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    raise SystemExit("config/load.py not found (expected ../config next to bench/)")
+
+
+CFGLIB = _load_cfg_module()
+
+NCH = 8            # cfg-ok: protocol (RC_CHANNELS_OVERRIDE has 8 channels here)
+IGNORE = 65535     # cfg-ok: ArduPilot: field is ignored
 RELEASE = 0        # ArduPilot: channel released to the RC receiver
-LO, HI = 1000, 2000
-SANE_MIN, SANE_MAX = 0, 4000   # outside of this a sample is "absurd" and dropped
-RELEASE_HOLD_S = 1.0
-THROTTLE_FS_FRAMES = 3
+# Tunables, filled from the registry (built-in defaults at import, the full layered config in parse_args()).
+LO = HI = SANE_MIN = SANE_MAX = RELEASE_HOLD_S = THROTTLE_FS_FRAMES = EXIT_RELEASE_FRAMES = EVDEV_POLL_S = None
+
+
+def configure(cfg):
+    global LO, HI, SANE_MIN, SANE_MAX, RELEASE_HOLD_S, THROTTLE_FS_FRAMES, EXIT_RELEASE_FRAMES, EVDEV_POLL_S
+    LO, HI = cfg["TX12_CLAMP_LO_US"], cfg["TX12_CLAMP_HI_US"]
+    SANE_MIN, SANE_MAX = cfg["TX12_SANE_MIN_US"], cfg["TX12_SANE_MAX_US"]   # outside of this a sample is "absurd" and dropped
+    RELEASE_HOLD_S = cfg["TX12_RELEASE_HOLD_S"]
+    THROTTLE_FS_FRAMES = cfg["TX12_THROTTLE_FS_FRAMES"]
+    EXIT_RELEASE_FRAMES = cfg["TX12_EXIT_RELEASE_FRAMES"]
+    EVDEV_POLL_S = cfg["TX12_EVDEV_POLL_S"]
+
+
+configure(CFGLIB.resolve(["tx12"], defaults_only=True))
 
 
 def log(msg):
@@ -211,7 +243,7 @@ class EvdevSource(Source):
     def _run(self):
         try:
             while True:
-                r, _, _ = select.select([self.dev.fd], [], [], 0.05)
+                r, _, _ = select.select([self.dev.fd], [], [], EVDEV_POLL_S)
                 if r:
                     for ev in self.dev.read():
                         if ev.type == self.ecodes.EV_ABS and ev.code in self.codes:
@@ -254,19 +286,25 @@ def take_lock(path):
 # ---------------------------------------------------------------- main
 
 def parse_args(argv=None):
+    cfg = CFGLIB.load(["tx12"], argv=sys.argv[1:] if argv is None else argv)
+    configure(cfg)
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--input", required=True, help="evdev:/dev/input/eventN | stdin | sweep")
-    ap.add_argument("--map", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "tx12_map.example.json"),
+    ap.add_argument("--map", default=cfg["TX12_MAP"] or os.path.join(os.path.dirname(os.path.abspath(__file__)), "tx12_map.example.json"),
                     help="axis mapping JSON for evdev input")
-    ap.add_argument("--conn", default="udpout:127.0.0.1:14550")
-    ap.add_argument("--sysid", type=int, default=255,
+    ap.add_argument("--conn", default=cfg["TX12_CONN"])
+    ap.add_argument("--sysid", type=int, default=cfg["TX12_SYSID"],
                     help="MAVLink source sysid; MUST match the FC's MAV_GCS_SYSID (docs/MAVLINK-ROUTER.md)")
-    ap.add_argument("--rate", type=float, default=20.0, help="override rate, Hz")
-    ap.add_argument("--max-rate", type=float, default=50.0, help="hard cap on frames/s ever sent")
-    ap.add_argument("--deadman-ms", type=int, default=300)
-    ap.add_argument("--throttle-ch", type=int, default=3)
-    ap.add_argument("--failsafe-throttle", type=int, default=1000)
-    ap.add_argument("--lock", default=default_lock())
+    ap.add_argument("--rate", type=float, default=cfg["TX12_RATE_HZ"], help="override rate, Hz")
+    ap.add_argument("--max-rate", type=float, default=cfg["TX12_MAX_RATE_HZ"], help="hard cap on frames/s ever sent")
+    ap.add_argument("--deadman-ms", type=int, default=cfg["TX12_DEADMAN_MS"])
+    ap.add_argument("--throttle-ch", type=int, default=cfg["TX12_THROTTLE_CH"])
+    ap.add_argument("--failsafe-throttle", type=int, default=cfg["TX12_FAILSAFE_THROTTLE_US"])
+    ap.add_argument("--lock", default=cfg["TX12_LOCK_PATH"] or default_lock())
+    ap.add_argument("--tx-trace", default="", metavar="FILE",
+                    help="test hook: append the monotonic time of every frame sent to FILE (sender-side timing)")
+    ap.add_argument("--i-know", action="store_true",
+                    help="allow values beyond the hard bounds of SAFETY keys (config/registry.tsv); logged loudly. Same as SBC_GS_I_KNOW=1")
     ap.add_argument("--duration", type=float, default=0, help="0 = until signal (tests use a value)")
     ap.add_argument("--confirm-props-off", action="store_true",
                     help="bench: you confirm no propellers are fitted and no battery/ESC is connected")
@@ -279,21 +317,27 @@ def parse_args(argv=None):
                  "or --real-fc-armed-ok (real FC, channels 1-4 only)")
     if not 0 < a.rate <= a.max_rate:
         ap.error("--rate must be > 0 and <= --max-rate")
-    if a.max_rate > 100:
-        ap.error("--max-rate above 100 Hz is refused")
     if not 1 <= a.throttle_ch <= NCH:
         ap.error("--throttle-ch must be 1-8")
     if not LO <= a.failsafe_throttle <= HI:
-        ap.error("--failsafe-throttle must be 1000-2000")
-    if a.deadman_ms < 50:
-        ap.error("--deadman-ms below 50 is refused")
-    if not 1 <= a.sysid <= 255:
-        ap.error("--sysid must be 1-255")
+        ap.error(f"--failsafe-throttle must be {LO}-{HI}")
+    # the registry bounds (hard bounds for SAFETY keys: e.g. --max-rate above 100 Hz, --deadman-ms below 50) apply to the CLI too
+    for dest, key in (("max_rate", "TX12_MAX_RATE_HZ"), ("rate", "TX12_RATE_HZ"), ("deadman_ms", "TX12_DEADMAN_MS"),
+                      ("throttle_ch", "TX12_THROTTLE_CH"), ("failsafe_throttle", "TX12_FAILSAFE_THROTTLE_US"),
+                      ("sysid", "TX12_SYSID")):
+        try:
+            cfg.check_cli(key, getattr(a, dest))
+        except CFGLIB.ConfigError as e:
+            ap.error(f"--{dest.replace('_', '-')}: {e}")
+    a.cfg = cfg
     return a
 
 
 def main(argv=None):
     a = parse_args(argv)
+    cfg = a.cfg
+    COMPONENT_ID, HB_PERIOD_S = cfg["TX12_COMPONENT_ID"], cfg["TX12_HB_PERIOD_S"]
+    STAT_PERIOD_S, LOOP_SLEEP_S = cfg["TX12_STAT_PERIOD_S"], cfg["TX12_LOOP_SLEEP_S"]
     stop = []
     for s in (signal.SIGTERM, signal.SIGINT):
         signal.signal(s, lambda *_: stop.append(1))
@@ -320,8 +364,9 @@ def main(argv=None):
 
     from pymavlink import mavutil
     mav = mavutil.mavlink
-    m = mavutil.mavlink_connection(a.conn, source_system=a.sysid, source_component=190)
+    m = mavutil.mavlink_connection(a.conn, source_system=a.sysid, source_component=COMPONENT_ID)
     min_gap = 1.0 / a.max_rate
+    trace = open(a.tx_trace, "a", buffering=1, encoding="utf-8") if a.tx_trace else None
     last_tx = [0.0]
     target = None
     n_sent = 0
@@ -332,6 +377,8 @@ def main(argv=None):
         if wait > 0:
             time.sleep(wait)       # --max-rate guard
         last_tx[0] = time.monotonic()
+        if trace:
+            trace.write(f"{last_tx[0]:.6f}\n")
         m.mav.rc_channels_override_send(target, 1, *vals)
         n_sent += 1
 
@@ -358,7 +405,7 @@ def main(argv=None):
             now = time.monotonic()
             if a.duration and now - t0 > a.duration:
                 break
-            if now - last_hb >= 1.0:
+            if now - last_hb >= HB_PERIOD_S:
                 last_hb = now
                 m.mav.heartbeat_send(mav.MAV_TYPE_GCS, mav.MAV_AUTOPILOT_INVALID, 0, 0, mav.MAV_STATE_ACTIVE)
             while True:
@@ -390,17 +437,19 @@ def main(argv=None):
                     else:
                         tx(throttle_fs_frame() if rel_n < THROTTLE_FS_FRAMES else [RELEASE] * NCH)
                         rel_n += 1
-            if now - last_stat >= 2.0:
+            if now - last_stat >= STAT_PERIOD_S:
                 last_stat = now
                 log(f"+{now - t0:5.1f}s state={state} fc={target} frames={n_sent}")
-            time.sleep(0.005)
+            time.sleep(LOOP_SLEEP_S)
     finally:
         if target is not None and state in ("ACTIVE", "RELEASE"):
             log("exit: throttle failsafe + release channels")
             for _ in range(THROTTLE_FS_FRAMES):
                 tx(throttle_fs_frame())
-            for _ in range(5):
+            for _ in range(EXIT_RELEASE_FRAMES):
                 tx([RELEASE] * NCH)
+        if trace:
+            trace.close()
         src.close()
         os.close(lock_fd)
     return 0

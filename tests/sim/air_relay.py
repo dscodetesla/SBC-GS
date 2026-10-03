@@ -21,19 +21,24 @@ import socket
 import struct
 import sys
 import time
+import os
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import simcfg  # noqa: E402
+
+CFG = simcfg.load(["sim"])   # RELAY_* keys, docs/CONFIG.md
 ETH_P_ALL = 3
-RX_RADIOTAP = struct.pack("<BBHIBbB", 0, 0, 11, (1 << 1) | (1 << 5) | (1 << 11), 0, -50, 0)  # flags, dBm signal, antenna
+RX_RADIOTAP = struct.pack("<BBHIBbB", 0, 0, 11, (1 << 1) | (1 << 5) | (1 << 11), 0, CFG["RELAY_RX_SIGNAL_DBM"], 0)  # flags, dBm signal, antenna
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--src", required=True)
     ap.add_argument("--dst", required=True)
-    ap.add_argument("--loss", type=float, default=0.0)
-    ap.add_argument("--delay-ms", type=float, default=0.0)
-    ap.add_argument("--jitter-ms", type=float, default=0.0)
-    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--loss", type=float, default=CFG["RELAY_LOSS"])
+    ap.add_argument("--delay-ms", type=float, default=CFG["RELAY_DELAY_MS"])
+    ap.add_argument("--jitter-ms", type=float, default=CFG["RELAY_JITTER_MS"])
+    ap.add_argument("--seed", type=int, default=CFG["RELAY_SEED"])
     ap.add_argument("--duration", type=float, default=0.0, help="0 = until SIGTERM")
     a = ap.parse_args()
     rnd = random.Random(a.seed)

@@ -1,5 +1,6 @@
 # gs-mavlink.conf: configuration of the ground-station MAVLink router service.
-# Install as /config/gs-mavlink.conf. Shell-sourceable KEY=value, no commands.
+# Install as /config/gs-mavlink.conf. Read as DATA (never executed): one KEY='value' per line, no shell syntax
+# ($, backticks, ';' are rejected). Keys are listed in config/registry.tsv; precedence: docs/CONFIG.md.
 # Every key is optional; the value shown is the default used by gs-mavlink.sh.
 # Facts and sources: docs/MAVLINK-ROUTER.md, docs/GS-MAVLINK.md.
 
@@ -20,6 +21,10 @@ GCS_UDP_PORTS='14560'
 # GCS clients that the router pushes to (UDP client endpoints, "ip:port", space-separated).
 # Works for both backends (mavp2p udpc:, mavlink-router -e).
 GCS_UDP_CLIENTS=''
+
+# Address of the GCS UDP and TCP server endpoints (not the upstream, see UPSTREAM_BIND). The legacy default 0.0.0.0 listens on
+# every interface without authentication/signing; 127.0.0.1 is recommended unless a remote GCS must connect (docs/CONFIG.md).
+LISTEN_ADDR='0.0.0.0'
 
 # TCP server for a phone/Mission Planner (0 = off). There is no authentication:
 # keep it on a trusted network. mavlink-router: off is emitted as "-t 0".

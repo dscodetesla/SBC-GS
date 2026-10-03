@@ -7,7 +7,6 @@
 command -v gst-launch-1.0 >/dev/null || die "gst-launch-1.0 not found (run setup-common.sh)"
 
 : "${LISTEN_PORT:=$GS_VIDEO_PORT}"
-: "${PROGRESS:=0}"
 
 case "$VIDEO_CODEC" in
 	h264) depay="rtph264depay"; parse="h264parse"; enc_name="H264"

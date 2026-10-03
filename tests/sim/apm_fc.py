@@ -13,6 +13,7 @@ import time
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import simcfg  # noqa: E402
 from apm_model import ApmModel  # noqa: E402
 from pymavlink import mavutil  # noqa: E402
 
@@ -20,16 +21,17 @@ MAV = mavutil.mavlink
 
 
 def main():
+    cfg = simcfg.load(["sim"])   # APM_* keys, docs/CONFIG.md
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--conn", default="udpout:127.0.0.1:14550")
-    ap.add_argument("--sysid", type=int, default=1)
+    ap.add_argument("--conn", default=cfg["APM_CONN"])
+    ap.add_argument("--sysid", type=int, default=cfg["APM_SYSID"])
     ap.add_argument("--duration", type=float, default=0)
-    ap.add_argument("--rc-override-time", type=float, default=3.0)
-    ap.add_argument("--fs-gcs-enable", type=int, default=0)
-    ap.add_argument("--fs-gcs-timeout", type=float, default=5.0)
-    ap.add_argument("--rc-fs-timeout", type=float, default=1.0)
-    ap.add_argument("--mav-gcs-sysid", type=int, default=255)
-    ap.add_argument("--mav-gcs-sysid-hi", type=int, default=0)
+    ap.add_argument("--rc-override-time", type=float, default=cfg["APM_RC_OVERRIDE_TIME_S"])
+    ap.add_argument("--fs-gcs-enable", type=int, default=cfg["APM_FS_GCS_ENABLE"])
+    ap.add_argument("--fs-gcs-timeout", type=float, default=cfg["APM_FS_GCS_TIMEOUT_S"])
+    ap.add_argument("--rc-fs-timeout", type=float, default=cfg["APM_RC_FS_TIMEOUT_S"])
+    ap.add_argument("--mav-gcs-sysid", type=int, default=cfg["APM_MAV_GCS_SYSID"])
+    ap.add_argument("--mav-gcs-sysid-hi", type=int, default=cfg["APM_MAV_GCS_SYSID_HI"])
     ap.add_argument("--disarmed", action="store_true")
     ap.add_argument("--receiver-present", action="store_true", help="a physical RC receiver exists (override loss is then not a radio failsafe)")
     a = ap.parse_args()

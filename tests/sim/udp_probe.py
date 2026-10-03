@@ -12,6 +12,12 @@ import struct
 import sys
 import threading
 import time
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import simcfg  # noqa: E402
+
+CFG = simcfg.load(["sim"])   # SIM_UDP_* keys, docs/CONFIG.md
 
 
 def hp(s):
@@ -23,11 +29,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--send-to", required=True)
     ap.add_argument("--listen", required=True)
-    ap.add_argument("--count", type=int, default=200)
-    ap.add_argument("--rate", type=float, default=100.0, help="packets per second")
-    ap.add_argument("--size", type=int, default=1000)
-    ap.add_argument("--settle", type=float, default=1.0, help="seconds to wait for stragglers after the last packet")
-    ap.add_argument("--min-delivery", type=float, default=0.99)
+    ap.add_argument("--count", type=int, default=CFG["SIM_UDP_COUNT"])
+    ap.add_argument("--rate", type=float, default=CFG["SIM_UDP_RATE_PPS"], help="packets per second")
+    ap.add_argument("--size", type=int, default=CFG["SIM_UDP_SIZE"])
+    ap.add_argument("--settle", type=float, default=CFG["SIM_UDP_SETTLE_S"], help="seconds to wait for stragglers after the last packet")
+    ap.add_argument("--min-delivery", type=float, default=CFG["SIM_UDP_MIN_DELIVERY"])
     a = ap.parse_args()
     rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     rx.bind(hp(a.listen))

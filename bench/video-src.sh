@@ -6,9 +6,7 @@
 
 command -v gst-launch-1.0 >/dev/null || die "gst-launch-1.0 not found (run setup-common.sh)"
 
-: "${SINK_HOST:=127.0.0.1}"
 : "${SINK_PORT:=$AIR_VIDEO_PORT}"
-: "${NUM_BUFFERS:=0}"
 # gst: num-buffers=-1 is endless, 0 would mean "no frames"
 [ "$NUM_BUFFERS" -le 0 ] && NUM_BUFFERS=-1
 
@@ -38,17 +36,17 @@ case "$VIDEO_CODEC" in
 		if [ "$ENCODER" = v4l2h264enc ]; then
 			warn "v4l2h264enc is EXPERIMENTAL here: control names and Pi support were not verified"
 			enc="v4l2h264enc ! video/x-h264,profile=baseline ! h264parse config-interval=-1 \
- ! rtph264pay config-interval=1 pt=96 mtu=1400"
+ ! rtph264pay config-interval=1 pt=${VIDEO_RTP_PT} mtu=${VIDEO_RTP_MTU}"
 		else
-		enc="x264enc tune=zerolatency speed-preset=ultrafast bitrate=${VIDEO_BITRATE_KBPS} key-int-max=${VIDEO_FPS} \
+		enc="x264enc tune=zerolatency speed-preset=${VIDEO_X264_PRESET} bitrate=${VIDEO_BITRATE_KBPS} key-int-max=${VIDEO_FPS} \
  ! video/x-h264,profile=baseline ! h264parse config-interval=-1 \
- ! rtph264pay config-interval=1 pt=96 mtu=1400"
+ ! rtph264pay config-interval=1 pt=${VIDEO_RTP_PT} mtu=${VIDEO_RTP_MTU}"
 		fi ;;
 	h265)
 		warn "x265 software encoding is heavy on a Pi 4; lower resolution/fps if frames drop"
-		enc="x265enc tune=zerolatency speed-preset=ultrafast bitrate=${VIDEO_BITRATE_KBPS} key-int-max=${VIDEO_FPS} \
+		enc="x265enc tune=zerolatency speed-preset=${VIDEO_X264_PRESET} bitrate=${VIDEO_BITRATE_KBPS} key-int-max=${VIDEO_FPS} \
  ! h265parse config-interval=-1 \
- ! rtph265pay config-interval=1 pt=96 mtu=1400" ;;
+ ! rtph265pay config-interval=1 pt=${VIDEO_RTP_PT} mtu=${VIDEO_RTP_MTU}" ;;
 	*) die "VIDEO_CODEC must be h264 or h265" ;;
 esac
 

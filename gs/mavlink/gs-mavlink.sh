@@ -2,7 +2,7 @@
 # gs-mavlink: build (and exec) the MAVLink router command line from /config/gs-mavlink.conf.
 #   gs-mavlink.sh           validate, then exec the router
 #   gs-mavlink.sh --print   validate, print the command line (and notes as "# ..."), exit 0 without exec
-# Config path: $GS_MAVLINK_CONF (tests) or /config/gs-mavlink.conf. Exit 2 = invalid configuration.
+# Config path: $GS_MAVLINK_CONF (tests) or /config/gs-mavlink.conf, parsed as data (KEY='value' only). Exit 2 = invalid configuration.
 # Only flags confirmed SRC in docs/MAVLINK-ROUTER.md are emitted; anything else is a "# UNVERIFIED" note.
 set -u
 
@@ -14,19 +14,22 @@ case "${1:-}" in
 	*) echo "usage: gs-mavlink.sh [--print]" >&2; exit 2 ;;
 esac
 
-# defaults (see gs-mavlink.conf.example)
-ROUTER='mavp2p'
-UPSTREAM_BIND='0.0.0.0'; UPSTREAM_PORT='14550'
-GCS_UDP_PORTS='14560'; GCS_UDP_CLIENTS=''
-TCP_ENABLE='0'; TCP_PORT='5760'
-SERIAL_DEV=''; SERIAL_BAUD='115200'
-HB_SYSID='125'; HB_DISABLE='0'; STREAMREQ_DISABLE='0'
-DUMP_ENABLE='0'; DUMP_PATH='/var/log/gs-mavlink/2006-01-02_15-04-05.tlog'
-
-if [ -f "$CONF" ]; then
-	# shellcheck disable=SC1090  # user config, path is dynamic
-	. "$CONF" || { echo "gs-mavlink: cannot read $CONF" >&2; exit 2; }
-fi
+# Configuration: layered loader (config/load.sh, docs/CONFIG.md). The config file is parsed as DATA (strict KEY='value'
+# lines, never sourced: /config is writable through anonymous Samba, audit S1) and the defaults live in config/registry.tsv.
+# Precedence: environment SBC_GS_<KEY> > $CONF > /config/sbc-gs.env > profile ($SBC_GS_PROFILE) > built-in default.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOADER=""
+for d in "${SBC_GS_CONFIG_DIR:-}" "$HERE/../../config" "$HERE/../config"; do
+	[ -n "$d" ] && [ -r "$d/load.sh" ] || continue
+	real="$(cd "$d" && pwd -P)"
+	case "$real" in /config|/config/*) continue ;; esac   # never run code from the writable config partition
+	LOADER="$real/load.sh"; break
+done
+[ -n "$LOADER" ] || { echo "gs-mavlink: error: config/load.sh not found (install gs/ together with config/)" >&2; exit 2; }
+# shellcheck source=../../config/load.sh
+. "$LOADER"
+# value checks stay in this script (its messages are covered by tests/golden/static/gs-mavlink.out): --no-value-check
+sbc_cfg_load --no-value-check --extra-file "$CONF" --extra-owner gs-mavlink gs-mavlink
 
 die() { echo "gs-mavlink: error: $*" >&2; exit 2; }
 is_int() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
@@ -34,11 +37,11 @@ chk_port() {  # name value
 	is_int "$2" && [ "${#2}" -le 5 ] && [ "$2" -ge 1 ] && [ "$2" -le 65535 ] || die "$1='$2' is not a port in 1..65535"
 }
 chk_ipv4() {  # name value
-	local o IFS=.
+	local o name="$1" IFS=.
 	# shellcheck disable=SC2086  # intentional split on dots
 	set -- $2
-	[ "$#" -eq 4 ] || die "$1 is not an IPv4 address"
-	for o in "$@"; do is_int "$o" && [ "${#o}" -le 3 ] && [ "$o" -le 255 ] || die "$1 is not an IPv4 address"; done
+	[ "$#" -eq 4 ] || die "$name is not an IPv4 address"
+	for o in "$@"; do is_int "$o" && [ "${#o}" -le 3 ] && [ "$o" -le 255 ] || die "$name is not an IPv4 address"; done
 }
 chk_flag() { case "$2" in 0|1) ;; *) die "$1='$2' must be 0 or 1" ;; esac; }
 
@@ -49,6 +52,7 @@ esac
 for f in TCP_ENABLE HB_DISABLE STREAMREQ_DISABLE DUMP_ENABLE; do chk_flag "$f" "${!f}"; done
 
 chk_ipv4 UPSTREAM_BIND "$UPSTREAM_BIND"
+chk_ipv4 LISTEN_ADDR "$LISTEN_ADDR"
 chk_port UPSTREAM_PORT "$UPSTREAM_PORT"
 chk_port TCP_PORT "$TCP_PORT"
 is_int "$HB_SYSID" && [ "$HB_SYSID" -ge 1 ] && [ "$HB_SYSID" -le 254 ] || die "HB_SYSID='$HB_SYSID' must be an integer in 1..254 (255 is the GCS sysid)"
@@ -84,9 +88,9 @@ if [ "$ROUTER" = mavp2p ]; then
 	cmd=(mavp2p)
 	[ -n "$SERIAL_DEV" ] && cmd+=("serial:$SERIAL_DEV:$SERIAL_BAUD")
 	cmd+=("udps:$UPSTREAM_BIND:$UPSTREAM_PORT")
-	for p in "${gcs_ports[@]}"; do cmd+=("udps:0.0.0.0:$p"); done
+	for p in "${gcs_ports[@]}"; do cmd+=("udps:$LISTEN_ADDR:$p"); done
 	for c in "${gcs_clients[@]}"; do cmd+=("udpc:$c"); done
-	[ "$TCP_ENABLE" = 1 ] && cmd+=("tcps:0.0.0.0:$TCP_PORT")
+	[ "$TCP_ENABLE" = 1 ] && cmd+=("tcps:$LISTEN_ADDR:$TCP_PORT")
 	if [ "$HB_DISABLE" = 1 ]; then cmd+=(--hb-disable); else cmd+=("--hb-systemid=$HB_SYSID"); fi
 	[ "$STREAMREQ_DISABLE" = 1 ] && cmd+=(--streamreq-disable)
 	[ "$DUMP_ENABLE" = 1 ] && cmd+=(--dump "--dump-path=$DUMP_PATH")
