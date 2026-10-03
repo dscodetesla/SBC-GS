@@ -107,3 +107,6 @@
 - Не робити до першого прогону на залізі: нові шари й нові SYNTH-числа (дрейф у бік обв'язки, `docs/AUDIT-INDEPENDENT-2026-10-02.md`).
 - Закрито 2026-10-03 (`docs/DECISIONS.md`): `LISTEN_ADDR` (типово 0.0.0.0, у контурі з окремим хостом конкретна адреса інтерфейсу + мережевий екран; `gs-hardened` 127.0.0.1), RX/TX = робочий варіант V-900. Лишаються відкритими: база ОС Pi 5, версія ArduPilot, комірки батареї.
 - Понеділок: окремий pipeline за `docs/STATUS.md` §4; перший вимір за моделлю: струм TX адаптера (`calib.py sheet`).
+
+## Доповнення 2026-10-03 (вечір)
+Симуляція доведена до межі «без заліза» (`docs/STATUS.md` §8): 220 golden/static, шари models/validate/twin/fuzz/netfetch/powerlab/evdev/dkms/bio в CI, QEMU-шари virt (gpio, usb, radio, roconf) і evdev `all` вручну. Закрито дефекти fuzz D1-D22 і моделей D1-D12. Далі: залізо за `docs/STATUS.md` §4 (окремий pipeline) із `bench/doctor.sh` -> `bench/ingest.py` -> `tests/sim/models/calib.py`.
