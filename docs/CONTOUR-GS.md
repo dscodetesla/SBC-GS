@@ -5,6 +5,8 @@
 Позначки: **SRC** (прочитано з першоджерела, вказано URL/файл), **REPO** (файл:рядок у цьому репо), **SNIP** (сніпет/підсумок пошуку чи малої моделі, не підстава для рішення), **INF** (мій висновок з прочитаного), **HW** (потрібне залізо), **UNVERIFIED** (не вдалося прочитати/перевірити), **UNMEASURED** (виміру не існує, число не вигадуємо).
 Мережа: `raw.githubusercontent.com`, `archive.ubuntu.com`, `deb.debian.org`, `archive.raspberrypi.com`, `apt.wfb-ng.org`, `manual.edgetx.org`, `expresslrs.org`, `radiomasterrc.com`, PyPI відповідали 200; `www.raspberrypi.com` через `curl` дає 403 (через `WebFetch` два сторінкові підсумки отримано, це SNIP); `api.github.com` і `github.com` через `gh`/MCP: 403 («repository is not configured for this session»).
 
+> Рішення 2026-10-03 (`docs/DECISIONS.md`): R2 робочий варіант V-900 (зовнішній ELRS-900 TX, внутрішній Multi у польоті OFF); R1 `LISTEN_ADDR` лишається `0.0.0.0` із захистом профілем/екраном.
+
 ## 0. Контур і коротка відповідь
 
 ```

@@ -105,5 +105,5 @@
 
 - Зроблено (REPO): шари `models`, `validate`, `twin`, `fuzz`, `virt`, `bio`, `dkms`; один запуск офлайн `tests/sim/layers.sh`; динамічна конфігурація (`docs/CONFIG.md`); міст до заліза (`bench/doctor.sh`, `tests/sim/models/calib.py`).
 - Не робити до першого прогону на залізі: нові шари й нові SYNTH-числа (дрейф у бік обв'язки, `docs/AUDIT-INDEPENDENT-2026-10-02.md`).
-- Рішення власника, що відкриті: виправлення дефектів G-S1..G-S4 (`docs/GAPS.md` §8), `LISTEN_ADDR` (типово 0.0.0.0, профіль `gs-hardened` 127.0.0.1), RX (ES900RX чи Xrossband Gemini), зовнішній TX-модуль, база ОС Pi 5.
+- Закрито 2026-10-03 (`docs/DECISIONS.md`): `LISTEN_ADDR` (типово 0.0.0.0, у контурі з окремим хостом конкретна адреса інтерфейсу + мережевий екран; `gs-hardened` 127.0.0.1), RX/TX = робочий варіант V-900. Лишаються відкритими: база ОС Pi 5, версія ArduPilot, комірки батареї.
 - Понеділок: окремий pipeline за `docs/STATUS.md` §4; перший вимір за моделлю: струм TX адаптера (`calib.py sheet`).
