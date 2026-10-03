@@ -130,6 +130,16 @@ if [ -z "$want" ] || [ "$want" = "static/driver-guards" ]; then
 	else echo "DIFF     static/driver-guards"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of gs/lib/gsconf.sh: atomic, verified writes of /etc/gs.conf through a symlink (D16)
+if [ -z "$want" ] || [ "$want" = "static/gsconf" ]; then
+	out="$(mktemp)"; "$HERE/static/gsconf.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/gsconf.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/gsconf"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/gsconf"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/gsconf"
+	else echo "DIFF     static/gsconf"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 # static check of the host decoder/sink choice of bench/video-rx.sh (V4L2 -> VA-API -> software) with shimmed gst tools
 if [ -z "$want" ] || [ "$want" = "static/host-decode" ]; then
 	out="$(mktemp)"; "$HERE/static/host-decode.sh" > "$out" 2>&1 || fail=1

@@ -299,3 +299,7 @@ OVERLAY (etc/gs.conf порожній) ... gs-applyconf.sh  ->  exit=1; stdout: 
 - D16 (`gs/gs-applyconf.sh`): на початку (до злиття `custom.conf`, до будь-яких змін) у підоболонці `source /etc/gs.conf` і перевірка, що `wifi_mode`, `rec_dir`, `gps_uart`, `gps_uart_baudrate` непорожні (ключі з різних частин файлу, тож обрив будь-де помітний); інакше exit 1 і повідомлення `not applying any change`, `custom.conf` лишається для наступного запуску. Атомарний запис `gs.conf` (друга половина пропозиції) не робився: `gs.conf` пишуть й інші скрипти (`gs-init.sh`, `gsmenu`), це окрема зміна.
 - Тести: `test_DEFECT_D1..D13, D16` стали постійними `test_FIXED_*` (D13 тепер три тести: SIGTERM/SIGINT, caller з власним EXIT trap, відновлення trap-ів). Оракул `gs-mavlink` і генератори розширені (числові порти з нулями, `1.2.3.4.`, `..`, `#` приклеєний, `\` у `"..."`, `a|b` в enum). Нові мутації M40-M55 (кожна відновлює один дефект) усі убиті.
 - Не перевірено на залізі (HW): `gs-applyconf.sh` на реальному `/etc/gs.conf` (симлінк на RO-root, `gs-init.sh` первинне створення) і порядок записів у образі; `fetch.sh` з реальним `curl` (лише `cp`-шим і `sleep`-шим); `board.sh` на Pi 5 (профілю `rpi5` ще немає, лише `rpi4`).
+
+## Виправлення D16 (друга половина): атомарний запис `gs.conf`
+Усі записи `gs.conf` ідуть через `gs/lib/gsconf.sh` (`docs/CONFIG.md` §11). Додано fuzz-тести бібліотеки й мутації; `run.sh roconf` у QEMU перевіряє її на реальному overlay/ext4/vfat (`docs/SIM-VIRT-DEVICES.md` §12). Усього тестів fuzz 91.
+

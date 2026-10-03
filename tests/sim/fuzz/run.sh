@@ -39,7 +39,7 @@ shards=(
 	"TestApplyconfFaults TestModelProperties TestFanFaults"
 	"TestConfigDifferential TestConfigResolveDifferential TestBoard"
 	"TestConfigInjection TestGsMavlink"
-	"TestStreamMissingTools TestUdevRender"
+	"TestStreamMissingTools TestUdevRender TestGsconfAtomic"
 )
 [ "${FUZZ_SHARDS:-1}" = 0 ] && shards=("")
 t0=$SECONDS

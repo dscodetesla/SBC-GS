@@ -2,12 +2,15 @@
 # Virtual kernel devices in a QEMU x86_64 guest: the project's REAL scripts, REAL libgpiod tools and REAL udev run against
 # emulated hardware (gpio-sim GPIO, usbip-vudc+vhci USB gadget/host, mac80211_hwsim radios). Rootless (QEMU TCG, or KVM if /dev/kvm is writable).
 #   tests/sim/virt/run.sh --check          static asserts on files/scripts/pin map, no VM, no network, <2 s
-#   tests/sim/virt/run.sh gpio|usb|radio   one VM boot with that test set (~40-90 s under TCG)
-#   tests/sim/virt/run.sh all              gpio,usb,radio in ONE boot
+#   tests/sim/virt/run.sh gpio|usb|radio|roconf   one VM boot with that test set (~40-90 s under TCG; roconf: see below)
+#   tests/sim/virt/run.sh all              gpio,usb,radio,roconf in ONE boot
+#   roconf = the image layout for gs.conf: rootfs ext4 mounted read-only, /etc = overlayfs, /etc/gs.conf -> /config/gs.conf on a writable ext4 (and FAT) partition;
+#            REAL gs/lib/gsconf.sh, gs/gs-applyconf.sh, gs/gsmenu.sh; kill -9 mid-write, read-only /config, unprivileged writer (docs/SIM-VIRT-DEVICES.md section 12)
 # Env: SIM_CACHE (default ~/.cache/sbc-gs-sim), KERNEL_PKG_VER (default: cached kernel-*-generic, else apt candidate),
 #      VIRT_OOPS_PROBE=1 (usb mode: finish with the deliberate vudc+acm detach that oopses this kernel; may wedge the guest),
 #      VIRT_KEEP_LOG=<file> (copy the guest serial log),
 #      GS_ROOT (repo whose gs/ is installed in the guest as /gs; default this repo; used for mutation checks on a COPY),
+#      DOSFSTOOLS_DEB_VER (roconf: mkfs.fat comes from the host, else from `apt-get download dosfstools` into SIM_CACHE; without it the FAT variant is SKIPped),
 #      WFB_NG_DIR / WFB_NG_REF (built wfb-ng tree, same as qemu_hwsim.sh), SMOKE_VIRT=1 is read by tests/sim/smoke.sh (when registered).
 # Needs on the host: qemu-system-x86_64 busybox(static) cpio gzip zstd gcc kmod(depmod, modprobe) iw ip udevadm systemd-udevd, mke2fs, python3;
 #      network (apt-get download, no root) only for the first run: kernel packages (~170 MB) + gpiod 1.6.x (~70 kB); radio mode also needs wfb-ng
@@ -22,20 +25,20 @@ WFB_NG_REF="${WFB_NG_REF:-2fe252b2f451c1ccfb16968e064fe1cdb18baaa0}"
 GUEST="$HERE/guest"
 
 skip() { echo "SKIP virt: $*"; exit 77; }
-usage() { sed -n '2,15p' "${BASH_SOURCE[0]}"; exit 2; }
+usage() { sed -n '2,18p' "${BASH_SOURCE[0]}"; exit 2; }
 
 # ------------------------------------------------------------------ --check (no VM)
 check_static() {
 	local fail=0 f n
 	ok() { if [ "$1" = 0 ]; then echo "PASS  $2"; else echo "FAIL  $2${3:+ ($3)}"; fail=1; fi; }
-	for f in run.sh guest/init.sh guest/lib.sh guest/t_gpio.sh guest/t_usb.sh guest/t_radio.sh guest/hwsimctl.c guest/usbip_link.c guest/mavhb.c; do
+	for f in run.sh guest/init.sh guest/lib.sh guest/t_gpio.sh guest/t_usb.sh guest/t_radio.sh guest/t_roconf.sh guest/hwsimctl.c guest/usbip_link.c guest/mavhb.c; do
 		[ -f "$HERE/$f" ]; ok $? "file $f exists"
 	done
-	for f in run.sh guest/init.sh guest/lib.sh guest/t_gpio.sh guest/t_usb.sh guest/t_radio.sh; do
+	for f in run.sh guest/init.sh guest/lib.sh guest/t_gpio.sh guest/t_usb.sh guest/t_radio.sh guest/t_roconf.sh; do
 		bash -n "$HERE/$f" 2>/dev/null; ok $? "bash -n $f"
 	done
 	if command -v shellcheck >/dev/null; then
-		( cd "$HERE" && shellcheck -x -S warning run.sh guest/lib.sh guest/t_gpio.sh guest/t_usb.sh guest/t_radio.sh guest/init.sh ) >/tmp/virt-sc.$$ 2>&1
+		( cd "$HERE" && shellcheck -x -S warning run.sh guest/lib.sh guest/t_gpio.sh guest/t_usb.sh guest/t_radio.sh guest/t_roconf.sh guest/init.sh ) >/tmp/virt-sc.$$ 2>&1
 		ok $? "shellcheck -x -S warning" "$(head -3 /tmp/virt-sc.$$ | tr '\n' ' ')"; rm -f /tmp/virt-sc.$$
 	else echo "SKIP  shellcheck not installed"; fi
 	if command -v gcc >/dev/null; then
@@ -64,7 +67,17 @@ check_static() {
 	done
 	"$ROOT/gs/boards/render-udev.sh" rpi4 /tmp/virt-render.$$ >/dev/null 2>&1 && grep -q 'NAME="rpi0"' /tmp/virt-render.$$/98-rename.rules; ok $? "render-udev.sh rpi4 yields gadget name rpi0"
 	rm -rf /tmp/virt-render.$$
-	for m in gpio usb radio; do grep -q "^VIRT-MODE-$m\b\|t_$m" "$HERE/run.sh"; ok $? "run.sh knows mode $m"; done
+	for m in gpio usb radio roconf; do grep -q "^VIRT-MODE-$m\b\|t_$m" "$HERE/run.sh"; ok $? "run.sh knows mode $m"; done
+	# roconf: the library, the scripts and the layout the test models must still look as the guest test expects
+	[ -f "$ROOT/gs/lib/gsconf.sh" ]; ok $? "gs/lib/gsconf.sh exists (roconf mode)"
+	for fn in gsconf_set_many gsconf_set_quoted gsconf_check gsconf_can_write gsconf_norm_value; do
+		grep -q "^$fn()" "$ROOT/gs/lib/gsconf.sh"; ok $? "gsconf.sh defines $fn"
+	done
+	grep -q 'source /gs/lib/gsconf.sh' "$ROOT/gs/gs-applyconf.sh"; ok $? "gs-applyconf.sh sources lib/gsconf.sh"
+	grep -q 'source /gs/lib/gsconf.sh' "$ROOT/gs/gsmenu.sh"; ok $? "gsmenu.sh sources lib/gsconf.sh"
+	[ "$(grep -cE 'sed -i.*/etc/gs\.conf' "$ROOT/gs/gs-applyconf.sh" "$ROOT/gs/gsmenu.sh" | awk -F: '{s+=$2} END {print s+0}')" = 0 ]; ok $? "no direct sed -i on /etc/gs.conf left in gs-applyconf.sh/gsmenu.sh"
+	grep -q '^cp -r lib boards' "$ROOT/gs/install.sh"; ok $? "install.sh copies the whole gs/lib (gsconf.sh included)"
+	grep -q 'roconf' "$HERE/guest/init.sh" || grep -q 't_"$m"' "$HERE/guest/init.sh"; ok $? "guest init dispatches t_<mode>.sh"
 	[ "$fail" = 0 ] && echo "virt --check: ALL PASS" || echo "virt --check: FAILED"
 	return "$fail"
 }
@@ -72,8 +85,8 @@ check_static() {
 modes=""
 case "${1:-}" in
 	--check) check_static; exit $? ;;
-	gpio|usb|radio) modes="$1" ;;
-	all) modes="gpio,usb,radio" ;;
+	gpio|usb|radio|roconf) modes="$1" ;;
+	all) modes="gpio,usb,radio,roconf" ;;
 	*) usage ;;
 esac
 [ -z "${2:-}" ] || usage
@@ -142,7 +155,8 @@ copy_bin() { # copy a host binary (path or name) and its shared libraries, keepi
 	done
 }
 for b in bash cat cut tr df grep sed awk findmnt nsenter mount umount sleep date mkfifo ls mkdir ln chmod timeout env dirname readlink \
-	basename touch rm find cp head tail wc sort seq tee ip iw udevadm mktemp id uname stty dd od cmp setsid tail kill pkill pgrep ps mv sync; do
+	basename touch rm find cp head tail wc sort seq tee ip iw udevadm mktemp id uname stty dd od cmp setsid tail kill pkill pgrep ps mv sync \
+	stat chown flock setpriv md5sum comm diff; do
 	[ -n "$(type -P "$b")" ] && copy_bin "$b"
 done
 copy_bin "$UDEVD"; mkdir -p "$rd/usr/lib/systemd"; mv "$rd/usr/bin/systemd-udevd" "$rd/usr/lib/systemd/systemd-udevd"
@@ -159,6 +173,7 @@ if [ -n "$src" ]; then ( cd "$work" && "$src/wfb_keygen" >/dev/null 2>&1 ) && cp
 [ -z "$MAVP2P" ] || cp "$MAVP2P" "$rd/usr/bin/mavp2p"
 # kernel modules (decompressed; dependency order precomputed from modules.dep)
 want="gpio-sim usbip-vudc vhci-hcd libcomposite usb_f_acm usb_f_ncm usb_f_ecm usb_f_mass_storage cdc-acm cdc_ncm cdc_ether usb-storage mac80211_hwsim"
+case "$modes" in *roconf*) want="$want overlay nls_iso8859-1" ;; esac   # overlayfs and nls_iso8859-1 (default iocharset of vfat on this kernel) are modules in the Ubuntu generic kernel (ext4, vfat, virtio-blk are built in)
 for m in $want; do
 	: >"$rd/mods/dep.$m"
 	modprobe -d "$kdir" -S "$ver" --show-depends "$m" 2>/dev/null | awk '$1=="insmod"{print $2}' | while read -r p; do
@@ -193,12 +208,44 @@ PY
 mkdir -p "$work/disk-src"; echo "virt-extdisk-marker" >"$work/disk-src/MARKER.TXT"
 mke2fs -q -F -t ext4 -d "$work/disk-src" -E offset=$((2048 * 512)) "$work/disk.img" $((16 * 1024 - 1024)) >/dev/null 2>&1 || skip "mke2fs for the disk image failed"
 mkdir -p "$rd/virt"; cp "$work/disk.img" "$rd/virt/disk.img"
+# roconf mode: the image layout for gs.conf as three virtio disks (never inside the initramfs, so the guest mounts real filesystems):
+#   vda = rootfs (ext4, mounted -o ro by the guest; /etc/gs.conf is a symlink to /config/gs.conf, fstab/samba/kernel cmdline like the image),
+#   vdb = /config (ext4, writable, empty), vdc = /config on FAT (empty; only when mkfs.fat exists or can be fetched)
+drives=()
+case "$modes" in *roconf*)
+	rs="$work/rootfs-src"
+	mkdir -p "$rs"/etc/{kernel,samba,default,network/interfaces.d,systemd/network,NetworkManager/system-connections} "$rs/boot/dtbo"
+	ln -s /config/gs.conf "$rs/etc/gs.conf"
+	echo "root=LABEL=rootfs console=ttyS2,1500000n8" >"$rs/etc/kernel/cmdline"; cp "$rs/etc/kernel/cmdline" "$rs/etc/kernel/cmdline.bak"
+	printf '/dev/vdd /Videos exfat defaults,nofail 0 0\n' >"$rs/etc/fstab"
+	printf '[global]\n[Videos]\n   path = /Videos\n' >"$rs/etc/samba/smb.conf"
+	echo gs-virt >"$rs/etc/hostname"
+	mke2fs -q -F -t ext4 -d "$rs" "$work/root.img" 24M >/dev/null 2>&1 || skip "mke2fs for the roconf rootfs image failed"
+	mke2fs -q -F -t ext4 "$work/cfg-ext4.img" 16M >/dev/null 2>&1 || skip "mke2fs for the roconf config image failed"
+	drives=(-drive "file=$work/root.img,if=virtio,format=raw,cache=unsafe" -drive "file=$work/cfg-ext4.img,if=virtio,format=raw,cache=unsafe")
+	mkfat="$(command -v mkfs.fat || command -v mkfs.vfat || true)"
+	if [ -z "$mkfat" ]; then
+		fdir="$(find "$CACHE" -maxdepth 1 -name 'dosfstools-*' | sort -V | tail -1)"
+		if [ -z "$fdir" ] || [ ! -x "$fdir/usr/sbin/mkfs.fat" ]; then
+			mkdir -p "$work/fdeb"
+			if ( cd "$work/fdeb" && apt-get download dosfstools >/dev/null 2>&1 ) && ls "$work"/fdeb/dosfstools_*.deb >/dev/null 2>&1; then
+				fv="$(dpkg-deb -f "$work"/fdeb/dosfstools_*.deb Version)"; fdir="$CACHE/dosfstools-$fv"; mkdir -p "$fdir"
+				dpkg-deb -x "$work"/fdeb/dosfstools_*.deb "$fdir" || fdir=""
+			else fdir=""; fi
+		fi
+		[ -z "$fdir" ] || mkfat="$fdir/usr/sbin/mkfs.fat"
+	fi
+	if [ -n "$mkfat" ] && [ -x "$mkfat" ] && "$mkfat" -F 16 -C "$work/cfg-vfat.img" 16384 >/dev/null 2>&1; then
+		drives+=(-drive "file=$work/cfg-vfat.img,if=virtio,format=raw,cache=unsafe")
+	else echo "NOTE: no mkfs.fat: the FAT /config variant of roconf will be SKIPped" >&2; fi ;;
+esac
 ( cd "$rd" && find . | cpio -o -H newc --quiet 2>/dev/null | gzip -1 >"$work/initrd.gz" ) || skip "cpio failed"
 
 # ------------------------------------------------------------------ run
 accel=(); [ -w /dev/kvm ] && accel=(-enable-kvm -cpu host)
 log="$work/serial.log"
-nice -n 5 timeout 420 qemu-system-x86_64 "${accel[@]}" -m 1G -smp 2 -kernel "$kdir/boot/vmlinuz-$ver" -initrd "$work/initrd.gz" \
+qemu_timeout=420; case "$modes" in *roconf*) qemu_timeout=$((qemu_timeout + 420)) ;; esac
+nice -n 5 timeout "$qemu_timeout" qemu-system-x86_64 "${accel[@]}" -m 1G -smp 2 -kernel "$kdir/boot/vmlinuz-$ver" -initrd "$work/initrd.gz" "${drives[@]}" \
 	-append "console=ttyS0 rdinit=/init quiet virt.mode=$modes virt.oops=${VIRT_OOPS_PROBE:-0}" -display none -no-reboot -serial "file:$log" -monitor none >/dev/null 2>&1
 echo "virt: kernel $ver (${accel[*]:-TCG}), libgpiod $(basename "$gdir" | sed 's/^gpiod-//'), modes: $modes"
 grep -E '^(SIM-BOOT|SIM-MODE|VIRT-)' "$log" | sed -E 's/^VIRT-PASS/PASS /; s/^VIRT-FAIL/FAIL /; s/^VIRT-INFO/INFO /; s/^VIRT-SKIP/SKIP /'

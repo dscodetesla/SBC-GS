@@ -3,6 +3,7 @@
 set -e
 echo "start channel scan" > /run/pixelpilot.msg
 source /etc/gs.conf
+source /gs/lib/gsconf.sh   # atomic, verified writes of gs.conf (D16)
 [[ "$wfb_bandwidth" == "40" ]] && wfb_bandwidth="40+"
 
 if [ -z "$1" ]; then
@@ -77,7 +78,9 @@ for channel in $channel_available; do
 done
 
 if [ -n "${channel_wfb_used}" ]; then
-	sed -i "s/wfb_channel='[0-9]\+'/wfb_channel='${channel_wfb_used}'/" $(readlink -f /etc/gs.conf)
+	if [[ "${channel_wfb_used}" =~ ^[0-9]+$ ]]; then
+		gsconf_set_quoted /etc/gs.conf wfb_channel "${channel_wfb_used}"
+	fi
 	for nic in $wfb_nics; do
 		iw dev $nic set channel $channel_wfb_used HT${wfb_bandwidth}
 	done

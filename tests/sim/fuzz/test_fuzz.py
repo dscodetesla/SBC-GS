@@ -1872,6 +1872,203 @@ class TestModelProperties(unittest.TestCase):
 
 
 
+# ====================================================================== gs/lib/gsconf.sh (atomic gs.conf writes, D16 second half)
+class TestGsconfAtomic(unittest.TestCase):
+    """gs/lib/gsconf.sh: every update of /etc/gs.conf is atomic, validated before and after, rolled back on failure, never executes values."""
+
+    @staticmethod
+    def lib():
+        return F.path("gs", "lib", "gsconf.sh")
+
+    def fresh(self):
+        d = F.tmpdir("gsc-")
+        os.makedirs(os.path.join(d, "config"))
+        shutil.copy(F.path("gs", "gs.conf"), os.path.join(d, "config", "gs.conf"))
+        os.symlink(os.path.join(d, "config", "gs.conf"), os.path.join(d, "gs.conf"))   # like /etc/gs.conf -> /config/gs.conf
+        os.chmod(os.path.join(d, "config", "gs.conf"), 0o640)
+        return d
+
+    def sh(self, d, code, env=None, timeout=60):
+        e = dict(env or {})
+        e["C"] = os.path.join(d, "gs.conf")
+        return F.run(["bash", "-c", '. "$1"; shift; ' + code, "_", self.lib()], env=e, timeout=timeout)
+
+    def real(self, d):
+        return os.path.join(d, "config", "gs.conf")
+
+    def leftovers(self, d):
+        return sorted(x for x in os.listdir(os.path.join(d, "config")) if x != "gs.conf")
+
+    def test_random_updates_match_a_reference_model_and_values_stay_inert(self):
+        R = F.rng("gsconf.model")
+        keys = ["rec_fps", "wfb_channel", "wfb_bandwidth", "osd_type", "screen_mode", "alink_enable", "wifi_ssid", "no_such_key"]
+        alphabet = list("abcXYZ019 _-./:@%+=,;&|<>$`\\\"!#*?()[]{}~^\t\ré") + ["'", "\n", "$(touch PWNED)", "`touch PWNED`", "'; touch PWNED; '"]
+        for sc in range(F.n(5)):
+            d = self.fresh()
+            ops = [(R.choice(keys), "".join(R.choice(alphabet) for _ in range(R.randint(0, 9)))) for _ in range(12)]
+            model = rd(F.path("gs", "gs.conf")).split("\n")
+            want_rc = []
+            for k, v in ops:
+                if "'" in v or "\n" in v:
+                    want_rc.append(1)
+                    continue
+                want_rc.append(0)
+                model = [f"{k}='{v}'" if ln.startswith(k + "=") else ln for ln in model]
+            args = [x for kv in ops for x in kv]
+            rc, so, se = F.run(["bash", "-c", '. "$1"; C="$2"; shift 2; while [ $# -gt 0 ]; do gsconf_set_quoted "$C" "$1" "$2" 2>/dev/null; echo "rc=$?"; shift 2; done',
+                       "_", self.lib(), os.path.join(d, "gs.conf")] + args, cwd=d, timeout=120)
+            self.assertEqual([int(x[3:]) for x in so.split()], want_rc, (sc, ops))
+            self.assertEqual(rb(self.real(d)).decode("utf-8").split("\n"), model, f"scenario {sc}: file differs from the reference model")
+            self.assertTrue(os.path.islink(os.path.join(d, "gs.conf")), "the symlink must survive")
+            self.assertEqual(stat.S_IMODE(os.stat(self.real(d)).st_mode), 0o640)
+            self.assertEqual(self.leftovers(d), [])
+            self.assertFalse(os.path.exists(os.path.join(d, "PWNED")), "a value was executed")
+            rc, so, se = F.run(["bash", "-c", '. "$1"; printf "%s" "$wifi_mode"', "_", self.real(d)], cwd=d)
+            self.assertEqual(so, "hotspot", "gs.conf must still source cleanly")
+
+    def test_FIXED_D16_kill_in_the_middle_of_the_write_never_cuts_the_target(self):
+        for sig in ("KILL", "TERM"):
+            d = self.fresh()
+            sh = os.path.join(d, "shim")
+            os.makedirs(sh)
+            write(os.path.join(sh, "awk"), '#!/bin/bash\n/usr/bin/awk "$@" | head -n 5; sleep 30\n')
+            os.chmod(os.path.join(sh, "awk"), 0o755)
+            env = dict(os.environ, PATH=sh + ":" + os.environ["PATH"])
+            p = subprocess.Popen(["bash", "-c", '. "$1"; gsconf_set_quoted "$2" rec_fps 90', "_", self.lib(), os.path.join(d, "gs.conf")], env=env,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            ok = wait_for(lambda: any(x.startswith("gs.conf.new.") and os.path.getsize(os.path.join(d, "config", x)) > 0 for x in os.listdir(os.path.join(d, "config"))), 8)
+            os.killpg(p.pid, getattr(signal, "SIG" + sig))
+            p.wait(timeout=10)
+            F.measure(f"gsconf.kill.{sig}", {"partial_tmp_seen": ok, "target_bytes": os.path.getsize(self.real(d))})
+            self.assertTrue(ok, "the writer never reached the point where the temp file is half written (test is not testing the kill)")
+            self.assertEqual(rd(self.real(d)), rd(F.path("gs", "gs.conf")), f"{sig}: the target must still be the complete old file")
+            rc, so, se = self.sh(d, 'gsconf_check "$C"')
+            self.assertEqual(rc, 0, se)
+            if sig == "TERM":
+                self.assertEqual(self.leftovers(d), [], "the TERM handler must remove the temp file")
+            rc, so, se = self.sh(d, 'gsconf_set_quoted "$C" rec_fps 91')
+            self.assertEqual(rc, 0, se)
+            self.assertEqual(self.leftovers(d), [], "the next update must sweep the leftovers of a dead writer")
+            self.assertIn("rec_fps='91'", rd(self.real(d)))
+
+    def test_FIXED_D16_empty_truncated_or_unsourceable_target_is_refused_untouched(self):
+        full = rd(F.path("gs", "gs.conf"))
+        cases = {"empty": "", "truncated": "wifi_mode='hotspot'\nrec_dir='/Videos'\nrec_fps='60'\n", "syntax": full + "if then fi\n",
+                 "cut_mid_line": full[: len(full) // 2]}
+        for name, content in cases.items():
+            d = self.fresh()
+            write(self.real(d), content)
+            rc, so, se = self.sh(d, 'gsconf_set_quoted "$C" rec_fps 90')
+            self.assertEqual(rc, 1, (name, se))
+            self.assertEqual(rd(self.real(d)), content, f"{name}: the file must be untouched")
+            self.assertIn("gsconf:", se, name)
+            self.assertEqual(self.leftovers(d), [], name)
+
+    def test_a_bad_result_after_the_rename_is_rolled_back(self):
+        d = self.fresh()
+        sh = os.path.join(d, "shim")
+        os.makedirs(sh)
+        write(os.path.join(sh, "mv"), '#!/bin/bash\nif [ ! -e "$SHIMSTATE" ]; then : > "$SHIMSTATE"; /bin/mv "$@" && : > "${@: -1}"; exit $?; fi\nexec /bin/mv "$@"\n')
+        os.chmod(os.path.join(sh, "mv"), 0o755)
+        rc, so, se = self.sh(d, 'gsconf_set_quoted "$C" rec_fps 90', {"PATH": sh + ":" + os.environ["PATH"], "SHIMSTATE": os.path.join(d, "state")})
+        self.assertEqual(rc, 1, se)
+        self.assertEqual(rd(self.real(d)), rd(F.path("gs", "gs.conf")), "the previous content must be restored byte for byte")
+        self.assertIn("restoring the previous content", se)
+        self.assertEqual(self.leftovers(d), [])
+
+    def test_content_that_fails_verification_never_reaches_the_target(self):
+        # blanking a required key would make the next boot treat gs.conf as truncated (D16): refused BEFORE the rename (the mv shim must not run)
+        d = self.fresh()
+        sh = os.path.join(d, "shim")
+        os.makedirs(sh)
+        write(os.path.join(sh, "mv"), '#!/bin/bash\necho "mv $*" >> "$SHIMLOG"\nexec /bin/mv "$@"\n')
+        os.chmod(os.path.join(sh, "mv"), 0o755)
+        log = os.path.join(d, "mv.log")
+        for key in ("rec_dir", "wifi_mode", "gps_uart", "gps_uart_baudrate"):
+            rc, so, se = self.sh(d, 'gsconf_set_quoted "$C" ' + key + " ''", {"PATH": sh + ":" + os.environ["PATH"], "SHIMLOG": log})
+            self.assertEqual(rc, 1, (key, se))
+            self.assertIn("failed verification", se, key)
+            self.assertEqual(rd(self.real(d)), rd(F.path("gs", "gs.conf")), key)
+            self.assertFalse(os.path.exists(log), f"{key}: the bad content was moved over the target (mv ran)")
+        self.assertEqual(self.leftovers(d), [])
+
+    def test_unsafe_right_hand_sides_are_refused_by_the_writer_itself(self):
+        d = self.fresh()
+        for rhs in ["$(touch PWNED)", "`touch PWNED`", "a b", "'a'b'", "'it's'", "x;touch PWNED", "\"q\"", "a\nb", "'a\nb'"]:
+            rc, so, se = F.run(["bash", "-c", '. "$1"; gsconf_set_many "$2" rec_fps "$3"', "_", self.lib(), os.path.join(d, "gs.conf"), rhs], cwd=d)
+            self.assertEqual(rc, 1, (rhs, se))
+            self.assertEqual(rd(self.real(d)), rd(F.path("gs", "gs.conf")), rhs)
+        self.assertFalse(os.path.exists(os.path.join(d, "PWNED")))
+        for rhs in ["90", "'90'", "''", "a/b:c@d%e+f=g-h,i.j_k"]:
+            rc, so, se = F.run(["bash", "-c", '. "$1"; gsconf_set_many "$2" rec_fps "$3"', "_", self.lib(), os.path.join(d, "gs.conf"), rhs], cwd=d)
+            self.assertEqual(rc, 0, (rhs, se))
+            self.assertIn(f"\nrec_fps={rhs}\n", rd(self.real(d)))
+
+    def test_mode_and_owner_are_carried_to_the_new_file(self):
+        d = self.fresh()
+        os.chmod(self.real(d), 0o600)
+        before = os.stat(self.real(d))
+        rc, so, se = self.sh(d, 'gsconf_set_quoted "$C" rec_fps 90')
+        self.assertEqual(rc, 0, se)
+        after = os.stat(self.real(d))
+        self.assertEqual((stat.S_IMODE(after.st_mode), after.st_uid, after.st_gid), (0o600, before.st_uid, before.st_gid))
+        self.assertNotEqual(after.st_ino, before.st_ino, "the file must be replaced by rename (atomic), not rewritten in place")
+
+    def test_concurrent_writers_do_not_lose_updates(self):
+        d = self.fresh()
+        sh = os.path.join(d, "shim")
+        os.makedirs(sh)
+        write(os.path.join(sh, "awk"), '#!/bin/bash\n/usr/bin/awk "$@"; rc=$?; sleep 0.25; exit $rc\n')   # widens the read-modify-write window
+        os.chmod(os.path.join(sh, "awk"), 0o755)
+        env = dict(os.environ, PATH=sh + ":" + os.environ["PATH"])
+        kv = [("rec_fps", "91"), ("wfb_channel", "40"), ("wfb_bandwidth", "40"), ("osd_type", "msposd_gs"), ("alink_enable", "yes"), ("screen_mode", "1280x720@60")]
+        ps = [subprocess.Popen(["bash", "-c", '. "$1"; gsconf_set_quoted "$2" "$3" "$4"', "_", self.lib(), os.path.join(d, "gs.conf"), k, v], env=env,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for k, v in kv]
+        for p in ps:
+            p.wait(timeout=60)
+        text = rd(self.real(d))
+        lost = [k for k, v in kv if f"\n{k}='{v}'\n" not in text]
+        F.measure("gsconf.concurrent.lost_updates", lost)
+        self.assertEqual(lost, [], "a concurrent update was lost (no lock)")
+        self.assertEqual(self.leftovers(d), [])
+
+    def test_gsmenu_set_rejects_a_hostile_value_and_stores_a_normal_one(self):
+        # gs/gsmenu.sh used `sed -i "s/^rec_fps=.*/rec_fps='$5'/"`: a value with a quote produced a broken (and, sourced as root, hostile) gs.conf
+        for val, ok in (("90", True), ("it's", False), ("a/b", True)):
+            r = sandbox("gs/gsmenu.sh", None, {"ARGS": f"set gs system rec_fps {val}"}, inv="standalone", timeout=40)
+            conf = r.read("etc/gs.conf") or ""
+            self.assertIn("rec_fps='%s'" % (val if ok else "60"), conf, (val, r.f("stderr")[-300:]))
+            self.assertEqual(r.exit, 0 if ok else 1, (val, r.f("stderr")[-300:]))
+            rc, so, se = F.run(["bash", "-c", '. "$1"; printf "%s" "$wifi_mode"', "_", os.path.join(r.root, "etc", "gs.conf")])
+            self.assertEqual(so, "hotspot", f"gs.conf must still source after set rec_fps {val}")
+            if not ok:
+                self.assertIn("gsconf: rejected", r.f("stderr"))
+
+    def test_applyconf_keeps_custom_conf_when_gs_conf_cannot_be_updated(self):
+        # a read-only /config: the merge must not consume custom.conf without merging it (before: every line failed, the file was renamed anyway)
+        ov = F.tmpdir("gsov-")
+        os.makedirs(os.path.join(ov, "config"))
+        os.makedirs(os.path.join(ov, "shims"))
+        write(os.path.join(ov, "config", "custom.conf"), "wifi_ssid=zz\n")
+        write(os.path.join(ov, "shims", "mktemp"), '#!/bin/sh\necho "mktemp: failed to create file via template: Read-only file system" >&2\nexit 1\n')
+        os.chmod(os.path.join(ov, "shims", "mktemp"), 0o755)
+        r = sandbox_overlay_dir("gs/gs-applyconf.sh", ov)
+        self.assertEqual(r.exit, 1, r.f("stderr")[-400:])
+        self.assertTrue(r.exists("config/custom.conf") and not r.exists("config/custom-merged.conf"), "custom.conf must stay for the next run")
+        self.assertIn("custom.conf is kept", r.f("stderr"))
+        self.assertIsNone(re.search(r"^(reboot|mount|chroot)", r.f("shim.log"), re.M), "nothing may be applied")
+        self.assertNotIn("wifi_ssid='zz'", r.read("etc/gs.conf") or "")
+
+
+def sandbox_overlay_dir(script, ov, env=None, inv="standalone", timeout=60):
+    """Like sandbox(), but the overlay directory is prepared by the caller (it may hold executable shims)."""
+    out = F.tmpdir("sbo-")
+    e = dict(env or {})
+    e["OVERLAY"] = ov
+    F.run(["bash", DRIVER, REPO, script, os.path.join(out, "r"), inv], env=e, timeout=timeout)
+    return Sb(os.path.join(out, "r"))
+
+
 def main():
     import json
     args = [a for a in sys.argv[1:] if a != "-v"]
