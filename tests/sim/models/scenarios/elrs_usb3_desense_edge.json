@@ -1,0 +1,30 @@
+{
+ "name": "elrs_usb3_desense_edge",
+ "description": "Edge of range (900 m) with the USB3 noise source always on and the 900 MHz / 2.4 GHz modules coupling more strongly than the nominal prior.",
+ "kind": "link",
+ "cfg": {
+  "distance_m": 400,
+  "duration_s": 600,
+  "dt_s": 20
+ },
+ "set": {
+  "hw.usb3_present_prob": 1.0
+ },
+ "dist": {
+  "hw.elrs900_coupling_db": {
+   "kind": "normal",
+   "mu": 105,
+   "sigma": 8
+  },
+  "hw.multi24_coupling_db": {
+   "kind": "normal",
+   "mu": 90,
+   "sigma": 8
+  },
+  "hw.usb3_noise_dbm": {
+   "kind": "normal",
+   "mu": -92,
+   "sigma": 4
+  }
+ }
+}

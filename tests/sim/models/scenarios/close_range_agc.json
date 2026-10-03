@@ -1,0 +1,15 @@
+{
+ "name": "close_range_agc",
+ "description": "Bench test at 3 m with 27 dBm commanded power and MCS4: ADC/AGC saturation near the transmitter.",
+ "kind": "link",
+ "cfg": {
+  "distance_m": 3,
+  "duration_s": 300,
+  "dt_s": 20
+ },
+ "set": {
+  "rf.tx_power_dbm": 27.0,
+  "rf.mcs_index": 4
+ },
+ "dist": {}
+}

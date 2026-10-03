@@ -1,0 +1,1978 @@
+{
+ "schema": 1,
+ "note": "Priors of the stochastic scenario engine (tests/sim/models/scenario_engine.py). SYNTH = synthesized realistic placeholder for planning, NOT a fact. Same leaf schema as params.json plus 'dist'. See docs/SIM-SCENARIOS.md.",
+ "base_dist_note": "Contour-specific priors (SYNTH) that replace the min/typ/max triangle of a params.json entry: air-to-ground LOS exponent close to free space; flight power around 24 dBm of a 28 dBm PA; small non-RF loss floor; moderate loss bursts; LOS air-to-ground Rician K around 10 dB; a decent 5 A supply cable.",
+ "base_dist": {
+  "rf.path_loss_exponent": {
+   "kind": "triangular",
+   "lo": 2.0,
+   "mode": 2.0,
+   "hi": 2.8
+  },
+  "rf.tx_power_dbm": {
+   "kind": "triangular",
+   "lo": 20.0,
+   "mode": 24.0,
+   "hi": 27.0
+  },
+  "rf.rician_k_db": {
+   "kind": "triangular",
+   "lo": 5.0,
+   "mode": 10.0,
+   "hi": 15.0
+  },
+  "rf.floor_per": {
+   "kind": "triangular",
+   "lo": 0.0,
+   "mode": 0.001,
+   "hi": 0.01
+  },
+  "rf.ge_mean_burst_frames": {
+   "kind": "triangular",
+   "lo": 1.0,
+   "mode": 3.0,
+   "hi": 10.0
+  },
+  "power.cable_resistance_ohm": {
+   "kind": "triangular",
+   "lo": 0.05,
+   "mode": 0.1,
+   "hi": 0.25
+  }
+ },
+ "base_sampled": [
+  "rf.tx_power_dbm",
+  "rf.tx_antenna_gain_dbi",
+  "rf.rx_antenna_gain_dbi",
+  "rf.misc_loss_db",
+  "rf.noise_figure_db",
+  "rf.implementation_loss_db",
+  "rf.diversity_gain_db",
+  "rf.path_loss_exponent",
+  "rf.rician_k_db",
+  "rf.ge_mean_burst_frames",
+  "rf.floor_per",
+  "rf.mac_access_us",
+  "power.cable_resistance_ohm",
+  "power.tx_peak_factor",
+  "power.devices.rtl8812_tx_a",
+  "power.devices.rtl8812_rx_a",
+  "power.usb_dropout_v",
+  "power.usb_reenum_s",
+  "power.boards.pi5.board_load_a",
+  "video.iframe_ratio",
+  "latency.capture_frames",
+  "latency.encode_frames",
+  "latency.usb_rx_ms",
+  "latency.network_ms",
+  "latency.panel_ms",
+  "latency.display_queue_frames",
+  "latency.decoders.pi5_h265_stateless.proc_ms_1080p"
+ ],
+ "sections": {
+  "hw": {
+   "description": "Nonlinear hardware of the AIR TX (OpenIPC WiFiLink2, RunCam RTL8812EU) and of the GS RX (RTL8812AU on Pi 5): PA compression, EVM floor, thermal derating, supply sag, AGC saturation, desense sources, antenna losses.",
+   "assumptions": [
+    "Rapp AM-AM curve (smoothness p), EVM^2 = floor + (k*amplitude error)^2, SNR_eff = 1/(1/SNR + EVM^2) (INF, textbook)",
+    "Adapter thermal = first-order RC (Rth, tau) with derating above a start temperature and shutdown with hysteresis (INF)",
+    "TX output droops when the AIR supply is below a knee: k1*dV + k2*dV^2 dB (INF shape, SYNTH coefficients)",
+    "ELRS 900 MHz and the Multi 2.4 GHz module reach the 5 GHz receiver only via harmonics/intermod/ADC overload: one lumped coupling loss each, duty-cycled (INF)",
+    "Antenna losses = pattern null + polarisation mismatch + body shadow, persistent for ~tens of seconds (INF)"
+   ],
+   "params": {
+    "pa_p1db_out_dbm": {
+     "value": 27.5,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 27.5,
+      "sigma": 1.2,
+      "lo": 23,
+      "hi": 31
+     },
+     "note": "output-referred 1 dB compression point of the AIR PA. SRC docs.openipc.org lists 28 dBm (FCC) as the rated power of WiFiLink2; P1dB itself is not published"
+    },
+    "pa_rapp_p": {
+     "value": 2.75,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 1.5,
+      "hi": 4.0
+     },
+     "note": "Rapp smoothness: 1.5 soft knee .. 4 hard knee (shape prior, SYNTH)"
+    },
+    "evm_floor_db": {
+     "value": -33.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": -33.0,
+      "sigma": 2.0,
+      "lo": -40,
+      "hi": -26
+     },
+     "note": "linear EVM floor (phase noise, IQ imbalance, DAC); 802.11 mandates only a ceiling per MCS"
+    },
+    "evm_comp_coeff": {
+     "value": 1.75,
+     "unit": "x",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 1.0,
+      "hi": 2.5
+     },
+     "note": "scale of the compression amplitude error in EVM (SYNTH)"
+    },
+    "evm_temp_db_per_c": {
+     "value": 0.06,
+     "unit": "dB/C",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.02,
+      "hi": 0.1
+     },
+     "note": "EVM floor degradation per degree above 25 C (SYNTH)"
+    },
+    "air_rth_c_per_w": {
+     "value": 7.0,
+     "unit": "C/W",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 7.0,
+      "sigma": 0.35,
+      "lo": 3,
+      "hi": 30
+     },
+     "note": "case-to-ambient thermal resistance of the WiFiLink2 radio incl. heatsink and fan (fan 25/30 g is SRC-listed per docs/SIM-BLOCKERS.md, Rth unknown)"
+    },
+    "air_tau_s": {
+     "value": 150.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 150.0,
+      "sigma": 0.4,
+      "lo": 30,
+      "hi": 900
+     },
+     "note": "thermal time constant of the radio + heatsink"
+    },
+    "air_diss_frac": {
+     "value": 0.825,
+     "unit": "",
+     "provenance": "INF",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.7,
+      "hi": 0.95
+     },
+     "note": "share of DC input power dissipated as heat (the rest is RF out); INF from PA efficiency 5..30 %"
+    },
+    "air_board_heat_w": {
+     "value": 1.5,
+     "unit": "W",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.5,
+      "hi": 2.5
+     },
+     "note": "SoC + sensor heat sharing the radio's heat path (SSC338Q + IMX415)"
+    },
+    "air_ambient_rise_c": {
+     "value": 8.5,
+     "unit": "C",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 2.0,
+      "hi": 15.0
+     },
+     "note": "airframe interior temperature rise above outside air (SYNTH)"
+    },
+    "thermal_derate_start_c": {
+     "value": 85.0,
+     "unit": "C",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 85.0,
+      "sigma": 5.0,
+      "lo": 65,
+      "hi": 100
+     },
+     "note": "junction temperature where the driver starts to reduce TX power (RTL thermal tracking, threshold unknown)"
+    },
+    "thermal_derate_db_per_c": {
+     "value": 0.175,
+     "unit": "dB/C",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.05,
+      "hi": 0.3
+     },
+     "note": "TX power reduction per degree above the start (SYNTH)"
+    },
+    "thermal_shutdown_c": {
+     "value": 110.0,
+     "unit": "C",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 110.0,
+      "sigma": 5.0,
+      "lo": 95,
+      "hi": 130
+     },
+     "note": "thermal shutdown threshold (parameter; datasheet value not read)"
+    },
+    "thermal_hyst_c": {
+     "value": 16.5,
+     "unit": "C",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 8.0,
+      "hi": 25.0
+     },
+     "note": "hysteresis before TX resumes after shutdown (SYNTH)"
+    },
+    "air_bec_v": {
+     "value": 5.0,
+     "unit": "V",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 5.0,
+      "sigma": 0.12,
+      "lo": 4.5,
+      "hi": 5.5
+     },
+     "note": "voltage the BEC delivers to the VTX (DC 9-22 V input, BEC recommended: SRC docs.openipc.org)"
+    },
+    "air_supply_r_ohm": {
+     "value": 0.05,
+     "unit": "ohm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.05,
+      "sigma": 0.5,
+      "lo": 0.01,
+      "hi": 0.3
+     },
+     "note": "AIR supply path resistance (BEC output, wire, connector) seen by the TX current pulse"
+    },
+    "air_supply_ripple_v": {
+     "value": 0.04,
+     "unit": "V",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.04,
+      "sigma": 0.5,
+      "lo": 0.005,
+      "hi": 0.3
+     },
+     "note": "BEC ripple / noise std per slice (ESC and motor load)"
+    },
+    "tx_sag_knee_v": {
+     "value": 4.75,
+     "unit": "V",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 4.75,
+      "sigma": 0.1,
+      "lo": 4.4,
+      "hi": 5.0
+     },
+     "note": "supply below which the PA output droops"
+    },
+    "tx_sag_k1_db_per_v": {
+     "value": 5.0,
+     "unit": "dB/V",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 2.0,
+      "hi": 8.0
+     },
+     "note": "linear sag coefficient (power ~ V^2 gives ~3.5 dB/V near 5 V)"
+    },
+    "tx_sag_k2_db_per_v2": {
+     "value": 14.5,
+     "unit": "dB/V2",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 4.0,
+      "hi": 25.0
+     },
+     "note": "quadratic sag coefficient (hard droop near brown-out)"
+    },
+    "rx_agc_knee_dbm": {
+     "value": -28.0,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": -28.0,
+      "sigma": 3.0,
+      "lo": -40,
+      "hi": -15
+     },
+     "note": "received level where the GS ADC/AGC starts to saturate (too close to the AIR TX)"
+    },
+    "rx_agc_slope": {
+     "value": 1.35,
+     "unit": "dB/dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.7,
+      "hi": 2.0
+     },
+     "note": "SNR loss per dB above the knee (SYNTH)"
+    },
+    "rx_agc_cap_db": {
+     "value": 35.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 25.0,
+      "hi": 45.0
+     },
+     "note": "maximum SNR loss from saturation"
+    },
+    "elrs900_present": {
+     "value": 1,
+     "unit": "bool",
+     "provenance": "INF",
+     "dist": {
+      "kind": "point"
+     },
+     "note": "ELRS RX on 900 MHz is in the AIR contour (user fact); at the GS the external TX module is the source"
+    },
+    "elrs900_tx_dbm": {
+     "value": 25.0,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 20.0,
+      "hi": 30.0
+     },
+     "note": "ELRS 900 MHz TX module power at the GS (100 mW..1 W); model of the module unknown"
+    },
+    "elrs900_coupling_db": {
+     "value": 135.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 135.0,
+      "sigma": 12.0,
+      "lo": 90,
+      "hi": 160
+     },
+     "note": "EFFECTIVE in-band-equivalent coupling of the 900 MHz module into the 5.8 GHz receiver: harmonics/intermod, out-of-band rejection and antenna isolation lumped (very high loss expected; the tail is the risk)"
+    },
+    "elrs900_duty": {
+     "value": 0.275,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.05,
+      "hi": 0.5
+     },
+     "note": "share of time the module radiates (packet rate x airtime), SYNTH"
+    },
+    "multi24_present": {
+     "value": 1,
+     "unit": "bool",
+     "provenance": "INF",
+     "dist": {
+      "kind": "point"
+     },
+     "note": "TX12 MKII internal Multi module: 2.4 GHz may be switched on at the GS (user fact; protocol unknown)"
+    },
+    "multi24_tx_dbm": {
+     "value": 15.0,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 10.0,
+      "hi": 20.0
+     },
+     "note": "Multi module output power (CC2500/ELRS 2.4); the exact module is unknown"
+    },
+    "multi24_coupling_db": {
+     "value": 120.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 120.0,
+      "sigma": 12.0,
+      "lo": 70,
+      "hi": 150
+     },
+     "note": "EFFECTIVE in-band-equivalent coupling of the 2.4 GHz Multi module into the 5.8 GHz receiver incl. antenna proximity and out-of-band rejection"
+    },
+    "multi24_duty": {
+     "value": 0.21,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.02,
+      "hi": 0.4
+     },
+     "note": "share of time the Multi module radiates"
+    },
+    "usb3_present_prob": {
+     "value": 0.2,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 2,
+      "b": 8
+     },
+     "note": "probability that a noisy USB3 path (cable/port/SSD) is active during a session"
+    },
+    "usb3_noise_dbm": {
+     "value": -98.0,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": -98.0,
+      "sigma": 5.0,
+      "lo": -110,
+      "hi": -80
+     },
+     "note": "broadband USB3 noise reaching the 5.8 GHz input (USB3 noise is mainly 2.4 GHz; effect on 5.8 is unverified)"
+    },
+    "ant_null_prob": {
+     "value": 0.1,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 2,
+      "b": 18
+     },
+     "note": "share of time the antenna pattern is in a null"
+    },
+    "ant_null_mean_db": {
+     "value": 10.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 10.0,
+      "sigma": 0.4,
+      "lo": 3,
+      "hi": 30
+     },
+     "note": "mean null depth (exponential)"
+    },
+    "ant_pol_max_deg": {
+     "value": 35.0,
+     "unit": "deg",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 10.0,
+      "hi": 60.0
+     },
+     "note": "maximum polarisation tilt between the AIR and GS antennas"
+    },
+    "ant_pol_cap_db": {
+     "value": 22.5,
+     "unit": "dB",
+     "provenance": "INF",
+     "dist": {
+      "kind": "uniform",
+      "lo": 15.0,
+      "hi": 30.0
+     },
+     "note": "cap of the cross-polar loss"
+    },
+    "ant_body_prob": {
+     "value": 0.05,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 2,
+      "b": 38
+     },
+     "note": "share of time the operator's body/airframe shadows an antenna"
+    },
+    "ant_body_mean_db": {
+     "value": 12.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 12.0,
+      "sigma": 0.3,
+      "lo": 4,
+      "hi": 25
+     },
+     "note": "mean body/airframe shadow depth"
+    },
+    "ant_body_sigma_db": {
+     "value": 4.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 2.0,
+      "hi": 6.0
+     },
+     "note": "spread of the shadow depth"
+    },
+    "ant_persist_s": {
+     "value": 20.0,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 20.0,
+      "sigma": 0.5,
+      "lo": 2,
+      "hi": 120
+     },
+     "note": "how long an orientation state persists"
+    },
+    "soc_rise_c": {
+     "value": 30.0,
+     "unit": "C",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 30.0,
+      "sigma": 6.0,
+      "lo": 10,
+      "hi": 55
+     },
+     "note": "Pi 5 SoC temperature rise above ambient with decode load and the cooler fitted (no cooler is worse)"
+    },
+    "soc_soft_limit_c": {
+     "value": 80.0,
+     "unit": "C",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 80.0,
+      "sigma": 3.0,
+      "lo": 60,
+      "hi": 90
+     },
+     "note": "temperature where the Pi 5 caps the ARM clock (vcgencmd get_throttled bit 3/2)"
+    },
+    "throttle_decode_factor": {
+     "value": 1.6,
+     "unit": "x",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 1.2,
+      "hi": 2.0
+     },
+     "note": "decode-time multiplier while the clock is capped"
+    }
+   },
+   "calibration": [
+    {
+     "id": "hw-tx-power-sweep",
+     "measure": "AIR conducted/radiated power vs commanded txpower (power meter or SDR), and EVM per MCS",
+     "params": [
+      "hw.pa_p1db_out_dbm",
+      "hw.pa_rapp_p",
+      "hw.evm_floor_db",
+      "hw.evm_comp_coeff"
+     ],
+     "command": "iw dev wlan0 set txpower fixed <mBm> at 17..28 dBm; capture with a spectrum analyser/power meter",
+     "tool": "power meter or SDR + 30 dB attenuator",
+     "how": "Fit the Rapp curve to Pout vs Pin: P1dB = the point where gain is 1 dB lower; EVM from the analyser at MCS 1 and 7"
+    },
+    {
+     "id": "hw-thermal",
+     "measure": "adapter case temperature vs time at flight TX power in the closed enclosure (thermal camera or NTC on the heatsink)",
+     "params": [
+      "hw.air_rth_c_per_w",
+      "hw.air_tau_s",
+      "hw.air_board_heat_w",
+      "hw.air_ambient_rise_c",
+      "hw.evm_temp_db_per_c",
+      "hw.thermal_derate_start_c",
+      "hw.thermal_derate_db_per_c",
+      "hw.thermal_shutdown_c",
+      "hw.thermal_hyst_c"
+     ],
+     "command": "run TX at flight power 30 min; log vtx temperature (majestic/telemetry) every 5 s; repeat at 40 C ambient (warm box)",
+     "tool": "thermocouple/NTC, thermal camera",
+     "how": "Rth = (Tss - Tamb)/P; tau = time to 63 % of the rise; derate/shutdown from the first power drop seen by the power meter"
+    },
+    {
+     "id": "hw-supply-sag",
+     "measure": "VTX 5 V rail during TX bursts (scope on the BEC output)",
+     "params": [
+      "hw.air_bec_v",
+      "hw.air_supply_r_ohm",
+      "hw.air_supply_ripple_v",
+      "hw.tx_sag_knee_v",
+      "hw.tx_sag_k1_db_per_v",
+      "hw.tx_sag_k2_db_per_v2"
+     ],
+     "command": "scope on the VTX 5 V pad while txpower steps; lab supply stepped 5.0->4.2 V to measure output power",
+     "tool": "scope, adjustable lab supply, power meter",
+     "how": "R = dV/dI at the burst; sag coefficients from Pout vs rail voltage"
+    },
+    {
+     "id": "hw-rx-agc",
+     "measure": "GS RX SNR/PER vs received level at very short range (conducted with attenuators)",
+     "params": [
+      "hw.rx_agc_knee_dbm",
+      "hw.rx_agc_slope",
+      "hw.rx_agc_cap_db"
+     ],
+     "command": "AIR TX -> variable attenuator 0..60 dB -> GS RX; log PER in wfb-cli gs",
+     "tool": "RF attenuators",
+     "how": "knee = level where PER starts to rise as attenuation decreases"
+    },
+    {
+     "id": "hw-desense",
+     "measure": "GS PER with the ELRS 900 MHz module and the Multi 2.4 GHz module transmitting next to the dongle, and with/without USB3 devices",
+     "params": [
+      "hw.elrs900_tx_dbm",
+      "hw.elrs900_coupling_db",
+      "hw.elrs900_duty",
+      "hw.multi24_tx_dbm",
+      "hw.multi24_coupling_db",
+      "hw.multi24_duty",
+      "hw.usb3_present_prob",
+      "hw.usb3_noise_dbm"
+     ],
+     "command": "fixed link at ~10 dB margin; switch each module/USB3 device on and off; wfb-cli gs loss counters",
+     "tool": "attenuators, the real TX12 and modules",
+     "how": "dSNR (dB) at a known received level gives the noise rise: coupling = interferer power at the source minus the implied in-band-equivalent power"
+    },
+    {
+     "id": "hw-antenna",
+     "measure": "RSSI distribution while rotating the airframe / walking (antenna nulls, polarisation, body shadow)",
+     "params": [
+      "hw.ant_null_prob",
+      "hw.ant_null_mean_db",
+      "hw.ant_pol_max_deg",
+      "hw.ant_pol_cap_db",
+      "hw.ant_body_prob",
+      "hw.ant_body_mean_db",
+      "hw.ant_body_sigma_db",
+      "hw.ant_persist_s"
+     ],
+     "command": "log RSSI per antenna at fixed 100 m LOS while rotating through attitudes for 10 min",
+     "tool": "wfb-cli RX_ANT log",
+     "how": "histogram of RSSI deficit vs the maximum; autocorrelation time = persistence"
+    },
+    {
+     "id": "hw-pi5-thermal",
+     "measure": "Pi 5 SoC temperature and get_throttled during decode at 30 C ambient",
+     "params": [
+      "hw.soc_rise_c",
+      "hw.soc_soft_limit_c",
+      "hw.throttle_decode_factor"
+     ],
+     "command": "vcgencmd measure_temp; vcgencmd get_throttled every 5 s for 30 min under the real GS load",
+     "tool": "vcgencmd",
+     "how": "rise = SoC temp - ambient; decode factor from GStreamer latency before/after capping"
+    }
+   ]
+  },
+  "proc": {
+   "description": "Slow stochastic processes: noise-floor drift and shocks, shadowing, component ageing.",
+   "assumptions": [
+    "noise-floor excess = Ornstein-Uhlenbeck drift + Poisson shocks (lognormal size, exponential decay) (INF)",
+    "log-normal shadowing as an AR(1) process in dB (INF)",
+    "ageing linear in operating hours (INF)"
+   ],
+   "params": {
+    "nf_ou_sigma_db": {
+     "value": 1.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.0,
+      "sigma": 0.4,
+      "lo": 0.2,
+      "hi": 4
+     },
+     "note": "stationary std of the slow noise-floor drift"
+    },
+    "nf_ou_tau_s": {
+     "value": 120.0,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 120.0,
+      "sigma": 0.5,
+      "lo": 10,
+      "hi": 1800
+     },
+     "note": "correlation time of the drift"
+    },
+    "shock_rate_per_h": {
+     "value": 2.0,
+     "unit": "1/h",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 2.0,
+      "sigma": 0.8,
+      "lo": 0.1,
+      "hi": 30
+     },
+     "note": "Poisson rate of interference shocks (ESC, neighbour transmitters)"
+    },
+    "shock_mag_db": {
+     "value": 6.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 6.0,
+      "sigma": 0.5,
+      "lo": 1,
+      "hi": 20
+     },
+     "note": "median shock size"
+    },
+    "shock_tau_s": {
+     "value": 20.0,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 20.0,
+      "sigma": 0.5,
+      "lo": 2,
+      "hi": 200
+     },
+     "note": "shock decay time"
+    },
+    "shadow_sigma_db": {
+     "value": 2.5,
+     "unit": "dB",
+     "provenance": "INF",
+     "dist": {
+      "kind": "uniform",
+      "lo": 1.0,
+      "hi": 4.0
+     },
+     "note": "log-normal shadowing sigma (3..8 dB outdoors is a textbook range)"
+    },
+    "shadow_tau_s": {
+     "value": 30.0,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 30.0,
+      "sigma": 0.6,
+      "lo": 3,
+      "hi": 300
+     },
+     "note": "shadowing correlation time (speed dependent)"
+    },
+    "age_hours": {
+     "value": 150.0,
+     "unit": "h",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 150.0,
+      "sigma": 1.0,
+      "lo": 1,
+      "hi": 5000
+     },
+     "note": "operating hours of the radios at the time of the flight"
+    },
+    "age_nf_db_per_kh": {
+     "value": 0.1,
+     "unit": "dB/kh",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.0,
+      "hi": 0.2
+     },
+     "note": "noise-figure creep per 1000 h"
+    },
+    "age_pa_db_per_kh": {
+     "value": 0.2,
+     "unit": "dB/kh",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.0,
+      "hi": 0.4
+     },
+     "note": "PA output loss per 1000 h"
+    }
+   },
+   "calibration": [
+    {
+     "id": "proc-noise-log",
+     "measure": "noise floor over a 1 h log on the ground and in the air (iw survey dump / wfb-cli noise)",
+     "params": [
+      "proc.nf_ou_sigma_db",
+      "proc.nf_ou_tau_s",
+      "proc.shock_rate_per_h",
+      "proc.shock_mag_db",
+      "proc.shock_tau_s"
+     ],
+     "command": "iw dev wlan0 survey dump every 2 s for 1 h; ESC on/off",
+     "tool": "iw",
+     "how": "OU sigma/tau from the autocorrelation of the log; shocks = excursions > 3 sigma"
+    },
+    {
+     "id": "proc-shadow",
+     "measure": "RSSI vs time for a moving aircraft on a fixed-range arc",
+     "params": [
+      "proc.shadow_sigma_db",
+      "proc.shadow_tau_s"
+     ],
+     "command": "fly/drive a fixed-radius arc, log RSSI",
+     "tool": "wfb-cli",
+     "how": "sigma = std of the detrended RSSI in dB; tau = decorrelation time"
+    },
+    {
+     "id": "proc-ageing",
+     "measure": "same link measured with a new unit and an old one (batch of hours)",
+     "params": [
+      "proc.age_hours",
+      "proc.age_nf_db_per_kh",
+      "proc.age_pa_db_per_kh"
+     ],
+     "command": "compare sensitivity (PER at fixed attenuation) and Pout of units with different logged hours",
+     "tool": "attenuators, power meter",
+     "how": "slope per 1000 h; hours from the unit log"
+    }
+   ]
+  },
+  "ext": {
+   "description": "External factors: ambient temperature, sun load, channel clash / interference episodes.",
+   "assumptions": [
+    "ambient temperature normal around the flight day; sun load adds to the airframe interior (SYNTH)",
+    "clash episodes = two-state chain at slice level (Gilbert-style), INR over the noise floor while on"
+   ],
+   "params": {
+    "ambient_c": {
+     "value": 24.0,
+     "unit": "C",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "normal",
+      "mu": 24.0,
+      "sigma": 8.0,
+      "lo": -10,
+      "hi": 45
+     },
+     "note": "outside air temperature of the session"
+    },
+    "solar_rise_c": {
+     "value": 7.5,
+     "unit": "C",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.0,
+      "hi": 15.0
+     },
+     "note": "extra heating of the enclosures by direct sun"
+    },
+    "clash_rate_per_h": {
+     "value": 6.0,
+     "unit": "1/h",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 6.0,
+      "sigma": 0.8,
+      "lo": 0.2,
+      "hi": 60
+     },
+     "note": "start rate of interference episodes on the channel (neighbour FPV/AP)"
+    },
+    "clash_mean_s": {
+     "value": 8.0,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 8.0,
+      "sigma": 0.7,
+      "lo": 1,
+      "hi": 120
+     },
+     "note": "mean episode duration"
+    },
+    "clash_inr_db": {
+     "value": 12.0,
+     "unit": "dB",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "normal",
+      "mu": 12.0,
+      "sigma": 4.0,
+      "lo": 3,
+      "hi": 30
+     },
+     "note": "interference-to-noise ratio during an episode"
+    }
+   },
+   "calibration": [
+    {
+     "id": "ext-survey",
+     "measure": "channel occupancy at the flying site (survey of the channel over 1 h, spectrum scan)",
+     "params": [
+      "ext.clash_rate_per_h",
+      "ext.clash_mean_s",
+      "ext.clash_inr_db"
+     ],
+     "command": "iw dev wlan0 survey dump / channel-scan.sh repeatedly at the site",
+     "tool": "iw, channel-scan.sh",
+     "how": "episodes = intervals where busy time rises above threshold; INR from the busy-noise level"
+    },
+    {
+     "id": "ext-weather",
+     "measure": "ambient and sun load of the planned flight (thermometer in the sun/shade, enclosure surface)",
+     "params": [
+      "ext.ambient_c",
+      "ext.solar_rise_c"
+     ],
+     "command": "thermometer log; IR thermometer on the closed enclosure after 10 min in the sun",
+     "tool": "thermometer",
+     "how": "distribution over the planned season/location"
+    }
+   ]
+  },
+  "vid": {
+   "description": "Video encoder behaviour that stresses the air interface.",
+   "assumptions": [
+    "majestic delivers more than the configured bitrate in bursts (overshoot), with a periodic IDR (GOP)"
+   ],
+   "params": {
+    "bitrate_overshoot": {
+     "value": 1.08,
+     "unit": "x",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.08,
+      "sigma": 0.12,
+      "lo": 0.9,
+      "hi": 2.0
+     },
+     "note": "mean encoded bitrate / configured bitrate (rate control overshoot)"
+    },
+    "gop_s": {
+     "value": 1.25,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.5,
+      "hi": 2.0
+     },
+     "note": "IDR period in seconds (majestic default unknown)"
+    }
+   },
+   "calibration": [
+    {
+     "id": "vid-bitrate",
+     "measure": "actual encoder bitrate and IDR period from a capture (tcpdump on the wfb UDP port / majestic log)",
+     "params": [
+      "vid.bitrate_overshoot",
+      "vid.gop_s"
+     ],
+     "command": "tcpdump -i lo udp port 5600 for 5 min; bitrate per 1 s; IDR spacing from the stream",
+     "tool": "tcpdump, ffprobe",
+     "how": "overshoot = mean/config; GOP = IDR spacing"
+    }
+   ]
+  },
+  "inj": {
+   "description": "Injection path (wfb_tx -> driver queue): random EBUSY, finite queue (M/M/1/K) and rate cap.",
+   "assumptions": [
+    "M/M/1/K blocking at the TX queue with utilisation rho = offered packets / min(air capacity, rate cap) (INF)",
+    "an I-frame burst arrives within one frame period and overflows the queue (INF)"
+   ],
+   "params": {
+    "queue_pkts": {
+     "value": 288.0,
+     "unit": "pkts",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 64.0,
+      "hi": 512.0
+     },
+     "note": "driver/socket TX queue length in packets"
+    },
+    "rate_cap_pps": {
+     "value": 5000.0,
+     "unit": "pps",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 5000.0,
+      "sigma": 0.5,
+      "lo": 800,
+      "hi": 20000
+     },
+     "note": "maximum injection rate the driver/USB path sustains (packets per second)"
+    },
+    "ebusy_prob": {
+     "value": 0.0002,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 4999
+     },
+     "note": "per-frame random EBUSY/ENOBUFS probability even without overload"
+    }
+   },
+   "calibration": [
+    {
+     "id": "inj-rate",
+     "measure": "maximum injection rate and drop counters with an overloaded wfb_tx",
+     "params": [
+      "inj.queue_pkts",
+      "inj.rate_cap_pps",
+      "inj.ebusy_prob"
+     ],
+     "command": "wfb_tx with bitrate above the air capacity; count send errors (strace -c / wfb_tx stats)",
+     "tool": "wfb_tx stats, strace",
+     "how": "rate_cap = max sustained pps; ebusy = errors per frame at low load"
+    }
+   ]
+  },
+  "usb": {
+   "description": "GS USB/power: PSU sag, USB drop hazard vs margin, re-enumeration, Pi 5 current-limit trip.",
+   "assumptions": [
+    "hazard = base * exp(-V margin/Vs) * exp(-I margin/Is) (INF shape)",
+    "Pi 5 limit 0.6 A vs 1.6 A is power_model.usb_budget_a (SRC raspberrypi docs); trip behaviour is an assumption",
+    "peak currents from power_model (tx_peak_factor)"
+   ],
+   "params": {
+    "psu_v_sigma": {
+     "value": 0.07,
+     "unit": "V",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.02,
+      "hi": 0.12
+     },
+     "note": "unit-to-unit PSU voltage offset std"
+    },
+    "cable_r_ohm": {
+     "value": 0.08,
+     "unit": "ohm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.08,
+      "sigma": 0.5,
+      "lo": 0.02,
+      "hi": 0.4
+     },
+     "note": "extra resistance of the dongle USB cable and connector (thin cables, SRC wfb-ng warns about them)"
+    },
+    "drop_rate_per_h": {
+     "value": 0.05,
+     "unit": "1/h",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.05,
+      "sigma": 0.9,
+      "lo": 0.001,
+      "hi": 2
+     },
+     "note": "spontaneous USB disconnect rate at ample margins"
+    },
+    "drop_v_scale": {
+     "value": 0.1,
+     "unit": "V",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.05,
+      "hi": 0.15
+     },
+     "note": "e-fold voltage margin of the drop hazard"
+    },
+    "drop_i_scale_a": {
+     "value": 0.19,
+     "unit": "A",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.08,
+      "hi": 0.3
+     },
+     "note": "e-fold current margin of the drop hazard"
+    },
+    "reenum_sigma": {
+     "value": 0.4,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.2,
+      "hi": 0.6
+     },
+     "note": "log-std of the re-enumeration time"
+    },
+    "reenum_fail_prob": {
+     "value": 0.05,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 2,
+      "b": 38
+     },
+     "note": "probability that the adapter does not come back without a replug"
+    },
+    "gs_tx_burst_hz": {
+     "value": 5.0,
+     "unit": "1/s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 5.0,
+      "sigma": 0.7,
+      "lo": 0.2,
+      "hi": 50
+     },
+     "note": "TX burst rate of the GS adapter (uplink MAVLink/RC override, keepalive)"
+    },
+    "pi5_trip_tol": {
+     "value": 0.075,
+     "unit": "",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.0,
+      "hi": 0.15
+     },
+     "note": "tolerance above the documented limit before the Pi 5 trips"
+    },
+    "pi5_trip_off_s": {
+     "value": 2.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 2.0,
+      "sigma": 0.4,
+      "lo": 0.2,
+      "hi": 10
+     },
+     "note": "port-off time after a current-limit trip"
+    },
+    "pi5_trip_latch_n": {
+     "value": 4.0,
+     "unit": "",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 2.0,
+      "hi": 6.0
+     },
+     "note": "consecutive trips after which the port stays off until a power cycle (assumption)"
+    }
+   },
+   "calibration": [
+    {
+     "id": "usb-meter",
+     "measure": "USB current and 5 V rail at the Pi during the real GS load (TX bursts), with a 3 A and a 5 A PSU, usb_max_current_enable 0/1",
+     "params": [
+      "usb.psu_v_sigma",
+      "usb.cable_r_ohm",
+      "usb.gs_tx_burst_hz",
+      "usb.pi5_trip_tol",
+      "usb.pi5_trip_off_s",
+      "usb.pi5_trip_latch_n"
+     ],
+     "command": "USB inline meter + scope on the 5 V; dmesg -w for over-current; vcgencmd get_throttled",
+     "tool": "USB meter, scope",
+     "how": "trip tolerance/off time from dmesg timestamps; cable R from dV/dI"
+    },
+    {
+     "id": "usb-soak",
+     "measure": "USB disconnect events in a 24 h soak (dmesg 'USB disconnect', udev remove)",
+     "params": [
+      "usb.drop_rate_per_h",
+      "usb.drop_v_scale",
+      "usb.drop_i_scale_a",
+      "usb.reenum_sigma",
+      "usb.reenum_fail_prob"
+     ],
+     "command": "journalctl -k -f | grep -i usb for 24 h at two margins (5 A PSU vs 3 A PSU)",
+     "tool": "journalctl",
+     "how": "rate vs margin gives base and scales; time to return gives the re-enum distribution"
+    }
+   ]
+  },
+  "bringup": {
+   "description": "Device bring-up failures: USB probe, firmware load, monitor-mode set, injection start; retries with exponential backoff.",
+   "assumptions": [
+    "each stage is a Bernoulli trial per attempt; a failed attempt costs a timeout plus backoff base*factor^(i-1); after max attempts the stage fails (INF)"
+   ],
+   "params": {
+    "max_attempts": {
+     "value": 3,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "point"
+     },
+     "note": "retry count assumed for the bring-up service (a design choice; the repo has no retry loop yet)"
+    },
+    "backoff_base_s": {
+     "value": 2.5,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 1.0,
+      "hi": 4.0
+     },
+     "note": "first backoff delay"
+    },
+    "backoff_factor": {
+     "value": 2.25,
+     "unit": "x",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 1.5,
+      "hi": 3.0
+     },
+     "note": "backoff growth"
+    },
+    "usb_probe_fail_p": {
+     "value": 0.02,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 2,
+      "b": 98
+     },
+     "note": "per-attempt failure probability: USB enumeration (descriptor read timeouts, error -71)"
+    },
+    "usb_probe_timeout_s": {
+     "value": 5.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 5.0,
+      "sigma": 0.3,
+      "lo": 1,
+      "hi": 20
+     },
+     "note": "time lost by a failed attempt: USB enumeration (descriptor read timeouts, error -71)"
+    },
+    "usb_probe_ok_s": {
+     "value": 1.5,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.5,
+      "sigma": 0.3,
+      "lo": 0.3,
+      "hi": 6
+     },
+     "note": "time of a successful attempt: USB enumeration (descriptor read timeouts, error -71)"
+    },
+    "fw_fail_p": {
+     "value": 0.01,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 99
+     },
+     "note": "per-attempt failure probability: firmware/driver init"
+    },
+    "fw_timeout_s": {
+     "value": 2.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 2.0,
+      "sigma": 0.3,
+      "lo": 0.5,
+      "hi": 10
+     },
+     "note": "time lost by a failed attempt: firmware/driver init"
+    },
+    "fw_ok_s": {
+     "value": 1.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.0,
+      "sigma": 0.3,
+      "lo": 0.2,
+      "hi": 5
+     },
+     "note": "time of a successful attempt: firmware/driver init"
+    },
+    "monitor_fail_p": {
+     "value": 0.04,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 2,
+      "b": 48
+     },
+     "note": "per-attempt failure probability: iw set type monitor (busy: NetworkManager, rfkill)"
+    },
+    "monitor_timeout_s": {
+     "value": 1.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.0,
+      "sigma": 0.3,
+      "lo": 0.2,
+      "hi": 5
+     },
+     "note": "time lost by a failed attempt: iw set type monitor (busy: NetworkManager, rfkill)"
+    },
+    "monitor_ok_s": {
+     "value": 0.5,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.5,
+      "sigma": 0.3,
+      "lo": 0.1,
+      "hi": 3
+     },
+     "note": "time of a successful attempt: iw set type monitor (busy: NetworkManager, rfkill)"
+    },
+    "inj_start_fail_p": {
+     "value": 0.01,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 99
+     },
+     "note": "per-attempt failure probability: first injection test (EBUSY at start)"
+    },
+    "inj_start_timeout_s": {
+     "value": 1.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.0,
+      "sigma": 0.3,
+      "lo": 0.2,
+      "hi": 5
+     },
+     "note": "time lost by a failed attempt: first injection test (EBUSY at start)"
+    },
+    "inj_start_ok_s": {
+     "value": 0.5,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.5,
+      "sigma": 0.3,
+      "lo": 0.1,
+      "hi": 3
+     },
+     "note": "time of a successful attempt: first injection test (EBUSY at start)"
+    }
+   },
+   "calibration": [
+    {
+     "id": "bu-boot-loop",
+     "measure": "50 cold boots / hot-plugs: stage outcomes and durations from the logs",
+     "params": [
+      "bringup.backoff_base_s",
+      "bringup.backoff_factor",
+      "bringup.usb_probe_fail_p",
+      "bringup.usb_probe_timeout_s",
+      "bringup.usb_probe_ok_s",
+      "bringup.fw_fail_p",
+      "bringup.fw_timeout_s",
+      "bringup.fw_ok_s",
+      "bringup.monitor_fail_p",
+      "bringup.monitor_timeout_s",
+      "bringup.monitor_ok_s",
+      "bringup.inj_start_fail_p",
+      "bringup.inj_start_timeout_s",
+      "bringup.inj_start_ok_s",
+      "bringup.max_attempts"
+     ],
+     "command": "loop: power-cycle the dongle (uhubctl or relay) 50 times; log dmesg, iw set monitor exit codes, first wfb_tx send result",
+     "tool": "uhubctl or a relay, shell loop",
+     "how": "failure fraction per stage = p; mean durations = timeouts/ok times"
+    }
+   ]
+  },
+  "timing": {
+   "description": "Time: clock drift, scheduler jitter, queue (latency) creep, stalls, packet reordering.",
+   "assumptions": [
+    "queue creep = max(0, ppm) drift of the producer vs the sink until the leaky queue drops; stalls add a backlog that decays slowly (INF)",
+    "scheduler jitter = lognormal + rare exponential spikes (INF)"
+   ],
+   "params": {
+    "clock_ppm": {
+     "value": 0.0,
+     "unit": "ppm",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "normal",
+      "mu": 0.0,
+      "sigma": 25.0,
+      "lo": -100,
+      "hi": 100
+     },
+     "note": "frame-clock mismatch between the VTX encoder and the GS display/sink"
+    },
+    "ntp_step_rate_per_h": {
+     "value": 0.2,
+     "unit": "1/h",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.2,
+      "sigma": 0.8,
+      "lo": 0.01,
+      "hi": 5
+     },
+     "note": "rate of wall-clock steps (NTP/chrony) on the GS or host"
+    },
+    "ntp_step_ms": {
+     "value": 150.0,
+     "unit": "ms",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 150.0,
+      "sigma": 1.0,
+      "lo": 1,
+      "hi": 5000
+     },
+     "note": "median NTP step size"
+    },
+    "sched_jitter_median_ms": {
+     "value": 1.5,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 1.5,
+      "sigma": 0.5,
+      "lo": 0.2,
+      "hi": 10
+     },
+     "note": "median wake-up latency of the GS pipeline threads"
+    },
+    "sched_jitter_sigma": {
+     "value": 0.65,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.4,
+      "hi": 0.9
+     },
+     "note": "log-std of the jitter"
+    },
+    "sched_spike_prob": {
+     "value": 0.005,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 199
+     },
+     "note": "probability of a scheduling spike per sample"
+    },
+    "sched_spike_mean_ms": {
+     "value": 40.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 40.0,
+      "sigma": 0.5,
+      "lo": 5,
+      "hi": 300
+     },
+     "note": "mean spike length (CPU contention, decode load)"
+    },
+    "queue_max_ms": {
+     "value": 250.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 100.0,
+      "hi": 400.0
+     },
+     "note": "size of the leaky queue/jitter buffer where frames are dropped"
+    },
+    "stall_rate_per_h": {
+     "value": 3.0,
+     "unit": "1/h",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 3.0,
+      "sigma": 0.8,
+      "lo": 0.1,
+      "hi": 40
+     },
+     "note": "pipeline stall (decoder hiccup, GC, USB) rate"
+    },
+    "stall_backlog_ms": {
+     "value": 60.0,
+     "unit": "ms",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 60.0,
+      "sigma": 0.5,
+      "lo": 10,
+      "hi": 300
+     },
+     "note": "mean backlog added by a stall"
+    },
+    "catchup_ms_per_s": {
+     "value": 2.75,
+     "unit": "ms/s",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.5,
+      "hi": 5.0
+     },
+     "note": "backlog drain rate (sink catch-up)"
+    },
+    "reorder_prob": {
+     "value": 0.002,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 499
+     },
+     "note": "per-packet reordering probability"
+    },
+    "reorder_delay_ms": {
+     "value": 8.0,
+     "unit": "ms",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 8.0,
+      "sigma": 0.6,
+      "lo": 1,
+      "hi": 60
+     },
+     "note": "mean extra wait for a reordered packet"
+    }
+   },
+   "calibration": [
+    {
+     "id": "tm-latency-log",
+     "measure": "glass-to-glass latency over 30 min (LED + photodiode or phone slow motion), GStreamer queue levels, decoder stalls",
+     "params": [
+      "timing.clock_ppm",
+      "timing.queue_max_ms",
+      "timing.stall_rate_per_h",
+      "timing.stall_backlog_ms",
+      "timing.catchup_ms_per_s",
+      "timing.sched_jitter_median_ms",
+      "timing.sched_jitter_sigma",
+      "timing.sched_spike_prob",
+      "timing.sched_spike_mean_ms"
+     ],
+     "command": "protocol: python3 tests/sim/models/latency_budget.py protocol; GST_DEBUG=GST_TRACER:7 latency tracer; watch latency drift over 30 min",
+     "tool": "photodiode + scope, GST tracers",
+     "how": "creep slope = ppm; stalls from latency steps"
+    },
+    {
+     "id": "tm-ntp-reorder",
+     "measure": "chrony/NTP step log of the host over a week; wfb_rx reorder counters",
+     "params": [
+      "timing.ntp_step_rate_per_h",
+      "timing.ntp_step_ms",
+      "timing.reorder_prob",
+      "timing.reorder_delay_ms"
+     ],
+     "command": "chronyc tracking/journal; wfb-cli gs counters",
+     "tool": "chrony, wfb-cli",
+     "how": "step rate and size from the journal; reorder from out-of-order seq counters"
+    }
+   ]
+  },
+  "gpio": {
+   "description": "Mechanical button (GPIO) bounce, glitches and the timing of the REAL algorithm of gs/button.sh; RP1 specifics for Pi 5.",
+   "assumptions": [
+    "gs/button.sh button_action: gpiomon -r waits for the first rising edge, sleep 0.05, gpioget must read 1, uptime in centiseconds (cut -d ' ' -f1 /proc/uptime | tr -d .), gpiomon -f waits for the first falling edge, uptime again; < 200 cs = single, >= 200 = long (REPO gs/button.sh)",
+    "contact bounce = alternating transitions with exponential gaps, settles at the final level; release bounce scaled by a factor (INF)",
+    "RP1 (Pi 5 GPIO behind PCIe) adds interrupt latency/jitter, may drop edges and has a hardware input filter; all values UNMEASURED"
+   ],
+   "params": {
+    "settle_s": {
+     "value": 0.05,
+     "unit": "s",
+     "provenance": "REPO",
+     "dist": {
+      "kind": "point"
+     },
+     "note": "sleep between the first rising edge and the level check",
+     "source": "gs/button.sh"
+    },
+    "long_threshold_cs": {
+     "value": 200,
+     "unit": "cs",
+     "provenance": "REPO",
+     "dist": {
+      "kind": "point"
+     },
+     "note": "long-press threshold in /proc/uptime hundredths",
+     "source": "gs/button.sh"
+    },
+    "debounce_ms": {
+     "value": 0.0,
+     "unit": "ms",
+     "provenance": "REPO",
+     "dist": {
+      "kind": "point"
+     },
+     "note": "kernel/libgpiod debounce period in use: 0 = none (gpiomon is called without a debounce option)",
+     "source": "gs/button.sh"
+    },
+    "bounce_count_mean": {
+     "value": 3.0,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 3.0,
+      "sigma": 0.5,
+      "lo": 1,
+      "hi": 15
+     },
+     "note": "mean number of bounce pairs on a press (tact switch: a few)"
+    },
+    "bounce_total_ms": {
+     "value": 2.0,
+     "unit": "ms",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 2.0,
+      "sigma": 0.8,
+      "lo": 0.1,
+      "hi": 40
+     },
+     "note": "mean total bounce duration of a press (typical tact switch 1..5 ms, worn: tens of ms)"
+    },
+    "release_bounce_scale": {
+     "value": 1.9,
+     "unit": "x",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.8,
+      "hi": 3.0
+     },
+     "note": "release bounce vs press bounce"
+    },
+    "glitch_rate_per_s": {
+     "value": 0.02,
+     "unit": "1/s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.02,
+      "sigma": 1.0,
+      "lo": 0.0005,
+      "hi": 2
+     },
+     "note": "EMI glitch rate on the line (long wires near ESC/motors)"
+    },
+    "glitch_width_us": {
+     "value": 40.0,
+     "unit": "us",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 40.0,
+      "sigma": 0.8,
+      "lo": 2,
+      "hi": 5000
+     },
+     "note": "median glitch width"
+    },
+    "chatter_prob": {
+     "value": 0.02,
+     "unit": "",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 49
+     },
+     "note": "probability that vibration briefly opens the contact during a long hold"
+    },
+    "chatter_ms": {
+     "value": 3.0,
+     "unit": "ms",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 3.0,
+      "sigma": 0.7,
+      "lo": 0.2,
+      "hi": 60
+     },
+     "note": "duration of that opening"
+    },
+    "single_hold_s": {
+     "value": 0.12,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "lognormal",
+      "median": 0.12,
+      "sigma": 0.35,
+      "lo": 0.03,
+      "hi": 1.0
+     },
+     "note": "hold time of an intended short press"
+    },
+    "long_hold_mu_s": {
+     "value": 2.6,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 2.2,
+      "hi": 3.0
+     },
+     "note": "mean hold of an intended long press (operator)"
+    },
+    "long_hold_sigma_s": {
+     "value": 0.35,
+     "unit": "s",
+     "provenance": "SYNTH",
+     "dist": {
+      "kind": "uniform",
+      "lo": 0.2,
+      "hi": 0.5
+     },
+     "note": "spread of the intended long hold"
+    },
+    "mon_start_ms": {
+     "value": 12.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 12.0,
+      "sigma": 0.4,
+      "lo": 3,
+      "hi": 80
+     },
+     "note": "fork+exec+open latency of gpiomon (edges inside it are not seen)"
+    },
+    "get_ms": {
+     "value": 8.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 8.0,
+      "sigma": 0.4,
+      "lo": 2,
+      "hi": 60
+     },
+     "note": "latency of gpioget until the level is sampled"
+    },
+    "uptime_ms": {
+     "value": 5.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 5.0,
+      "sigma": 0.4,
+      "lo": 1,
+      "hi": 40
+     },
+     "note": "latency of the cut|tr pipeline reading /proc/uptime"
+    },
+    "exit_ms": {
+     "value": 2.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 2.0,
+      "sigma": 0.4,
+      "lo": 0.3,
+      "hi": 20
+     },
+     "note": "gpiomon event delivery and exit latency"
+    },
+    "action_ms": {
+     "value": 30.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 30.0,
+      "sigma": 0.6,
+      "lo": 3,
+      "hi": 500
+     },
+     "note": "execution time of the dispatched function before the loop re-arms"
+    },
+    "rp1_irq_latency_us": {
+     "value": 40.0,
+     "unit": "us",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 40.0,
+      "sigma": 0.6,
+      "lo": 5,
+      "hi": 2000
+     },
+     "note": "RP1 interrupt latency over PCIe added to every edge"
+    },
+    "rp1_edge_loss_prob": {
+     "value": 0.001,
+     "unit": "",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "beta",
+      "a": 1,
+      "b": 999
+     },
+     "note": "probability that an RP1 edge event is lost (coalescing)"
+    },
+    "rp1_filter_us": {
+     "value": 10.0,
+     "unit": "us",
+     "provenance": "UNMEASURED",
+     "dist": {
+      "kind": "lognormal",
+      "median": 10.0,
+      "sigma": 0.7,
+      "lo": 0.0,
+      "hi": 500
+     },
+     "note": "RP1 hardware input glitch filter (pulses shorter are ignored); 0 = off. Datasheet value not read"
+    }
+   },
+   "calibration": [
+    {
+     "id": "gp-scope",
+     "measure": "press/release bounce and glitches on the real button with a scope or logic analyser (>= 100 presses), and the edge timestamps libgpiod sees (gpiomon -r -f --format for 100 presses)",
+     "params": [
+      "gpio.bounce_count_mean",
+      "gpio.bounce_total_ms",
+      "gpio.release_bounce_scale",
+      "gpio.glitch_rate_per_s",
+      "gpio.glitch_width_us",
+      "gpio.chatter_prob",
+      "gpio.chatter_ms",
+      "gpio.rp1_irq_latency_us",
+      "gpio.rp1_edge_loss_prob",
+      "gpio.rp1_filter_us"
+     ],
+     "command": "logic analyser on the pin; in parallel gpiomon --num-events=0 --format='%e %s.%n' for 100 presses on a Pi 5 and a Radxa",
+     "tool": "logic analyser, gpiomon",
+     "how": "bounce stats from the analyser; RP1 latency = libgpiod timestamp - analyser edge; lost edges = analyser edges - gpiomon edges"
+    },
+    {
+     "id": "gp-script-timing",
+     "measure": "real latencies of the button.sh loop: time between edge and uptime reading, and between exit and re-arm",
+     "params": [
+      "gpio.mon_start_ms",
+      "gpio.get_ms",
+      "gpio.uptime_ms",
+      "gpio.exit_ms",
+      "gpio.action_ms"
+     ],
+     "command": "bash -x with timestamps (PS4='+ $EPOCHREALTIME ') on button.sh on the Pi 5; 50 presses",
+     "tool": "bash -x, EPOCHREALTIME",
+     "how": "differences between consecutive trace lines"
+    },
+    {
+     "id": "gp-human",
+     "measure": "hold times of single and long presses by 3 operators (20 each)",
+     "params": [
+      "gpio.single_hold_s",
+      "gpio.long_hold_mu_s",
+      "gpio.long_hold_sigma_s"
+     ],
+     "command": "log press durations with a logic analyser",
+     "tool": "logic analyser",
+     "how": "lognormal/normal fit"
+    }
+   ]
+  }
+ }
+}

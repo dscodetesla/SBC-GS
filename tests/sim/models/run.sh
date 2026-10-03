@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Calibratable-model checks (RF / power / latency): no network, no root, < 5 s.
+# Calibratable-model checks (RF / power / latency + stochastic scenario engine): no network, no root, < 10 s.
 #   run.sh --check          py_compile + unit/property/golden tests (the fast mode used by smoke.sh)
 #   run.sh                  same, then print the demo tables (range sweep, power report, latency matrix)
 #   run.sh --update-golden  rewrite golden/*.txt after an INTENDED model change
@@ -23,15 +23,18 @@ done
 
 if [ "$mode" = "--update-golden" ]; then
 	UPDATE_GOLDEN=1 "$PY" "$HERE/test_models.py" >/dev/null 2>&1
+	UPDATE_GOLDEN=1 "$PY" "$HERE/test_degrade.py" >/dev/null 2>&1
 	"$PY" "$HERE/test_models.py" || exit 1
+	"$PY" "$HERE/test_degrade.py" || exit 1
 	echo "models: golden updated"
 	exit 0
 fi
 
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
-if "$PY" "$HERE/test_models.py" >"$log" 2>&1; then
-	echo "PASS models: $(sed -n 's/^Ran \([0-9]*\) tests.*/\1/p' "$log") tests; $(grep -o 'UNMEASURED parameters:.*' "$log")"
+if "$PY" "$HERE/test_models.py" >"$log" 2>&1 && "$PY" "$HERE/test_degrade.py" >>"$log" 2>&1; then
+	n="$(sed -n 's/^Ran \([0-9]*\) tests.*/\1/p' "$log" | awk '{s+=$1} END {print s}')"
+	echo "PASS models: $n tests; $(grep -o 'UNMEASURED parameters: .*' "$log"); $(grep -o 'UNMEASURED parameters (degrade file): .*' "$log")"
 else
 	cat "$log"
 	echo "FAIL models"
@@ -41,5 +44,6 @@ if [ -z "$mode" ]; then
 	"$PY" "$HERE/rf_model.py" sweep
 	"$PY" "$HERE/power_model.py" report --board pi5 --psu-a 3 --with fc,webcam,fan
 	"$PY" "$HERE/latency_budget.py" matrix --res 1920x1080 --bitrate 8000 --mcs 3
+	"$PY" "$HERE/scenario_engine.py" run nominal_pi5_5a_150m --n 60
 fi
 exit 0

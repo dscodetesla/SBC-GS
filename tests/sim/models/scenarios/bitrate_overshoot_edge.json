@@ -1,0 +1,18 @@
+{
+ "name": "bitrate_overshoot_edge",
+ "description": "Bitrate 4000 kbit/s with majestic overshoot x1.6 at MCS1 FEC 8/12: airtime and I-frame queue overflow.",
+ "kind": "link",
+ "cfg": {
+  "distance_m": 150,
+  "duration_s": 300,
+  "dt_s": 20
+ },
+ "set": {},
+ "dist": {
+  "vid.bitrate_overshoot": {
+   "kind": "lognormal",
+   "median": 1.6,
+   "sigma": 0.1
+  }
+ }
+}

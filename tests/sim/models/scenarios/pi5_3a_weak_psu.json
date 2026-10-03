@@ -1,0 +1,14 @@
+{
+ "name": "pi5_3a_weak_psu",
+ "description": "Same, but a 3 A PSU without usb_max_current_enable: Pi 5 USB limit 0.6 A (power_model budget).",
+ "kind": "link",
+ "cfg": {
+  "distance_m": 150,
+  "duration_s": 600,
+  "dt_s": 20,
+  "psu_a": 3.0,
+  "usb_max_current": false
+ },
+ "set": {},
+ "dist": {}
+}

@@ -1,0 +1,14 @@
+{
+ "name": "nominal_pi5_5a_150m",
+ "description": "Standard contour: AIR RTL8812EU downlink 720p MCS1 FEC 8/12 at 150 m, GS Pi 5 + 5 A PSU, ELRS-900 and Multi-2.4 modules present, mild weather (SYNTH).",
+ "kind": "link",
+ "cfg": {
+  "distance_m": 150,
+  "duration_s": 600,
+  "dt_s": 20,
+  "psu_a": 5.0,
+  "usb_max_current": false
+ },
+ "set": {},
+ "dist": {}
+}
