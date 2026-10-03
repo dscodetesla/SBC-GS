@@ -154,21 +154,25 @@ def throttled_rows():
 
 
 def soc_prior_rows():
-    """Пріор hw.soc_soft_limit_c проти документації Pi (80..85 °C; жорсткий ліміт 85 °C)."""
+    """Пріор hw.soc_soft_limit_c проти документації Pi (прогресивний дросель 80..85 °C; жорсткий ліміт 85 °C). Носій і P(>85 °C) рахуються
+    з квантилів самого пріора (будь-який вид розподілу), а не з припущення про нормальний розподіл."""
     deg = vlib.priors.load_degrade()
     d = deg.dist("hw.soc_soft_limit_c")
-    spec = d.spec
-    p_over = 0.5 * math.erfc((PI_THERMAL_LIMIT_C - spec["mu"]) / spec["sigma"] / math.sqrt(2))
-    return {"mu": spec["mu"], "sigma": spec["sigma"], "hi": spec.get("hi"), "lo": spec.get("lo"),
-            "p_above_hard_limit": p_over, "doc_start": PI_THROTTLE_START_C, "doc_limit": PI_THERMAL_LIMIT_C}
+    n = 20001
+    xs = [d.ppf((i + 0.5) / n) for i in range(n)]
+    return {"kind": d.kind, "lo": min(xs), "hi": max(xs), "median": d.ppf(0.5),
+            "p_above_hard_limit": sum(1 for x in xs if x > PI_THERMAL_LIMIT_C) / n,
+            "p_below_doc_start": sum(1 for x in xs if x < PI_THROTTLE_START_C) / n,
+            "doc_start": PI_THROTTLE_START_C, "doc_limit": PI_THERMAL_LIMIT_C}
 
 
 def online_verify():
     """Повторне читання джерел (мережа через дозволений проксі; TLS не вимикається). Повертає [(url, ok|недоступно, деталь)]."""
     import urllib.request
     checks = [
-        (PI_URL, ["1.6A (600mA if using a 3A power supply)", "4.63 V", "5.1V supply"]),
-        (THERMAL_URL, ["limit which we define as 85", "between 80"]),
+        (PI_URL, ["1.6A (600mA if using a 3A power supply)", "4.63 V", "5.1V supply",
+                  "| Raspberry Pi 2B | Raspberry Pi 3B | Raspberry Pi Zero | Raspberry Pi 4B"]),  # D11: the current table has no 3B+ column
+        (THERMAL_URL, ["limit which we define as 85", "between 80", "There is currently no soft limit defined"]),  # D5: Pi 4 has no soft limit
         (THROT_URL, ["Soft temperature limit active", "Undervoltage detected"]),
         (NS3_URL, ["134365911.0", "47664215639.0", "1.0 / (2.0 * bValue)"]),
         ("https://www.mathworks.com/help/wlan/ug/802-11ac-receiver-minimum-input-sensitivity-test.html",
@@ -209,8 +213,8 @@ def report(online=False):
         out.append("біт %d: довідник %r, модель %r%s" % (b, doc, mod, "" if doc == mod else "  <-- РІЗНИЦЯ"))
     sp = soc_prior_rows()
     out.append("### B6 термодросель (SRC %s)" % THERMAL_URL)
-    out.append("довідник: прогресивний дросель 80..85 °C, жорсткий ліміт 85 °C; пріор hw.soc_soft_limit_c: N(%.0f, %.0f) обрізаний [%s, %s]; P(>85 °C)=%.3f"
-               % (sp["mu"], sp["sigma"], sp["lo"], sp["hi"], sp["p_above_hard_limit"]))
+    out.append("довідник: прогресивний дросель 80..85 °C, жорсткий ліміт 85 °C; пріор hw.soc_soft_limit_c (%s): носій [%.1f, %.1f], медіана %.1f; P(>85 °C)=%.3f, P(<80 °C)=%.3f"
+               % (sp["kind"], sp["lo"], sp["hi"], sp["median"], sp["p_above_hard_limit"], sp["p_below_doc_start"]))
     out.append("### Недоступно / не знайдено (нічого не вигадано)")
     for what, why in UNAVAILABLE:
         out.append("- %s: %s" % (what, why))

@@ -214,7 +214,8 @@ class TestEngine(unittest.TestCase):
         self.assertGreater(pr[-1], pr[0])
 
     def test_weak_psu_trips_pi5_limit(self):
-        weak = engine("pi5_3a_weak_psu", cfg=FAST).run(30, 1)
+        # w = 1: an instantaneous limiter sees every TX burst as a sustained overload (the verdict "3 A PSU kills the link", D12)
+        weak = engine("pi5_3a_weak_psu", sets={"usb.pi5_trip_tx_weight": 1.0}, cfg=FAST).run(30, 1)
         strong = engine("nominal_pi5_5a_150m", cfg=FAST).run(30, 1)
         self.assertGreater(prob_of(weak, "usb_trip"), 0.9)
         self.assertLess(prob_of(strong, "usb_trip"), 0.1)
@@ -249,7 +250,7 @@ class TestEngine(unittest.TestCase):
             engine(n)
 
     def test_events_schema(self):
-        e = engine("pi5_3a_weak_psu", cfg=dict(duration_s=200.0, dt_s=10.0))
+        e = engine("pi5_3a_weak_psu", sets={"usb.pi5_trip_tx_weight": 1.0}, cfg=dict(duration_s=200.0, dt_s=10.0))
         th, rp = e.draw(0, 1, False)
         ev = []
         dm.run_session(th, e.cfg, rp, ev)
@@ -385,9 +386,12 @@ class TestNonlinearHardware(unittest.TestCase):
         c0 = dm.BurstChain(0.0, 10.0, Rng(1))
         self.assertFalse(any(c0.step(5.0) for _ in range(500)))
         c1 = dm.BurstChain(360.0, 20.0, Rng(1))
-        on = sum(1 for _ in range(3000) if c1.step(5.0))
-        # stationary on-fraction = rate*mean/(1+rate*mean) = 2/3 for rate 0.1/s, mean 20 s (slice-level approximation)
-        self.assertGreater(on / 3000.0, 0.4)
+        share = sum(c1.step(5.0) for _ in range(6000)) / 6000.0
+        # stationary on-fraction = rate*mean/(1+rate*mean) = 2/3 for rate 0.1/s, mean 20 s (continuous time: exact for any dt, D6)
+        self.assertAlmostEqual(share, 2.0 / 3.0, delta=0.06)
+        for _ in range(50):
+            f = c1.step(5.0)
+            self.assertTrue(0.0 <= f <= 1.0)
 
     def test_consistent_with_rf_model_when_degradations_neutral(self):
         eng = engine()
@@ -432,6 +436,7 @@ class TestUsbPower(unittest.TestCase):
         self.assertEqual(s.state, "OK")
         s = dm.Pi5UsbLimiter(lim600, 0.05, 3)
         self.assertIsNone(s.step(0.0, 0.5, 2.0))
+        self.assertIsNone(s.step(0.5, 0.62, 2.0))  # above the 0.6 A limit but inside the 5 % tolerance (D2): the ONE threshold is 0.63 A
         self.assertEqual(s.step(1.0, 1.0, 2.0), "usb_trip")
         self.assertEqual(s.state, "TRIPPED")
         self.assertIsNone(s.step(2.0, 1.0, 2.0))  # still off
@@ -485,6 +490,16 @@ class TestBringupInjectionTiming(unittest.TestCase):
         self.assertEqual(bad["attempts"]["monitor_mode"], 3)
         slow = dm.bringup(self.theta(**{"bringup.monitor_fail_p": 1.0, "bringup.backoff_base_s": 10.0}), Rng(1))
         self.assertGreater(slow["t_s"], bad["t_s"])
+
+    def test_md1k_and_fec_interpolation_smoke(self):
+        # D10 / D3: the full checks (120-digit reference, event simulation, random sweeps) are in validate/test_validate.py
+        self.assertAlmostEqual(dm.injection_block_prob_det(1.0, 1), 0.5, places=12)  # K = 1: Erlang B = rho/(1+rho)
+        self.assertAlmostEqual(dm.injection_block_prob_det(1.0, 5), 0.10345, places=4)
+        self.assertLess(dm.injection_block_prob_det(1.0, 5), dm.injection_block_prob(1.0, 5))
+        self.assertEqual(dm.injection_block(1.5, 7, "exp"), dm.injection_block_prob(1.5, 7))
+        self.assertEqual(dm.make_cfg()["queue_service"], "det")
+        self.assertEqual(dm.fec_residual(0.05, 3.0, 8, 12, False), rf_model.residual_iid(0.05, 8, 12))
+        self.assertAlmostEqual(dm.fec_residual(0.0371, 3.3, 8, 12, True) / rf_model.residual_ge(0.0371, 3.3, 8, 12), 1.0, delta=2e-3)
 
     def test_mm1k_blocking(self):
         self.assertEqual(dm.injection_block_prob(0.0, 10), 0.0)

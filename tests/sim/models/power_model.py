@@ -63,6 +63,33 @@ SCENARIOS = {
 
 
 # ---------------------------------------------------------------- budget
+DEFAULT_USB_TRIP_TOL = 0.075  # nominal Pi 5 trip tolerance = the mean of the usb.pi5_trip_tol prior U(0; 0.15) (UNMEASURED); used only when
+#                               the parameter set has no usb.* group (the plain power_model CLI); a Theta of the engine always has it
+
+
+def usb_trip_tolerance(P, board):
+    """Tolerance above the documented USB current limit before the port acts (D2). Pi 5 only: the Pi 3B+/4 limits are documented
+    maximum totals, not a current-limiting switch; the parameter is the engine's usb.pi5_trip_tol when present."""
+    if board != "pi5":
+        return 0.0
+    try:
+        return P.get("usb.pi5_trip_tol")
+    except common.ParamError:
+        return DEFAULT_USB_TRIP_TOL
+
+
+def usb_trip_threshold_a(limit_a, tol):
+    """The ONE USB overload threshold (D2): documented limit x (1 + tolerance). Budget flags, the engine's port-trip state machine
+    (degrade_model.Pi5UsbLimiter) and the spontaneous-drop hazard margin are all defined against it."""
+    return limit_a * (1.0 + tol)
+
+
+def usb_overload(i_a, limit_a, tol):
+    """True when the current i_a (the caller names WHICH statistic: state current, duty-weighted current seen by the limiter, or the TX
+    pulse) exceeds the one threshold usb_trip_threshold_a(limit_a, tol)."""
+    return i_a > usb_trip_threshold_a(limit_a, tol)
+
+
 def usb_budget_a(P, board, psu_a, usb_max_current=False):
     if board == "pi5" and (usb_max_current or psu_a >= 5.0):
         return P.get("power.boards.pi5.usb_budget_a")
@@ -95,19 +122,24 @@ def budget(P, board, psu_a=None, adapters=1, state="tx", with_=(), load="active"
     usb = sum(a for _n, a, c in items if c == "usb")
     total = sum(a for _n, a, _c in items)
     ub = usb_budget_a(P, board, psu, usb_max_current)
+    tol = usb_trip_tolerance(P, board)
+    trip = usb_trip_threshold_a(ub, tol)
     v = P.get("power.psu_nominal_v") - total * P.get("power.cable_resistance_ohm")
     flags = []
     if total > psu:
         flags.append("PSU_OVER")
     elif psu - total < P.get("power.margin_warn_frac") * psu:
         flags.append("LOW_PSU_MARGIN")
-    if usb > ub:
+    if usb_overload(usb, ub, tol):
         flags.append("USB_OVER")
+    elif usb > ub:
+        flags.append("USB_TOL_BAND")  # above the documented limit but inside the trip tolerance: the port may or may not act (D2)
     if v < P.get("power.undervolt_threshold_v"):
         flags.append("UNDERVOLT")
     verdict = "FAIL" if set(flags) & {"PSU_OVER", "USB_OVER", "UNDERVOLT"} else ("WARN" if flags else "OK")
     return {"board": board, "psu_a": psu, "psu_recommended_a": rec, "items": items, "usb_a": usb, "total_a": total,
-            "usb_budget_a": ub, "psu_margin_a": psu - total, "usb_margin_a": ub - usb, "v_board": v,
+            "usb_budget_a": ub, "usb_trip_tol": tol, "usb_trip_a": trip, "psu_margin_a": psu - total, "usb_margin_a": ub - usb,
+            "usb_trip_margin_a": trip - usb, "v_board": v,
             "flags": flags, "verdict": verdict}
 
 
@@ -139,6 +171,7 @@ def timeline(P, sc, seed, dt=0.05):
     rnd = random.Random(seed)
     board, psu = sc["board"], sc["psu_a"]
     ub = usb_budget_a(P, board, psu, sc.get("usb_max_current", False))
+    tol = usb_trip_tolerance(P, board)
     nominal = P.get("power.psu_nominal_v")
     r_cab = P.get("power.cable_resistance_ohm")
     thr_v = P.get("power.undervolt_threshold_v")
@@ -186,7 +219,7 @@ def timeline(P, sc, seed, dt=0.05):
         reason = None
         if v < drop_v:
             reason = "undervoltage"
-        elif usb > ub:
+        elif usb_overload(usb, ub, tol):
             reason = "overcurrent"
         if reason and cur:
             cand = [x for x in order if x in cur] if reason == "undervoltage" else sorted(cur, key=lambda x: -cur[x])
@@ -202,7 +235,9 @@ def build_events(P, name, sc, seed):
             "duration_s": sc["duration_s"],
             "model": {"psu_a": sc["psu_a"], "usb_budget_a": usb_budget_a(P, sc["board"], sc["psu_a"], sc.get("usb_max_current", False)),
                       "undervolt_threshold_v": P.get("power.undervolt_threshold_v"),
-                      "usb_dropout_v": P.get("power.usb_dropout_v"), "usb_reenum_s": P.get("power.usb_reenum_s")},
+                      "usb_dropout_v": P.get("power.usb_dropout_v"), "usb_reenum_s": P.get("power.usb_reenum_s"),
+                      "usb_trip_a": usb_trip_threshold_a(usb_budget_a(P, sc["board"], sc["psu_a"], sc.get("usb_max_current", False)),
+                                                         usb_trip_tolerance(P, sc["board"]))},
             "events": timeline(P, sc, seed)}
 
 
@@ -213,7 +248,8 @@ def fmt_report(b, a, thr_v):
            "item,amps,counts_against"]
     out += ["%s,%.3f,%s" % it for it in b["items"]]
     out += ["total_a=%.3f psu_margin_a=%+.3f" % (b["total_a"], b["psu_margin_a"]),
-            "usb_a=%.3f usb_budget_a=%.2f usb_margin_a=%+.3f" % (b["usb_a"], b["usb_budget_a"], b["usb_margin_a"]),
+            "usb_a=%.3f usb_budget_a=%.2f usb_margin_a=%+.3f usb_trip_a=%.3f (tol %.1f %%) usb_trip_margin_a=%+.3f"
+            % (b["usb_a"], b["usb_budget_a"], b["usb_margin_a"], b["usb_trip_a"], 100.0 * b["usb_trip_tol"], b["usb_trip_margin_a"]),
             "v_board=%.3fV (undervolt threshold %.2fV)" % (b["v_board"], thr_v),
             "flags=%s" % (",".join(b["flags"]) or "-"), "verdict=%s" % b["verdict"]]
     return out

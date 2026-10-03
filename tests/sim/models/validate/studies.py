@@ -245,13 +245,14 @@ def queue_sim(rho, k, n_arr, service, seed):
 
 def queue(quick=False):
     n = 60000 if quick else 400000
-    out = ["## черга ін'єкції: injection_block_prob (замкнена M/M/1/K) проти подієвого MC; M/D/1/K (детермінована служба) як структурна альтернатива",
-           "rho,K,closed_form,MC_M/M/1/K,MC_M/D/1/K"]
-    for rho, k in ((0.8, 3), (0.95, 5), (1.0, 5), (1.1, 5), (1.5, 10), (2.0, 20), (0.9, 30)):
+    out = ["## черга ін'єкції: M/M/1/K (замкнена), M/D/1/K (замкнена, точна; типова для рушія з D10) проти подієвого MC (експоненційна й детермінована служба)",
+           "rho,K,closed_M/M/1/K,closed_M/D/1/K,MC_M/M/1/K,MC_M/D/1/K"]
+    for rho, k in ((0.8, 3), (0.95, 5), (1.0, 5), (1.1, 5), (1.5, 10), (2.0, 20), (0.9, 30), (1.0, 288)):
         cf = dm.injection_block_prob(rho, k)
+        cd = dm.injection_block_prob_det(rho, k)
         mm = queue_sim(rho, k, n, "exp", 1)
         md = queue_sim(rho, k, n, "det", 1)
-        out.append("%.2f,%d,%.4f,%.4f,%.4f" % (rho, k, cf, mm, md))
+        out.append("%.2f,%d,%.4f,%.4f,%.4f,%.4f" % (rho, k, cf, cd, mm, md))
     return out
 
 

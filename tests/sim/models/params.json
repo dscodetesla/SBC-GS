@@ -193,7 +193,7 @@
      "provenance": "UNMEASURED",
      "min": 0.0,
      "max": 2.0,
-     "note": "placeholder, range is INF. extra SNR credit when ldpc=1; 0 = neutral"
+     "note": "placeholder, range is INF. extra SNR credit in dB when rf.ldpc=1; 0 = neutral. D7: the scenario engine now SAMPLES it (params.degrade.json base_sampled, triangular(0, 0, 2): no credit most likely, up to 2 dB) so that the LDPC option moves the result instead of being silently ignored by the BCC union bound. The credit needs LDPC at BOTH ends: wfb-ng master.cfg says '8812au only', the AIR RTL8812EU is UNVERIFIED"
     },
     "diversity_gain_db": {
      "value": 0.0,
@@ -506,11 +506,11 @@
       "board_idle_a": {
        "value": 0.3,
        "unit": "A",
-       "provenance": "SRC",
+       "provenance": "INF",
        "min": 0.3,
        "max": 0.5,
        "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
-       "note": "Idle avg 0.30 A is for Pi 3B (the table has no 3B+ column); 3B+ bare-board active is 0.5 A"
+       "note": "D11: INF, not SRC. The doc's current table (re-read 2026-10-03) has columns 1B+/2B/3B/Zero/4B and NO 3B+ column; 0.30 A is the Pi 3B idle average, used as a proxy for the 3B+. The 3B+ typical bare-board active current (0.5 A, SRC, first table) is above the 3B's (0.4 A), so the proxy is probably a LOWER bound: range 0.3..0.5 (0.5 = the 3B+ active value)"
       },
       "board_active_a": {
        "value": 0.5,
@@ -522,11 +522,11 @@
       "board_load_a": {
        "value": 0.85,
        "unit": "A",
-       "provenance": "SRC",
+       "provenance": "INF",
        "min": 0.85,
        "max": 1.34,
        "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
-       "note": "Stress avg 0.85 A / max 1.34 A is for Pi 3B (no 3B+ column; INF for the 3B+)"
+       "note": "D11: INF, not SRC. Stress avg 0.85 A / max 1.34 A are the Pi 3B column of the doc's current table (re-read 2026-10-03; no 3B+ column exists), used as a proxy for the 3B+ (value = 3B stress avg, max = 3B stress max)"
       }
      },
      "pi4": {

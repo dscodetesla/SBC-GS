@@ -67,7 +67,12 @@ def tx_sag_db(v, knee_v, k1, k2):
 
 
 def agc_penalty_db(rx_dbm, knee_dbm, slope, cap_db):
-    """SNR loss from ADC/AGC saturation when the received level exceeds the knee (too close to the transmitter)."""
+    """SNR loss from ADC/AGC saturation when the received level exceeds the knee (too close to the transmitter).
+
+    D8, by design (INF, not a defect): the net SNR = rx - noise - slope*(rx - knee) FALLS with the received level when slope > 1 (IMD3-like
+    overload, up to 2 dB/dB), so SNR(distance) is UNIMODAL: it peaks at the knee distance and is strictly decreasing beyond it, but it
+    RISES with distance inside the saturated zone (and is monotone everywhere for slope <= 1). link_eval()['agc_zone'] marks that
+    zone; range_at_target() skips it; nothing outside it (rx <= knee) is affected, the penalty is exactly 0 there."""
     return min(cap_db, max(0.0, rx_dbm - knee_dbm) * slope)
 
 
@@ -158,39 +163,76 @@ class AntennaLoss:
 
 # =============================================================== (b) stochastic degradation processes
 class NoiseFloor:
-    """Excess noise (dB): OU slow drift + Poisson shocks (lognormal size, exponential decay) + ageing offset."""
+    """Excess noise (dB): OU slow drift + Poisson shocks (lognormal size, exponential decay) + ageing offset.
+
+    The OU part is the exact AR(1) discretisation (stationary for any dt). The shocks are a CONTINUOUS-time Poisson process: the arrival
+    instants are drawn once from their own sub-stream (exponential gaps), independently of dt, and a shock that arrived inside the slice
+    has already decayed by exp(-(t_end - t_arrival)/tau) when the slice state is read (D6: the old 'at most one shock per slice, read at
+    full size' made the mean excess grow with dt, by (dt/tau)/(1 - exp(-dt/tau)) = 2.3x at dt = 40 s, tau = 20 s)."""
 
     def __init__(self, th, rng):
         g = th.get
         self.sig, self.tau = g("proc.nf_ou_sigma_db"), g("proc.nf_ou_tau_s")
         self.rate, self.mag, self.stau = g("proc.shock_rate_per_h") / 3600.0, g("proc.shock_mag_db"), g("proc.shock_tau_s")
         self.rng, self.x, self.shock, self.shock_n = rng, 0.0, 0.0, 0
+        self.r_shock = rng.child(77)  # arrival times and sizes: same timeline whatever dt is
+        self.t, self.events = 0.0, []
+        self.t_next = self.r_shock.expo(1.0 / self.rate) if self.rate > 0 else math.inf
 
     def step(self, dt):
+        """Advance dt; returns (excess dB at the end of the slice, True if a shock arrived). self.events lists the arrivals of this slice as
+        (t_arrival, excess dB right after the arrival)."""
         a = math.exp(-dt / self.tau)
         self.x = self.x * a + self.sig * math.sqrt(1.0 - a * a) * self.rng.z()
-        self.shock *= math.exp(-dt / self.stau)
-        new = False
-        if self.rng.poisson_step(self.rate, dt):
-            self.shock += self.rng.lognorm(self.mag, 0.5)
+        t1 = self.t + dt
+        lvl, tp = self.shock, self.t
+        self.events = []
+        while self.t_next < t1:
+            lvl = lvl * math.exp(-(self.t_next - tp) / self.stau) + self.r_shock.lognorm(self.mag, 0.5)
+            tp = self.t_next
+            self.events.append((tp, lvl))
             self.shock_n += 1
-            new = True
-        return self.x + self.shock, new
+            self.t_next += self.r_shock.expo(1.0 / self.rate)
+        self.shock = lvl * math.exp(-(t1 - tp) / self.stau)
+        self.t = t1
+        return self.x + self.shock, bool(self.events)
 
 
 class BurstChain:
-    """Two-state (Gilbert-style) episode process at slice level: quiet <-> interference burst (channel clash, jammer)."""
+    """Two-state episode process: quiet <-> interference burst (channel clash, jammer), in CONTINUOUS time (D6).
+
+    Quiet periods last Exp(1/rate), bursts Exp(mean); the switching instants are drawn from their own stream independently of dt, and the
+    start state is the stationary one (P(on) = rate*mean/(1 + rate*mean)). step(dt) returns the FRACTION of the slice spent in the
+    burst state, so a burst shorter than the slice is neither lost nor stretched to a whole slice and the time share is exact for every
+    dt (the old per-slice two-state chain sampled the state at slice ends: its duty cycle and its 'hit at least once' probability both
+    depended on dt/mean)."""
 
     def __init__(self, rate_per_h, mean_s, rng):
-        self.on_rate, self.mean, self.rng, self.on = rate_per_h / 3600.0, mean_s, rng, False
+        self.rate, self.mean, self.rng = rate_per_h / 3600.0, mean_s, rng
+        self.t = 0.0
+        p_on = self.rate * self.mean / (1.0 + self.rate * self.mean)
+        self.on = self.rate > 0 and rng.u() < p_on
+        self.t_switch = self._hold() if self.rate > 0 else math.inf
+        self.events = []  # switching instants of the last step(): (t, 'burst_on' | 'burst_off')
+        self._pending = [(0.0, "burst_on")] if self.on else []
+
+    def _hold(self):
+        return self.rng.expo(self.mean if self.on else 1.0 / self.rate)
 
     def step(self, dt):
+        t1, cur, on_t = self.t + dt, self.t, 0.0
+        self.events, self._pending = self._pending, []
+        while self.t_switch < t1:
+            if self.on:
+                on_t += self.t_switch - cur
+            cur = self.t_switch
+            self.on = not self.on
+            self.events.append((cur, "burst_on" if self.on else "burst_off"))
+            self.t_switch += self._hold()
         if self.on:
-            if self.rng.u() < -math.expm1(-dt / self.mean):
-                self.on = False
-        elif self.rng.poisson_step(self.on_rate, dt):
-            self.on = True
-        return self.on
+            on_t += t1 - cur
+        self.t = t1
+        return min(1.0, on_t / dt)
 
 
 def _i0_scaled(z):
@@ -299,19 +341,34 @@ def per_threshold_db(tab, target=0.1):
     return _HI
 
 
-@functools.lru_cache(maxsize=8192)
-def _residual_q(lp_q, burst_q, k, n, ge):
-    p = 10.0 ** (lp_q / 64.0)
-    return rf_model.residual_ge(p, burst_q, k, n) if ge else rf_model.residual_iid(p, k, n)
+_FEC_NODES_PER_DECADE = 32  # grid of the Gilbert residual table in log10 p (interpolation nodes only: p and burst are NOT snapped)
+
+
+@functools.lru_cache(maxsize=32768)
+def _residual_node(ip, burst, k, n):
+    """ln of the exact Gilbert residual (rf_model.residual_ge) at the grid node p = 10^(ip / nodes-per-decade) for the exact `burst`."""
+    return math.log(max(rf_model.residual_ge(10.0 ** (ip / _FEC_NODES_PER_DECADE), burst, k, n), 1e-300))
 
 
 def fec_residual(p, burst, k, n, ge):
-    """rf_model residual loss with log-quantised p (1/64 decade) so the Gilbert DP is cached; monotone in p."""
+    """Residual loss of FEC k/n at frame loss p (D3: no quantisation of p or of the burst).
+
+    iid: the exact binomial tail (cheap). Gilbert: the exact DP is evaluated at nodes of a log10 p grid (32 per decade, cached per
+    exact burst) and interpolated LINEARLY in ln(residual) vs ln(p) between the two neighbouring nodes, so the result is continuous
+    and monotone in p. Interpolation error: below 1e-3 relative almost everywhere, at worst 0.9 % right at the kink burst = 1/(1-p) of
+    rf_model.residual_ge (REPO: validate/test_validate.py D3). The former snapping of p to the nearest 1/64 decade and of the burst to
+    the nearest 0.25 frames gave up to 9.4 % (p, residual ~ p^5) and a factor 5 (burst near 1) of error."""
     if p <= 1e-12:
         return 0.0
     if p >= 1.0:
         return 1.0
-    return _residual_q(round(math.log10(p) * 64), round(burst * 4) / 4.0, k, n, ge)
+    if not ge:
+        return rf_model.residual_iid(p, k, n)
+    x = math.log10(p) * _FEC_NODES_PER_DECADE
+    i = math.floor(x)
+    a = _residual_node(i, burst, k, n)
+    b = _residual_node(i + 1, burst, k, n)
+    return math.exp(a + (b - a) * (x - i))
 
 
 # =============================================================== (c) USB / power
@@ -338,7 +395,7 @@ class Pi5UsbLimiter:
                 self.state = "OK"
                 return "usb_return"
             return None
-        if i_a > self.limit * (1.0 + self.tol):
+        if power_model.usb_overload(i_a, self.limit, self.tol):  # the ONE overload definition (D2): limit x (1 + tolerance)
             self.consec += 1
             if self.consec >= self.latch_n:
                 self.state = "LATCHED"
@@ -347,6 +404,150 @@ class Pi5UsbLimiter:
             return "usb_trip"
         self.consec = 0
         return None
+
+
+class Outage:
+    """Union of the intervals [a, b) in which the GS adapter is NOT usable (port trip, USB drop and re-enumeration, bring-up), in
+    CONTINUOUS time (D6): a slice of any length counts exactly the down time that falls inside it. The old model blanked the whole slice
+    after every event, so each outage cost at least dt (40 s slices turned a 5 s re-enumeration into 40 s)."""
+
+    def __init__(self):
+        self.iv = []
+
+    def add(self, a, b):
+        if b <= a:
+            return
+        out = []
+        for x, y in self.iv:
+            if y < a or x > b:
+                out.append((x, y))
+            else:
+                a, b = min(a, x), max(b, y)
+        out.append((a, b))
+        self.iv = sorted(out)
+
+    def down_at(self, t):
+        return any(x <= t < y for x, y in self.iv)
+
+    def end_at(self, t):
+        """End of the outage that contains t (inf for a permanent one), or None when the adapter is up at t."""
+        for x, y in self.iv:
+            if x <= t < y:
+                return y
+        return None
+
+    def down_in(self, t0, t1):
+        return sum(max(0.0, min(y, t1) - max(x, t0)) for x, y in self.iv)
+
+    def first_down(self, t0, t1):
+        """Earliest down instant inside [t0, t1), or None."""
+        c = [max(x, t0) for x, y in self.iv if x < t1 and y > t0]
+        return min(c) if c else None
+
+
+def wpctl(xs, ws, q):
+    """Weighted percentile (q in 0..100): linear interpolation on the cumulative weight; equals pctl() when all weights are equal."""
+    pairs = sorted((x, w) for x, w in zip(xs, ws) if w > 0)
+    if not pairs:
+        return float("nan")
+    tot = sum(w for _x, w in pairs)
+    # position of each value = (cumulative weight before + half its own) / total, rescaled so equal weights reproduce pctl()
+    n = len(pairs)
+    if n == 1:
+        return pairs[0][0]
+    cum, pos = 0.0, []
+    for _x, w in pairs:
+        pos.append((cum + 0.5 * w) / tot)
+        cum += w
+    lo_p, hi_p = pos[0], pos[-1]
+    target = lo_p + (hi_p - lo_p) * q / 100.0
+    for i in range(n - 1):
+        if pos[i] <= target <= pos[i + 1]:
+            span = pos[i + 1] - pos[i]
+            return pairs[i][0] + (pairs[i + 1][0] - pairs[i][0]) * ((target - pos[i]) / span if span > 0 else 0.0)
+    return pairs[-1][0]
+
+
+def limiter_timeline(th, plan, horizon_s, rng_lim, rng_bu, outage, log, flags):
+    """Pi 5 port-limiter episode in continuous time when the current the limiter reacts to stays above the trip threshold.
+
+    The overload statistic plan['i_usb_lim'] is a property of the draw (it does not depend on dt), so the limiter either never acts or
+    keeps tripping: trip -> port off for off_s -> re-enumeration + bring-up (the dongle is back in the RX state, the overload returns) -> trip
+    again ... and after `usb.pi5_trip_latch_n` consecutive trips the port stays off until a power cycle (INF assumption). Events and
+    outages are generated at their true instants, whatever the slice length. Returns the latch instant (inf when it never latches)."""
+    lim = Pi5UsbLimiter(plan["limit"], plan["trip_tol"], int(th.get("usb.pi5_trip_latch_n")))
+    i_a = plan["i_usb_lim"]
+    t = 0.0
+    while t < horizon_s:
+        ev = lim.step(t, i_a, rng_lim.lognorm(th.get("usb.pi5_trip_off_s"), 0.3))
+        if ev == "usb_trip":
+            flags["usb_trip"] = True
+            log(t, "usb_trip", limit_a=round(plan["limit"], 3), i_usb_a=round(i_a, 3))
+            log(t, "usb_drop", device="rtl8812", bus_port="1-1", reason="overcurrent", v=round(plan["v_dongle_pk"], 3), i_usb_a=round(plan["i_usb_pk"], 3))
+            t_back = lim.until
+            log(t_back, "usb_return", device="rtl8812", bus_port="1-1")
+            lim.step(t_back, i_a, 0.0)  # port power returns (state OK)
+            rb = bringup(th, rng_bu)
+            t_ready = t_back + rb["t_s"]
+            if not rb["ok"]:
+                flags["bringup_fail"] = True
+                log(t_back, "bringup", ok=False, failed_stage=rb["failed_stage"])
+                outage.add(t, math.inf)
+                return t
+            outage.add(t, t_ready)
+            t = t_ready
+        elif ev == "usb_latched":
+            flags["usb_trip"] = flags["usb_latched"] = True
+            log(t, "usb_trip", limit_a=round(plan["limit"], 3), i_usb_a=round(i_a, 3))
+            log(t, "usb_latched")
+            log(t, "usb_drop", device="rtl8812", bus_port="1-1", reason="overcurrent", v=round(plan["v_dongle_pk"], 3), i_usb_a=round(plan["i_usb_pk"], 3))
+            outage.add(t, math.inf)
+            return t
+        else:
+            return math.inf  # no overload: the limiter never acts
+    return math.inf
+
+
+def usb_drop_timeline(th, plan, horizon_s, rng, rng_bu, outage, log, flags):
+    """Spontaneous USB drops of the GS adapter in continuous time (D6).
+
+    The hazard is a property of the draw (supply and current margins do not depend on dt), so the up times are exponential with that
+    rate: drop -> re-enumeration (usb_reenum_s) + bring-up -> up again, or stuck for good with probability usb.reenum_fail_prob (or when
+    the bring-up fails). A drop can only happen while the adapter is up (the port-limiter episode, generated first, owns its own
+    outage). The old per-slice Bernoulli allowed one drop per slice and a drop only at slice centres: its drop count and its down time
+    changed with dt as soon as hazard * dt was not small."""
+    haz = usb_drop_rate_per_s(plan["v_dongle_pk"] - th.get("power.usb_dropout_v"), plan["trip_a"] - plan["i_usb_pk"],
+                              th.get("usb.drop_rate_per_h"), th.get("usb.drop_v_scale"), th.get("usb.drop_i_scale_a"))
+    if haz <= 0.0:
+        return
+    t = 0.0
+    while True:
+        t += rng.expo(1.0 / haz)
+        if t >= horizon_s:
+            return
+        end = outage.end_at(t)
+        if end is not None:  # the adapter is already down (limiter episode): the memoryless clock restarts when it is back
+            if math.isinf(end):
+                return
+            t = end
+            continue
+        flags["usb_dropout"] = True
+        re_s = rng.lognorm(th.get("power.usb_reenum_s"), th.get("usb.reenum_sigma"))
+        log(t, "usb_drop", device="rtl8812", bus_port="1-1", reason="undervoltage" if plan["v_dongle_pk"] < th.get("power.usb_dropout_v") else "spontaneous",
+            v=round(plan["v_dongle_pk"], 3), i_usb_a=round(plan["i_usb_pk"], 3))
+        if rng.u() < th.get("usb.reenum_fail_prob"):
+            flags["bringup_fail"] = True
+            outage.add(t, math.inf)
+            log(t, "usb_stuck")
+            return
+        rb = bringup(th, rng_bu)
+        outage.add(t, t + re_s + rb["t_s"])
+        log(t + re_s, "usb_return", device="rtl8812", bus_port="1-1")
+        if not rb["ok"]:
+            flags["bringup_fail"] = True
+            outage.add(t, math.inf)
+            return
+        t += re_s + rb["t_s"]
 
 
 # =============================================================== (d) bring-up and injection
@@ -385,7 +586,8 @@ def bringup(th, rng):
 
 
 def injection_block_prob(rho, k):
-    """M/M/1/K blocking probability (txq length K, utilisation rho): the nonlinearity of overload."""
+    """M/M/1/K blocking probability (txq length K, utilisation rho): the nonlinearity of overload. EXPONENTIAL service: the
+    pessimistic variant (cfg queue_service='exp'); the engine default is the deterministic-service M/D/1/K (D10)."""
     if rho <= 0:
         return 0.0
     if abs(rho - 1.0) < 1e-9:
@@ -394,6 +596,60 @@ def injection_block_prob(rho, k):
         return (1.0 - rho) * rho ** k / (1.0 - rho ** (k + 1))
     r = 1.0 / rho  # same value without overflow for rho >> 1
     return (1.0 - r) / (1.0 - r ** (k + 1))
+
+
+def injection_block_prob_det(rho, k):
+    """M/D/1/K blocking probability (Poisson arrivals, DETERMINISTIC service, k places in the system incl. the one in service) (D10).
+
+    The injection service time is the frame airtime at a fixed MCS and payload: it is (almost) constant, so M/M/1/K (exponential
+    service) overstates blocking near rho = 1 by up to 1.6x (K = 5) .. 1.8x (K = 288); far from rho = 1 the two agree.
+    Exact embedded-chain solution of the M/G/1/K queue at departure epochs, p_K = 1 - 1/(pi_0 + rho) (Gross & Harris), with a_j the
+    Poisson(rho) pmf (service time = 1):
+      rho <= 1 : Ramaswami's recursion f_j = (T_j + sum_{i=1}^{j-1} f_i T_{j-i+1}) / a_0 with T_m = P(Poisson(rho) >= m) (only additions of
+                 positive terms: stable; the plain forward recursion is not for rho < 1);
+      rho  > 1 : the plain forward balance recursion (stable here: the solution grows). If it overflows the queue is practically
+                 never empty and p_K = 1 - 1/rho to double precision.
+    f_j = pi_j / pi_0, pi_0 = 1 / sum_{j<K} f_j. Cost O(K * W), W ~ rho + 12 sqrt(rho) + 40 (the Poisson pmf is negligible beyond it).
+    Absolute accuracy ~1e-15 (for p_K below that the result is clamped at 0). Checked against exact 120-digit arithmetic, against
+    p_K = rho/(1+rho) at K = 1 (Erlang B) and against an event simulation (validate/)."""
+    if rho <= 0 or k <= 0:
+        return 0.0 if rho <= 0 else 1.0
+    if rho > 50.0:  # exp(-rho) would underflow soon; the queue is saturated: p_K = 1 - 1/rho + O(exp(-rho))
+        return 1.0 - 1.0 / rho
+    w = int(rho + 12.0 * math.sqrt(rho) + 40.0)
+    lr = math.log(rho)
+    a = [math.exp(-rho + j * lr - math.lgamma(j + 1)) for j in range(w + 1)]
+    f = [1.0]
+    tot = 1.0
+    if rho <= 1.0:
+        t = [0.0] * (w + 2)
+        for m in range(w, 0, -1):
+            t[m] = a[m] + t[m + 1]
+        for j in range(1, k):
+            v = t[j] if j <= w else 0.0
+            for i in range(max(1, j - w + 1), j):
+                v += f[i] * t[j - i + 1]
+            f.append(v / a[0])
+            tot += f[-1]
+    else:
+        for j in range(0, k - 1):
+            v = f[j] - a[j] if j <= w else f[j]
+            for i in range(max(1, j + 1 - w), j + 1):
+                v -= f[i] * a[j + 1 - i]
+            f.append(v / a[0])
+            tot += f[-1]
+            if f[-1] > 1e200:
+                return 1.0 - 1.0 / rho
+    return max(0.0, 1.0 - 1.0 / (1.0 / tot + rho))
+
+
+def injection_block(rho, k, service="det"):
+    """Blocking probability of the injection queue for the chosen service model: 'det' (default, M/D/1/K) or 'exp' (M/M/1/K)."""
+    if service == "det":
+        return injection_block_prob_det(rho, k)
+    if service == "exp":
+        return injection_block_prob(rho, k)
+    raise ValueError("queue_service must be 'det' or 'exp', got %r" % (service,))
 
 
 def iframe_overflow_frac(pkts_i, queue_pkts, t_pkt_ms, frame_ms):
@@ -432,9 +688,10 @@ def sched_jitter_ms(th, rng):
 
 
 # =============================================================== link simulation
-DEFAULT_CFG = {"distance_m": 600.0, "duration_s": 600.0, "dt_s": 5.0, "board": "pi5", "psu_a": 5.0, "usb_max_current": False,
+DEFAULT_CFG = {"distance_m": 600.0, "duration_s": 600.0, "dt_s": 5.0, "board": "pi5", "psu_a": 5.0, "usb_max_current": False, "queue_service": "det",
                "codec": "h265", "gs_with": ["fc", "fan"], "soak_s": 120.0,
-               "spec": {"residual": 0.01, "g2g_ms": 250.0, "freeze": 1.0}}  # freeze share is reported; as a spec it is off by default (1.0)
+               "spec": {"residual": 0.01, "g2g_ms": 250.0, "freeze": 1.0,  # freeze share is reported; as a spec it is off by default (1.0)
+                    "flag_share": 0.10}}  # time share of the up time above which a state flag (latency_creep, agc_saturation, desense) is raised (D6)
 FAIL_MODES = ("bringup_fail", "thermal_derate", "thermal_shutdown", "usb_dropout", "usb_trip", "usb_latched", "undervoltage",
               "soc_throttle", "agc_saturation", "desense", "burst_outage", "injection_overload", "idr_freeze",
               "latency_creep", "fec_exhaust")
@@ -467,7 +724,7 @@ def prepare(th, cfg, rng):
     util = rf_model.utilisation(th, mcs, k, n)
     pps = g("video.bitrate_kbps") * 1000 / 8 / g("rf.payload_bytes") * n / k
     rho = max(util, pps / g("inj.rate_cap_pps"))
-    block = injection_block_prob(rho, int(g("inj.queue_pkts")))
+    block = injection_block(rho, int(g("inj.queue_pkts")), cfg["queue_service"])
     p_inj = 1.0 - (1.0 - g("inj.ebusy_prob")) * (1.0 - block)
     ppf = rf_model.packets_per_frame(th)
     ppf_i = max(1, math.ceil(g("video.bitrate_kbps") * 1000 / 8 / fps * g("video.iframe_ratio") / g("rf.payload_bytes")))
@@ -492,6 +749,13 @@ def prepare(th, cfg, rng):
     e_dbm = mw_to_dbm(sum(dbm_to_mw(d) * du for d, du in srcs) / max(sum(du for _d, du in srcs), 1e-12)) if srcs else -200.0
     e_duty = 1.0 - math.prod(1.0 - du for _d, du in srcs) if srcs else 0.0
     b_tx = power_model.budget(th, board, psu, 1, "tx", with_, "active", False, cfg["usb_max_current"])
+    # ONE overload threshold (D2): limit x (1 + tolerance), the same sampled tolerance in the budget flags, the port-trip state machine and
+    # the drop hazard. The limiter reacts to the current i_lim = i_rx + w (i_tx - i_rx): the RX-state current plus the share w of the TX-state
+    # excess that its (UNVERIFIED) response window lets through; w = 0 = a long window (the GS dongle is in the RX state almost all the time),
+    # w = 1 = an instantaneous limiter that sees every TX burst as a sustained overload (what the old per-slice coin flip did for dt >= 5 s).
+    trip_tol = power_model.usb_trip_tolerance(th, board)
+    trip_a = power_model.usb_trip_threshold_a(b_pk["usb_budget_a"], trip_tol)
+    i_usb_lim = b_rx["usb_a"] + g("usb.pi5_trip_tx_weight") * (b_tx["usb_a"] - b_rx["usb_a"])
     plan = {
         "th": th, "mcs": mcs, "k": k, "n": n, "tab": tab, "ftab": ftab, "thr10": per_threshold_db(tab), "ge": g("rf.loss_model") == "ge",
         "burst": g("rf.ge_mean_burst_frames"), "floor": g("rf.floor_per"), "gtx": g("rf.tx_antenna_gain_dbi"),
@@ -503,7 +767,7 @@ def prepare(th, cfg, rng):
         "clash_inr": g("ext.clash_inr_db"), "p_inj": p_inj, "block": block, "rho": rho, "util": util, "ovf": ovf, "ppf": ppf,
         "ppf_i": ppf_i, "t_pkt": t_pkt, "fps": fps, "frames_per_gop": fps * g("vid.gop_s"), "ovs": ovs,
         "b_rx": b_rx, "b_pk": b_pk, "v_pk": v_pk, "v_dongle_pk": v_dongle_pk, "i_usb_pk": b_pk["usb_a"], "i_usb_tx": b_tx["usb_a"], "i_usb_rx": b_rx["usb_a"],
-        "limit": b_pk["usb_budget_a"], "fec_full_ms": latency_budget.radio_terms(th, mcs, k, n, fps, g("video.bitrate_kbps"), True)[1][2],
+        "limit": b_pk["usb_budget_a"], "trip_a": trip_a, "trip_tol": trip_tol, "i_usb_lim": i_usb_lim, "fec_full_ms": latency_budget.radio_terms(th, mcs, k, n, fps, g("video.bitrate_kbps"), True)[1][2],
         "amb_air": g("ext.ambient_c") + g("hw.air_ambient_rise_c") + g("ext.solar_rise_c"),
         "amb_gs": g("ext.ambient_c") + 0.5 * g("ext.solar_rise_c"), "nf_age": nf_age,
     }
@@ -540,7 +804,8 @@ def link_eval(plan, d, st):
         per = (1.0 - plan["elrs_duty"]) * per + plan["elrs_duty"] * per_lookup(plan["ftab"], eff_b)
         desense += plan["elrs_duty"] * noise_rise_db(n1b, [plan["elrs_i"]])
     per = 1.0 - (1.0 - per) * (1.0 - plan["floor"]) * (1.0 - plan["p_inj"])
-    return {"per": per, "margin": eff_a - plan["thr10"], "rx": rx, "pen": pen, "desense": desense, "comp": comp, "evm": evm}
+    return {"per": per, "margin": eff_a - plan["thr10"], "rx": rx, "pen": pen, "desense": desense, "comp": comp, "evm": evm,
+            "agc_zone": rx > plan["agc_knee"]}  # D8: inside the zone margin(d) is not monotone for slope > 1 (by design)
 
 
 def residual_of(plan, per):
@@ -584,14 +849,20 @@ def pctl(xs, q):
 def run_session(th, cfg, rng, events=None):
     """One session: bring-up, then T seconds in slices of dt. Returns the per-draw output dict (see scenario_engine.OUTPUTS).
 
-    A link that never works (bring-up failed, or no slice with the link up) has NO link margin: margin_db and margin_p5_db are None
-    and the separate flag out["dead"] is True (D4: the old stub margin = -60 dB lay inside the physical range, down to -70 dB at
-    the corners of the prior hypercube). Consumers must test `dead` / None, never compare with a magic value."""
+    A link that never works (bring-up failed, or no slice with the link up) has NO link margin and NO latency: margin_db, margin_p5_db,
+    g2g_ms and g2g_mean_ms are None and the separate flag out["dead"] is True (D4: the old stub margin = -60 dB lay inside the physical
+    range, down to -70 dB at the corners of the prior hypercube; the same stub existed for g2g_ms = the typical latency budget). Consumers
+    must test `dead` / None, never compare with a magic value.
+
+    dt invariance (D6): every process is a function of CONTINUOUS time (shock and burst timelines, outage intervals, stall arrival
+    instants); a slice only samples the slow states and weights its outputs by the fraction of the slice in which the adapter is up. The
+    'at least once' flags that depended on the number of slices are time shares (spec['flag_share']) or exact episode tests."""
     plan = prepare(th, cfg, rng)
     th = plan["th"]
     g = th.get
     dt, T = cfg["dt_s"], cfg["duration_s"]
     spec = cfg["spec"]
+    share = spec["flag_share"]
     ev = events if events is not None else None
 
     def log(t, kind, **kw):
@@ -603,13 +874,14 @@ def run_session(th, cfg, rng, events=None):
     flags = dict.fromkeys(FAIL_MODES, False)
     out = {"flags": flags, "bringup_s": 0.0, "bringup_stage": None}
     r_bu, r_nf, r_ch, r_ant, r_sh, r_air, r_usb, r_lat, r_jit = (rng.child(10 + i) for i in range(9))
+    r_lim = rng.child(19)
     bu = bringup(th, r_bu)
     out["bringup_s"], out["bringup_stage"] = bu["t_s"], bu["failed_stage"]
     log(0.0, "bringup", ok=bu["ok"], t_s_total=round(bu["t_s"], 3), failed_stage=bu["failed_stage"], attempts=bu["attempts"])
     if not bu["ok"]:
         flags["bringup_fail"] = True
-        out.update({"residual": 1.0, "margin_db": None, "margin_p5_db": None, "dead": True, "range_m": 0.0, "g2g_ms": plan["lat_total"],
-                    "g2g_mean_ms": plan["lat_total"], "availability": 0.0, "ttff_s": 0.0, "ttff_censored": False,
+        out.update({"residual": 1.0, "margin_db": None, "margin_p5_db": None, "dead": True, "range_m": 0.0, "g2g_ms": None,
+                    "g2g_mean_ms": None, "availability": 0.0, "ttff_s": 0.0, "ttff_censored": False,
                     "freeze": 1.0, "throttled": 0, "down_s": T})
         return out
     # AIR adapter thermal state after the ground soak (TX on)
@@ -628,31 +900,37 @@ def run_session(th, cfg, rng, events=None):
     p_rx_w = air_rx_heat_w(v_bec, i_rx) + board_w
     nf, burst = NoiseFloor(th, r_nf), BurstChain(g("ext.clash_rate_per_h"), g("ext.clash_mean_s"), r_ch)
     ant = AntennaLoss(th, r_ant)
-    lim = Pi5UsbLimiter(plan["limit"], g("usb.pi5_trip_tol"), int(g("usb.pi5_trip_latch_n")))
+    outage = Outage()  # GS adapter down intervals (continuous time)
+    if power_model.usb_overload(plan["i_usb_lim"], plan["limit"], plan["trip_tol"]):
+        limiter_timeline(th, plan, T, r_lim, r_bu, outage, log, flags)
+    usb_drop_timeline(th, plan, T, r_usb, r_bu, outage, log, flags)  # hazard margin against the SAME trip threshold (D2), for the TX pulse current
     shadow, a_sh = 0.0, math.exp(-dt / g("proc.shadow_tau_s"))
     sh_sig = g("proc.shadow_sigma_db")
     soc = plan["amb_gs"] + g("hw.soc_rise_c")
     thr_sticky, thr_now_prev = 0, 0
-    down_until, latched, was_shut, derating = 0.0, False, False, False
+    was_shut, derating = False, False
     creep, backlog, resets = 0.0, 0.0, 0
     clock_rate = max(0.0, g("timing.clock_ppm")) * 1e-3  # ms of queue growth per second
-    qmax = g("timing.queue_max_ms")
-    p_tx_slice = -math.expm1(-g("usb.gs_tx_burst_hz") * dt)
+    qmax, catchup = g("timing.queue_max_ms"), g("timing.catchup_ms_per_s")
+    d_m = cfg["distance_m"]
+    r_stall = rng.child(20)
+    stall_rate = g("timing.stall_rate_per_h") / 3600.0
+    t_stall = r_stall.expo(1.0 / stall_rate) if stall_rate > 0 else math.inf
     S = int(round(T / dt))
-    res_l, mar_l, lat_l, ok_l, st_hist = [], [], [], [], []
-    ttff, down_s, freeze_acc, up_n = None, 0.0, 0.0, 0
-    n_fec_bad = 0
+    res_l, ok_l, mar_l, mar_w, lat_l, lat_w, st_hist = [], [], [], [], [], [], []
+    ttff, down_s, freeze_acc, up_n = None, 0.0, 0.0, 0.0
+    n_fec_bad = n_lat_bad = n_agc = n_des = 0.0
     for i in range(S):
         t = i * dt
+        t1 = t + dt
         tc = t + 0.5 * dt
-        # ---- slow environment
-        nx, new_shock = nf.step(dt)
-        if new_shock:
-            log(tc, "shock", excess_db=round(nf.shock, 2))
-        was_burst = burst.on
-        on = burst.step(dt)
-        if on != was_burst:
-            log(tc, "burst_on" if on else "burst_off")
+        # ---- slow environment (continuous-time shock and burst timelines)
+        nx, _new_shock = nf.step(dt)
+        for ta, lvl in nf.events:
+            log(ta, "shock", excess_db=round(lvl, 2))
+        f_on = burst.step(dt)  # share of this slice spent inside a clash burst
+        for tb, kind in burst.events:
+            log(tb, kind)
         shadow = shadow * a_sh + sh_sig * math.sqrt(1.0 - a_sh * a_sh) * r_sh.z()
         ant_db = ant.step(dt)
         # ---- AIR adapter: thermal, supply sag
@@ -675,9 +953,9 @@ def run_session(th, cfg, rng, events=None):
         sag = tx_sag_db(v_air, g("hw.tx_sag_knee_v"), g("hw.tx_sag_k1_db_per_v"), g("hw.tx_sag_k2_db_per_v2"))
         st = {"plin": g("rf.tx_power_dbm") - derate, "p1db": plan["p1db0"] - sag - 0.5 * derate,
               "evm_shift": g("hw.evm_temp_db_per_c") * max(0.0, tj - 25.0), "ant": ant_db, "shadow": shadow,
-              "noise_extra": nx, "burst": on}
+              "noise_extra": nx, "burst": False}
         p_rf_w = dbm_to_mw(pa_output_dbm(st["plin"], st["p1db"], plan["pa_p"])) / 1000.0  # heat of the NEXT slice follows the live output
-        # ---- GS side: Pi supply, USB limit, spontaneous drops, throttled word
+        # ---- GS side: Pi supply, throttled word (the port-limiter episode and the spontaneous USB drops were generated up front)
         uv_now = plan["v_pk"] < g("power.undervolt_threshold_v")
         soft_now = soc >= g("hw.soc_soft_limit_c")
         now = (power_model.UV_NOW | power_model.THR_NOW if uv_now else 0) | ((1 << 3) if soft_now else 0)
@@ -691,68 +969,40 @@ def run_session(th, cfg, rng, events=None):
             thr_now_prev = now
         if soft_now:
             flags["soc_throttle"] = True
-        usb_up = t >= down_until and not latched
-        tx_now = r_usb.u() < p_tx_slice
-        ev_lim = lim.step(tc, plan["i_usb_tx"] if tx_now else plan["i_usb_rx"], r_usb.lognorm(g("usb.pi5_trip_off_s"), 0.3))
-        if ev_lim == "usb_trip":
-            flags["usb_trip"] = True
-            down_until = max(down_until, lim.until)
-            log(tc, "usb_trip", limit_a=round(plan["limit"], 3), i_usb_a=round(plan["i_usb_tx"], 3))
-            log(tc, "usb_drop", device="rtl8812", bus_port="1-1", reason="overcurrent", v=round(plan["v_dongle_pk"], 3), i_usb_a=round(plan["i_usb_pk"], 3))
-        elif ev_lim == "usb_latched":
-            flags["usb_latched"] = latched = True
-            log(tc, "usb_latched")
-            log(tc, "usb_drop", device="rtl8812", bus_port="1-1", reason="overcurrent", v=round(plan["v_dongle_pk"], 3), i_usb_a=round(plan["i_usb_pk"], 3))
-        elif ev_lim == "usb_return":
-            log(tc, "usb_return", device="rtl8812", bus_port="1-1")
-            rb = bringup(th, r_bu)
-            down_until = max(down_until, tc + rb["t_s"])
-            if not rb["ok"]:
-                flags["bringup_fail"] = latched = True
-                log(tc, "bringup", ok=False, failed_stage=rb["failed_stage"])
-        if usb_up and not latched and lim.state == "OK":
-            haz = usb_drop_rate_per_s(plan["v_dongle_pk"] - g("power.usb_dropout_v"), plan["limit"] - plan["i_usb_pk"],
-                                      g("usb.drop_rate_per_h"), g("usb.drop_v_scale"), g("usb.drop_i_scale_a"))
-            if r_usb.u() < -math.expm1(-haz * dt):
-                flags["usb_dropout"] = True
-                re_s = r_usb.lognorm(g("power.usb_reenum_s"), g("usb.reenum_sigma"))
-                log(tc, "usb_drop", device="rtl8812", bus_port="1-1", reason="undervoltage" if plan["v_dongle_pk"] < g("power.usb_dropout_v") else "spontaneous",
-                    v=round(plan["v_dongle_pk"], 3), i_usb_a=round(plan["i_usb_pk"], 3))
-                if r_usb.u() < g("usb.reenum_fail_prob"):
-                    latched = flags["bringup_fail"] = True
-                    log(tc, "usb_stuck")
-                else:
-                    rb = bringup(th, r_bu)
-                    down_until = tc + re_s + rb["t_s"]
-                    log(tc + re_s, "usb_return", device="rtl8812", bus_port="1-1")
-                    if not rb["ok"]:
-                        latched = flags["bringup_fail"] = True
-        up = (t >= down_until) and not latched and not shut
-        # ---- link
-        e = link_eval(plan, cfg["distance_m"], st)
-        if e["pen"] > 3.0:
-            flags["agc_saturation"] = True
-        if e["desense"] > 3.0:
-            flags["desense"] = True
-        if on and e["margin"] < 0:
-            flags["burst_outage"] = True
-        res = residual_of(plan, e["per"])
-        res_i = max(res, plan["ovf"])
-        frz = freeze_fraction(res, res_i, plan["ppf"], plan["ppf_i"], plan["frames_per_gop"])
+        w_up = 0.0 if shut else max(0.0, 1.0 - outage.down_in(t, t1) / dt)  # share of the slice with a working link
+        # ---- link: quiet state and (when a burst overlaps the slice) the burst state, mixed by the time share
+        e = link_eval(plan, d_m, st)
+        e1 = link_eval(plan, d_m, dict(st, burst=True)) if f_on > 0.0 else None
+        res0 = residual_of(plan, e["per"])
+        res1 = residual_of(plan, e1["per"]) if e1 else 0.0
+        res = (1.0 - f_on) * res0 + f_on * res1
+        per_m = (1.0 - f_on) * e["per"] + f_on * (e1["per"] if e1 else 0.0)
+        margin_m = (1.0 - f_on) * e["margin"] + f_on * (e1["margin"] if e1 else 0.0)
+
+        def frz_of(r):
+            return freeze_fraction(r, max(r, plan["ovf"]), plan["ppf"], plan["ppf_i"], plan["frames_per_gop"])
+        frz0, frz1 = frz_of(res0), (frz_of(res1) if e1 else 0.0)
+        frz = (1.0 - f_on) * frz0 + f_on * frz1
+        if e1 and w_up > 0.0 and e1["margin"] < 0:
+            flags["burst_outage"] = True  # exact episode test: a clash burst that overlaps the slice leaves the link below its PER threshold
         if plan["block"] > 0.01 or plan["ovf"] > 0.0:
             flags["injection_overload"] = True
-        # ---- latency sample
-        u_st, ex_st, u_v, u_fq, u_fw, u_ro, ex_ro = (r_lat.u(), r_lat.expo(g("timing.stall_backlog_ms")), r_lat.u(), r_lat.u(), r_lat.u(),
-                                                    r_lat.u(), r_lat.expo(g("timing.reorder_delay_ms")))
-        if u_st < -math.expm1(-g("timing.stall_rate_per_h") / 3600.0 * dt):
-            backlog = min(qmax, backlog + ex_st)
-            log(tc, "stall", backlog_ms=round(backlog, 1))
-        backlog = max(0.0, backlog - g("timing.catchup_ms_per_s") * dt)
+        # ---- latency sample: stalls are a continuous-time Poisson timeline (any number per slice, each at its own instant; the backlog
+        # drains at `catchup` ms/s between them), not at most one stall read at the start of the slice (D6: at dt = 40 s it had drained
+        # before the sample was taken)
+        u_v, u_fq, u_fw, u_ro, ex_ro = r_lat.u(), r_lat.u(), r_lat.u(), r_lat.u(), r_lat.expo(g("timing.reorder_delay_ms"))
+        tp = t
+        while t_stall < t1:
+            backlog = min(qmax, max(0.0, backlog - catchup * (t_stall - tp)) + r_stall.expo(g("timing.stall_backlog_ms")))
+            log(t_stall, "stall", backlog_ms=round(backlog, 1))
+            tp = t_stall
+            t_stall += r_stall.expo(1.0 / stall_rate)
+        backlog = max(0.0, backlog - catchup * (t1 - tp))
         creep += clock_rate * dt
         if creep + backlog >= qmax:
             creep, backlog, resets = 0.0, 0.0, resets + 1
             log(tc, "creep_reset")
-        q_loss = 1.0 - (1.0 - e["per"]) ** plan["k"]
+        q_loss = 1.0 - (1.0 - per_m) ** plan["k"]
         lat = plan["lat_total"] + (u_v - g("latency.vsync_wait_frac")) * plan["t_disp"] + sched_jitter_ms(th, r_jit) + creep + backlog
         if u_fq < q_loss:
             lat += plan["fec_full_ms"] * u_fw
@@ -760,43 +1010,59 @@ def run_session(th, cfg, rng, events=None):
             lat += ex_ro
         if soft_now:
             lat += plan["lat_decode"] * (g("hw.throttle_decode_factor") - 1.0)
-        # ---- bookkeeping
-        if up:
-            ok = res <= spec["residual"] and lat <= spec["g2g_ms"] and frz <= spec["freeze"]
-            if lat > spec["g2g_ms"]:
-                flags["latency_creep"] = True
+        # ---- bookkeeping (weights = share of the slice with a working link)
+        ok_share = 0.0  # share of the slice that is up AND meets the spec (the quiet and the burst part are judged separately)
+        if w_up > 0.0:
+            lat_ok = lat <= spec["g2g_ms"]
+            ok0 = res0 <= spec["residual"] and lat_ok and frz0 <= spec["freeze"]
+            ok1 = e1 is not None and res1 <= spec["residual"] and lat_ok and frz1 <= spec["freeze"]
+            ok_share = w_up * ((1.0 - f_on) * ok0 + f_on * ok1)
             if plan["ovf"] > 0.0:
                 flags["idr_freeze"] = True
-            if res > spec["residual"]:
-                n_fec_bad += 1
-            up_n += 1
-            res_l.append(res)
-            mar_l.append(e["margin"])
+            up_n += w_up
+            n_lat_bad += w_up * (not lat_ok)
+            n_agc += w_up * (e["pen"] > 3.0)
+            n_des += w_up * (e["desense"] > 3.0)
+            n_fec_bad += w_up * ((1.0 - f_on) * (res0 > spec["residual"]) + f_on * (res1 > spec["residual"]))
+            mar_l.append(margin_m)
+            mar_w.append(w_up)
             lat_l.append(lat)
-            freeze_acc += frz
+            lat_w.append(w_up)
+            freeze_acc += w_up * frz
             st_hist.append(st)
-        else:
-            ok = False
-            down_s += dt
-            res_l.append(1.0)
-        ok_l.append(ok)
-        if not ok and ttff is None:
-            ttff = t
+        down_s += (1.0 - w_up) * dt
+        res_l.append(w_up * res + (1.0 - w_up))
+        ok_l.append(ok_share)
+        if ttff is None:
+            if ok_share < w_up - 1e-12 or w_up <= 0.0:
+                ttff = t
+            elif w_up < 1.0:
+                fd = outage.first_down(t, t1)
+                ttff = t if fd is None else fd
+    flags["latency_creep"] = up_n > 0 and n_lat_bad / up_n >= share
+    flags["agc_saturation"] = up_n > 0 and n_agc / up_n >= share
+    flags["desense"] = up_n > 0 and n_des / up_n >= share
     flags["idr_freeze"] = flags["idr_freeze"] or (up_n > 0 and freeze_acc / up_n > 0.30)
-    flags["fec_exhaust"] = up_n > 0 and n_fec_bad / up_n >= 0.10
+    flags["fec_exhaust"] = up_n > 0 and n_fec_bad / up_n >= share
     avail = sum(ok_l) / len(ok_l)
     if st_hist:  # typical state = per-key median over up slices (numeric) -> range at the target residual
         typ = {k: pctl([s[k] for s in st_hist], 50) for k in ("plin", "p1db", "evm_shift", "ant", "shadow", "noise_extra")}
-        typ["burst"] = sum(1 for s in st_hist if s["burst"]) * 2 > len(st_hist)
+        typ["burst"] = False
         rng_m, _cap = range_at_target(plan, typ, spec["residual"])
     else:
         rng_m = 0.0
+    dead = up_n <= 0.0
     out.update({
-        "residual": sum(res_l) / len(res_l), "margin_db": sum(mar_l) / len(mar_l) if mar_l else None,
-        "margin_p5_db": pctl(mar_l, 5) if mar_l else None, "dead": not mar_l, "range_m": rng_m,
-        "g2g_ms": pctl(lat_l, 95) if lat_l else plan["lat_total"], "g2g_mean_ms": sum(lat_l) / len(lat_l) if lat_l else plan["lat_total"],
+        "residual": sum(res_l) / len(res_l), "dead": dead, "range_m": rng_m,
+        "margin_db": None if dead else sum(m * w for m, w in zip(mar_l, mar_w)) / up_n,
+        "margin_p5_db": None if dead else wpctl(mar_l, mar_w, 5),
+        "g2g_ms": None if dead else wpctl(lat_l, lat_w, 95),
+        "g2g_mean_ms": None if dead else sum(x * w for x, w in zip(lat_l, lat_w)) / up_n,
         "availability": avail, "ttff_s": T if ttff is None else ttff, "ttff_censored": ttff is None,
         "freeze": freeze_acc / up_n if up_n else 1.0, "throttled": thr_sticky, "down_s": down_s, "creep_resets": resets,
         "tj_end_c": th_air.tj, "shocks": nf.shock_n,
+        "shares": {k: (v / up_n if up_n else 0.0) for k, v in (("lat_over", n_lat_bad), ("agc", n_agc), ("desense", n_des), ("fec_bad", n_fec_bad))},
     })
+    if ev is not None:
+        ev.sort(key=lambda x: x["t_s"])  # events are generated by process, not in slice order
     return out

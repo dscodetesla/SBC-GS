@@ -630,9 +630,10 @@ class TestIntegration(unittest.TestCase):
         r = self.get("link")
         self.assertEqual(1, len(r["res"]["outages"]))
         o = r["res"]["outages"][0]
-        self.assertIn("silence:usb_overcurrent", o["tags"])
+        # the engine's cause of the first USB drop of this seed depends on the USB hazard model (D2: limiter tolerance): any USB silence
+        self.assertTrue(any(t.startswith("silence:usb_") for t in o["tags"]), o["tags"])
         self.assertAlmostEqual(FAST["silence_cap_s"], o["played_real_s"], places=1)
-        self.assertGreater(o["truncated_model_s"], 10.0)         # the engine's 24 s drop was cut to the cap and reported
+        self.assertGreater(o["truncated_model_s"], 1.0)          # a drop longer than the cap was cut to it and the cut is reported
 
     def test_link_run_all_contracts(self):
         bad = [(c["id"], c["detail"]) for c in self.get("link")["contracts"] if c["status"] == "FAIL"]

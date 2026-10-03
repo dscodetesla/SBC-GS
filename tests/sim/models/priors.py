@@ -315,7 +315,8 @@ class Rng:
         return median * math.exp(sigma * self.z())
 
     def poisson_step(self, rate_per_s, dt):
-        """Bernoulli approximation of a Poisson process step (exact for at most one event per step)."""
+        """Bernoulli approximation of a Poisson process step (exact for at most one event per step). Not used by the engine any more
+        (D6: its shock, burst and stall processes are continuous-time timelines independent of dt); kept for the public API."""
         return self.u() < -math.expm1(-rate_per_s * dt)
 
 

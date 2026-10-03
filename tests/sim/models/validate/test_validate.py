@@ -6,9 +6,10 @@
   * крос-модельна узгодженість (power <-> degrade, rf <-> degrade при нульовій деградації, latency <-> рушій, замкнені формули <-> MC);
   * статистика (антитетика знижує дисперсію, детермінізм, бутстреп);
   * back-test проти зовнішніх довідкових даних (SRC, див. backtest.py);
-  * «DEFECT»-тести (TestKnownDefects) фіксують ЗНАЙДЕНІ невідповідності моделей (Dn у docs/SIM-VALIDATION.md): вони проходять, поки дефект
-    є; коли модель виправлять, тест впаде з повідомленням «виправлено — онови доку й тест». Виправлені дефекти (D1, D1b, D4, D9)
-    перетворено на постійні «FIXED»-тести (TestFixedDefects): вони падають, якщо дефект повернеться.
+  * усі знайдені невідповідності D1..D12 (docs/SIM-VALIDATION.md §3) виправлені або зведені до задокументованої межі: постійні «FIXED»-тести
+    (TestFixedDefects) падають, якщо дефект повернеться; D8 (SNR(відстань) унімодальний у зоні AGC) — властивість за задумом, тест
+    фіксує межу (TestDesignLimits). Нових «DEFECT»-закріплень немає: коли знайдуть новий дефект, його спершу фіксують тестом, що
+    проходить, поки дефект є, і падає з підказкою «виправлено — онови доку й тест».
 Моделі цим файлом не змінюються. Тести проходять і під nobody на записуваній копії (нічого не пишуть у каталог моделей).
 """
 import math
@@ -372,8 +373,11 @@ def theta_violations(th):
             v.append("usb > total")
         if abs(b["v_board"] - (g("power.psu_nominal_v") - b["total_a"] * g("power.cable_resistance_ohm"))) > 1e-12:
             v.append("v_board")
-        if ("USB_OVER" in b["flags"]) != (b["usb_a"] > b["usb_budget_a"]):
+        tol = g("usb.pi5_trip_tol") if board == "pi5" else 0.0
+        if ("USB_OVER" in b["flags"]) != (b["usb_a"] > b["usb_budget_a"] * (1.0 + tol)):
             v.append("USB_OVER flag")
+        if ("USB_TOL_BAND" in b["flags"]) != (b["usb_budget_a"] < b["usb_a"] <= b["usb_budget_a"] * (1.0 + tol)):
+            v.append("USB_TOL_BAND flag")
         if ("UNDERVOLT" in b["flags"]) != (b["v_board"] < g("power.undervolt_threshold_v")):
             v.append("UNDERVOLT flag")
     h = dm.usb_drop_rate_per_s(0.3, 0.2, g("usb.drop_rate_per_h"), g("usb.drop_v_scale"), g("usb.drop_i_scale_a"))
@@ -429,9 +433,12 @@ class TestHypercube(unittest.TestCase):
             # D4 (ВИПРАВЛЕНО): мертвий лінк не має margin (None + dead=True); живий має скінченний margin, а не заглушку
             self.assertEqual(r["margin_db"] is None, r["dead"], "margin_db None <=> dead")
             self.assertEqual(r["margin_p5_db"] is None, r["dead"])
+            # g2g_ms: те саме для затримки (була заглушка = типовий бюджет): None <=> dead
+            self.assertEqual(r["g2g_ms"] is None, r["dead"], "g2g_ms None <=> dead")
+            self.assertEqual(r["g2g_mean_ms"] is None, r["dead"])
             if not r["dead"]:
                 self.assertGreaterEqual(r["margin_db"], -150.0)
-            self.assertGreater(r["g2g_ms"], 0.0)
+                self.assertGreater(r["g2g_ms"], 0.0)
             self.assertTrue(all(isinstance(x, bool) for x in r["flags"].values()))
             self.assertGreaterEqual(r["down_s"], 0.0)
 
@@ -762,13 +769,13 @@ class TestAlternativeForms(unittest.TestCase):
         self.assertGreater(abs(altforms.baseline_log_odds_slope(1)), 1.5)  # базова форма різка
 
     def test_alternatives_run_and_restore(self):
-        orig = (dm.usb_drop_rate_per_s, dm.Thermal, rf_model.per_ideal)
+        orig = (dm.usb_drop_rate_per_s, dm.Thermal, rf_model.per_ideal, dm.injection_block)
         for name, mk in altforms.FORMS.items():
             with mk():
                 e = vlib.engine()
                 res = e.run(8, 1)
                 self._ok(res)
-        self.assertEqual(orig, (dm.usb_drop_rate_per_s, dm.Thermal, rf_model.per_ideal))
+        self.assertEqual(orig, (dm.usb_drop_rate_per_s, dm.Thermal, rf_model.per_ideal, dm.injection_block))
 
     def _ok(self, res):
         for r in res:
@@ -783,80 +790,51 @@ class TestAlternativeForms(unittest.TestCase):
             self.assertAlmostEqual(dm.usb_drop_rate_per_s(*args), 0.05 / 3600, delta=1e-15)  # x<0 => базова інтенсивність
 
 
-# ================================================================ 6. ЗНАЙДЕНІ невідповідності (фіксуються, поки не виправлені)
-class TestKnownDefects(unittest.TestCase):
-    """Кожен тест = один пункт «Знайдені невідповідності» в docs/SIM-VALIDATION.md. Падіння = дефект виправлено: онови доку й тест."""
-
-    def test_D2_usb_overcurrent_thresholds_disagree(self):
-        P = common.load({"power.devices.fc_usb_a": 0.17})  # rx 0.45 + fc 0.17 = 0.62 А при ліміті 0.6 А
-        b = power_model.budget(P, "pi5", 3.0, 1, "rx", ("fc",), "active", False, False)
-        self.assertAlmostEqual(b["usb_a"], 0.62, delta=1e-9)
-        self.assertIn("USB_OVER", b["flags"])
-        lim = dm.Pi5UsbLimiter(b["usb_budget_a"], 0.075, 4)  # tol = типовий prior usb.pi5_trip_tol
-        self.assertIsNone(lim.step(0.0, b["usb_a"], 2.0), "D2 виправлено? limiter тепер тріпає при бюджетному USB_OVER")
-
-    def test_D3_fec_residual_quantisation_error(self):
-        r = random.Random(1)
-        worst = 0.0
-        for _ in range(600):
-            p = 10 ** r.uniform(-3, -0.5)
-            ex = rf_model.residual_iid(p, 8, 12)
-            if ex > 1e-12:
-                worst = max(worst, abs(dm.fec_residual(p, 3.0, 8, 12, False) - ex) / ex)
-        self.assertGreater(worst, 0.03, "D3 виправлено? макс. відносна похибка %.3f" % worst)
-        self.assertLess(worst, 0.15)
-
-    def test_D5_soc_prior_exceeds_documented_hard_limit(self):
-        sp = backtest.soc_prior_rows()
-        self.assertGreater(sp["hi"], backtest.PI_THERMAL_LIMIT_C)
-        self.assertGreater(sp["p_above_hard_limit"], 0.03)
-
-    def test_D6_any_slice_flags_depend_on_time_step(self):
-        # прапор «хоч в одному зрізі» росте з числом зрізів: latency_creep при dt=5 с проти dt=40 с (n=140, seed 1)
-        pr = {}
-        for dt in (5.0, 40.0):
-            e = vlib.engine("nominal_pi5_5a_150m", cfg_over={"dt_s": dt})
-            res = e.run(140, 1)
-            pr[dt] = sum(1 for r in res if r["flags"]["latency_creep"]) / len(res)
-        self.assertGreater(pr[5.0], 1.8 * pr[40.0], "D6 виправлено? P(latency_creep) dt=5: %.3f, dt=40: %.3f" % (pr[5.0], pr[40.0]))
-
-    def test_D12_weak_psu_scenario_is_degenerate(self):
-        e = eng("pi5_3a_weak_psu")
-        res = e.run(60, 1)
-        dead = sum(1 for r in res if r["availability"] == 0.0) / len(res)
-        sent = sum(1 for r in res if r["dead"]) / len(res)  # (D4: раніше margin == -60; тепер явний прапорець dead)
-        self.assertGreater(dead, 0.9, "D12 виправлено? частка мертвих лінків %.2f" % dead)
-        self.assertGreater(sent, 0.9)
-
-    def test_D7_ldpc_has_no_effect_without_gain_parameter(self):
-        a = rf_model.frame_per(common.load({"rf.ldpc": 0}), 1, 8.0)
-        b = rf_model.frame_per(common.load({"rf.ldpc": 1}), 1, 8.0)
-        self.assertEqual(a, b)
-        c = rf_model.frame_per(common.load({"rf.ldpc": 1, "rf.ldpc_gain_db": 1.5}), 1, 8.0)
-        self.assertLess(c, b)
-
-    def test_D8_margin_not_monotone_in_saturated_zone(self):
-        e = vlib.neutral_engine(extra={"hw.rx_agc_knee_dbm": -40.0, "hw.rx_agc_slope": 1.35, "rf.fading_model": "none"})
-        th = e.space.median_theta()
-        plan = dm.prepare(th, e.cfg, Rng(1))
-        st = self._st(th, plan)
-        m = [dm.link_eval(plan, d, st)["margin"] for d in (3, 6, 12)]
-        self.assertTrue(m[1] > m[0], "D8: margin(d) тепер монотонно спадає в зоні AGC: %s" % m)
+# ================================================================ 6. МЕЖІ ЗА ЗАДУМОМ (не дефекти; властивість зафіксована тестом)
+class TestDesignLimits(unittest.TestCase):
+    """D8: SNR(відстань) унімодальний у зоні AGC при hw.rx_agc_slope > 1. Це властивість моделі за задумом (INF: перевантаження АЦП/IMD3 дає
+    втрату SNR до 2 дБ/дБ), а не помилка: тест фіксує, ДЕ саме вона діє (межа), і що поза нею нічого не змінюється."""
 
     def _st(self, th, plan):
         return {"plin": th.get("rf.tx_power_dbm"), "p1db": plan["p1db0"], "evm_shift": 0.0, "ant": 0.0, "shadow": 0.0, "noise_extra": 0.0, "burst": False}
 
-    def test_D10_queue_ignores_deterministic_service(self):
-        import studies
-        cf = dm.injection_block_prob(1.0, 5)
-        md = studies.queue_sim(1.0, 5, 60000, "det", 3)
-        self.assertGreater(cf / md, 1.25, "D10 виправлено? M/M/1/K / M/D/1/K = %.2f" % (cf / md))
+    def _margins(self, slope, knee=-40.0, ds=(1.5, 2, 3, 4, 6, 8, 12, 20, 50, 100, 200, 400, 800, 1600, 3200)):
+        e = vlib.neutral_engine(extra={"hw.rx_agc_knee_dbm": knee, "hw.rx_agc_slope": slope, "rf.fading_model": "none"})
+        th = e.space.median_theta()
+        plan = dm.prepare(th, e.cfg, Rng(1))
+        st = self._st(th, plan)
+        return [(d, dm.link_eval(plan, d, st)) for d in ds]
 
-    def test_D11_pi3bp_rows_come_from_3b_column(self):
-        # док-таблиця струмів має стовпець 3B, не 3B+; params.json позначає ці рядки SRC для pi3bp
-        P = common.load()
-        self.assertEqual(P.get("power.boards.pi3bp.board_idle_a"), backtest.PI_DOC_TABLE["pi3b_column"]["idle_avg"])
-        self.assertEqual(P.prov("power.boards.pi3bp.board_idle_a"), "SRC")
+    def test_D8_margin_is_unimodal_with_the_peak_at_the_agc_knee(self):
+        ds = [1.5 * 1.02 ** i for i in range(0, 560)]   # 1,5 м .. ~7 км, крок 0,17 дБ
+        rows = self._margins(1.35, ds=ds)
+        zone = [(d, le) for d, le in rows if le["agc_zone"]]
+        out = [(d, le) for d, le in rows if not le["agc_zone"]]
+        self.assertTrue(len(zone) > 5 and len(out) > 100)
+        ms_out = [le["margin"] for _d, le in out]
+        self.assertTrue(all(b < a for a, b in zip(ms_out, ms_out[1:])), "поза зоною margin(d) строго спадає")
+        self.assertTrue(all(le["pen"] == 0.0 for _d, le in out), "поза зоною штрафу AGC немає")
+        ms_in = [le["margin"] for _d, le in zone]  # зона: відстань зростає, рівень падає, штраф падає, SNR РОСТЕ (за задумом, slope > 1)
+        self.assertTrue(all(b > a for a, b in zip(ms_in, ms_in[1:])), "у зоні при slope > 1 margin(d) зростає з відстанню")
+        peak = max(rows, key=lambda r: r[1]["margin"])
+        self.assertAlmostEqual(peak[1]["rx"], -40.0, delta=0.4, msg="максимум SNR саме на коліні AGC")
+        # унімодальність: до піку зростає, після спадає (одна зміна знака похідної)
+        ms = [le["margin"] for _d, le in rows]
+        signs = [1 if b > a else -1 for a, b in zip(ms, ms[1:])]
+        self.assertEqual(sum(1 for a, b in zip(signs, signs[1:]) if a != b), 1)
+
+    def test_D8_slope_at_most_one_is_monotone_everywhere(self):
+        for slope in (0.7, 1.0):
+            ms = [le["margin"] for _d, le in self._margins(slope)]
+            self.assertTrue(all(b <= a + 1e-9 for a, b in zip(ms, ms[1:])), "slope=%s: margin(d) не зростає з відстанню: %s" % (slope, ms))
+
+    def test_D8_zone_flag_matches_knee_and_penalty(self):
+        for slope in (0.7, 1.35, 2.0):
+            for d, le in self._margins(slope, knee=-35.0):
+                self.assertEqual(le["agc_zone"], le["rx"] > -35.0, (slope, d))
+                self.assertEqual(le["pen"] > 0.0, le["agc_zone"])
+        self.assertEqual(dm.agc_penalty_db(-50.0, -40.0, 2.0, 30.0), 0.0)   # нижче коліна штрафу немає
+        self.assertAlmostEqual(dm.agc_penalty_db(-30.0, -40.0, 1.5, 30.0), 15.0, delta=1e-12)
 
 
 # ================================================================ 6b. ВИПРАВЛЕНІ невідповідності (постійні регресійні тести)
@@ -882,7 +860,7 @@ def _rician_pdf_integral(tab, snr_db, k_db, n=240000, xmax=4.0):
 
 
 class TestFixedDefects(unittest.TestCase):
-    """Виправлені невідповідності (D1, D1b, D4, D9; docs/SIM-VALIDATION.md §3): якщо дефект повернеться, тест упаде."""
+    """Виправлені невідповідності (D1, D1b, D2..D7, D9..D12, D4 + g2g_ms мертвого лінка; docs/SIM-VALIDATION.md §3): якщо дефект повернеться, тест упаде."""
 
     def test_D1_air_temperature_grows_with_rf_tx_power(self):
         tj, rf, dc = [], [], []
@@ -928,7 +906,7 @@ class TestFixedDefects(unittest.TestCase):
         self.assertLess(clamped / len(ths), 0.6)
 
     def test_D4_dead_link_is_a_flag_not_a_stub_value(self):
-        e = eng("pi5_3a_weak_psu")
+        e = vlib.engine("pi5_3a_weak_psu", sets={"usb.pi5_trip_tx_weight": 1.0})  # w = 1: більшість лінків мертві (D12)
         res = e.run(40, 1)
         dead = [r for r in res if r["dead"]]
         self.assertGreater(len(dead), 30)
@@ -1011,6 +989,396 @@ class TestFixedDefects(unittest.TestCase):
         p15 = dm.per_lookup(ft, 15.0)
         self.assertGreater(p15, 1.5e-3)
         self.assertLess(p15, 3.0e-3)
+
+    # ------------------------------------------------------------ D2: ОДНЕ визначення перевантаження USB
+    def _usb_theta(self, tol, rx_total_a):
+        """Вектор параметрів із заданим допуском і струмом USB у стані RX (fc підганяє суму)."""
+        th = eng().space.median_theta()
+        th = Theta(dict(th.vals), th._provs)
+        th.vals["usb.pi5_trip_tol"] = tol
+        th.vals["power.devices.fc_usb_a"] = max(0.0, rx_total_a - th.get("power.devices.rtl8812_rx_a"))
+        return th
+
+    def test_D2_one_overload_threshold_for_budget_limiter_and_hazard(self):
+        # приклад дефекту: I = 0.62 А при ліміті 0.6 А: бюджет казав USB_OVER, автомат не тріпав. Тепер обидва в смузі допуску
+        th = self._usb_theta(0.075, 0.62)
+        b = power_model.budget(th, "pi5", 3.0, 1, "rx", ("fc",), "active", False, False)
+        self.assertAlmostEqual(b["usb_a"], 0.62, delta=1e-9)
+        self.assertNotIn("USB_OVER", b["flags"])
+        self.assertIn("USB_TOL_BAND", b["flags"])
+        self.assertEqual(b["verdict"], "WARN")
+        self.assertAlmostEqual(b["usb_trip_a"], 0.6 * 1.075, delta=1e-12)
+        lim = dm.Pi5UsbLimiter(b["usb_budget_a"], 0.075, 4)
+        self.assertIsNone(lim.step(0.0, b["usb_a"], 2.0), "автомат не тріпає в смузі допуску")
+        # один поріг на всьому просторі (струм, ліміт, допуск): budget.USB_OVER <=> тріп автомата <=> overload <=> від'ємний запас небезпеки
+        r = random.Random(11)
+        for _ in range(1500):
+            tol, i = r.uniform(0.0, 0.15), r.uniform(0.3, 2.0)
+            psu, umc = r.choice(((3.0, False), (5.0, False), (3.0, True)))
+            th = self._usb_theta(tol, i)
+            if th.get("power.devices.fc_usb_a") <= 0.0 and i < th.get("power.devices.rtl8812_rx_a"):
+                continue
+            b = power_model.budget(th, "pi5", psu, 1, "rx", ("fc",), "active", False, umc)
+            limit, usb = b["usb_budget_a"], b["usb_a"]
+            over = usb > limit * (1.0 + tol)
+            self.assertEqual("USB_OVER" in b["flags"], over)
+            self.assertEqual("USB_TOL_BAND" in b["flags"], limit < usb <= limit * (1.0 + tol))
+            self.assertEqual(power_model.usb_overload(usb, limit, tol), over)
+            self.assertEqual(dm.Pi5UsbLimiter(limit, tol, 3).step(0.0, usb, 2.0) is not None, over)
+            self.assertEqual(b["usb_trip_margin_a"] < 0.0, over)
+            self.assertAlmostEqual(b["usb_trip_a"] - usb, b["usb_trip_margin_a"], delta=1e-12)
+
+    def test_D2_engine_uses_the_same_tolerance_in_limiter_and_hazard_margin(self):
+        e = eng("pi5_3a_weak_psu")
+        for th in vlib.thetas(e, 12, 4):
+            plan = dm.prepare(th, e.cfg, Rng(1))
+            self.assertAlmostEqual(plan["trip_a"], plan["limit"] * (1.0 + th.get("usb.pi5_trip_tol")), delta=1e-12)
+            b = power_model.budget(th, "pi5", e.cfg["psu_a"], 1, "tx", tuple(e.cfg["gs_with"]), "active", False, e.cfg["usb_max_current"])
+            self.assertAlmostEqual(plan["trip_a"], b["usb_trip_a"], delta=1e-12)  # той самий допуск (вибраний), що й у бюджеті
+            lo, hi = plan["i_usb_rx"], plan["i_usb_tx"]
+            self.assertTrue(lo - 1e-12 <= plan["i_usb_lim"] <= hi + 1e-12)
+        # запас небезпеки береться від ТОГО Ж порога: перехоплюємо аргумент i_margin, який передає run_session
+        seen = []
+        orig = dm.usb_drop_rate_per_s
+
+        def spy(v_m, i_m, *a):
+            seen.append(i_m)
+            return orig(v_m, i_m, *a)
+        th = vlib.thetas(e, 1, 4)[0]
+        plan = dm.prepare(th, e.cfg, Rng(1))
+        with vlib.patched(dm, "usb_drop_rate_per_s", spy):
+            dm.run_session(th, e.cfg, Rng(1))
+        self.assertTrue(seen)
+        self.assertAlmostEqual(seen[0], plan["trip_a"] - plan["i_usb_pk"], delta=1e-12)
+
+    # ------------------------------------------------------------ D3: fec_residual без квантування
+    def test_D3_fec_residual_has_no_quantisation_error(self):
+        r = random.Random(1)
+        worst_iid = worst_ge = 0.0
+        for _ in range(2500):
+            p, b = 10 ** r.uniform(-3, math.log10(0.4)), r.uniform(1.0, 10.0)
+            ex = rf_model.residual_iid(p, 8, 12)
+            worst_iid = max(worst_iid, abs(dm.fec_residual(p, b, 8, 12, False) - ex) / ex)
+            ex = rf_model.residual_ge(p, b, 8, 12)
+            worst_ge = max(worst_ge, abs(dm.fec_residual(p, b, 8, 12, True) - ex) / ex)
+        self.assertLess(worst_iid, 1e-12, "iid має бути точним (було 9,4 %)")
+        self.assertLess(worst_ge, 0.015, "Gilbert: інтерполяція між вузлами (було 6,4 % по p і x5 по burst)")
+        # burst біля 1 раніше округлявся до 0.25 кадру: похибка x5
+        for p in (1e-3, 4e-3, 1e-2):
+            self.assertAlmostEqual(dm.fec_residual(p, 1.14, 8, 12, True) / rf_model.residual_ge(p, 1.14, 8, 12), 1.0, delta=0.01)
+        # монотонність і межі
+        prev = 0.0
+        for i in range(1, 400):
+            p = 10 ** (-6 + 6 * i / 400.0)
+            v = dm.fec_residual(p, 3.0, 8, 12, True)
+            self.assertGreaterEqual(v, prev)
+            prev = v
+        self.assertEqual(dm.fec_residual(0.0, 3.0, 8, 12, True), 0.0)
+        self.assertEqual(dm.fec_residual(1.0, 3.0, 8, 12, True), 1.0)
+        self.assertAlmostEqual(dm.fec_residual(0.3, 3.0, 1, 1, True), 0.3, delta=1e-12)  # без FEC residual = p
+
+    # ------------------------------------------------------------ D5: пріор soc_soft_limit_c у межах документації
+    def test_D5_soc_prior_stays_inside_the_documented_throttle_band(self):
+        sp = backtest.soc_prior_rows()
+        self.assertEqual(sp["p_above_hard_limit"], 0.0, "було 4,8 % масових вище жорсткого ліміту 85 °C")
+        self.assertEqual(sp["p_below_doc_start"], 0.0)
+        self.assertGreaterEqual(sp["lo"], backtest.PI_THROTTLE_START_C)
+        self.assertLessEqual(sp["hi"], backtest.PI_THERMAL_LIMIT_C)
+        self.assertTrue(backtest.PI_THROTTLE_START_C <= sp["median"] <= backtest.PI_THERMAL_LIMIT_C)
+        deg = priors.load_degrade()
+        self.assertEqual(deg.leaves["hw.soc_soft_limit_c"]["provenance"], "UNMEASURED")  # точка всередині смуги не виміряна
+        self.assertIn("UNVERIFIED", deg.leaves["hw.soc_soft_limit_c"]["note"])           # семантика біта 3 на Pi 5 не перевірена
+        # рушій не дає soc_throttle нижче 80 °C
+        e = eng()
+        for th in vlib.corner_thetas(e, 80, 3) + vlib.thetas(e, 200, 4):
+            self.assertTrue(80.0 <= th.get("hw.soc_soft_limit_c") <= 85.0)
+
+    # ------------------------------------------------------------ D6: інваріантність до кроку часу
+    def test_D6_burst_chain_timeline_does_not_depend_on_dt(self):
+        rate_h, mean_s = 36.0, 20.0
+        on_tot, hits = {}, {}
+        for seed in range(1, 25):
+            for dt in (2.0, 10.0, 50.0):
+                ch = dm.BurstChain(rate_h, mean_s, Rng(seed))
+                fr = [ch.step(dt) for _ in range(int(3000 / dt))]
+                on_tot[(seed, dt)] = sum(f * dt for f in fr)
+                hits[(seed, dt)] = any(f > 0 for f in fr)
+        for seed in range(1, 25):  # однакова часова лінія => однаковий сумарний час у сплеску й однаковий «був сплеск»
+            self.assertAlmostEqual(on_tot[(seed, 2.0)], on_tot[(seed, 10.0)], delta=1e-6)
+            self.assertAlmostEqual(on_tot[(seed, 2.0)], on_tot[(seed, 50.0)], delta=1e-6)
+            self.assertEqual(hits[(seed, 2.0)], hits[(seed, 50.0)])
+        # стаціонарна частка часу = rate*mean/(1+rate*mean) = 1/6
+        share = sum(on_tot[(s, 10.0)] for s in range(1, 25)) / (24 * 3000.0)
+        self.assertAlmostEqual(share, 1.0 / 6.0, delta=0.05)
+        # сплеск коротший за слайс не губиться і не розтягується на цілий слайс
+        ch = dm.BurstChain(3600.0, 0.5, Rng(3))
+        self.assertTrue(any(0.0 < ch.step(40.0) < 1.0 for _ in range(200)))
+
+    def test_D6_shock_timeline_and_mean_excess_do_not_depend_on_dt(self):
+        th = Theta({"proc.nf_ou_sigma_db": 0.5, "proc.nf_ou_tau_s": 60.0, "proc.shock_rate_per_h": 36.0,
+                    "proc.shock_mag_db": 6.0, "proc.shock_tau_s": 20.0})
+        means, counts = {}, {}
+        for dt in (1.0, 10.0, 40.0):
+            nf = dm.NoiseFloor(th, Rng(6))
+            xs = []
+            for _ in range(int(400000 / dt)):
+                nf.step(dt)
+                xs.append(nf.shock)
+            means[dt], counts[dt] = sum(xs) / len(xs), nf.shock_n
+        self.assertEqual(counts[1.0], counts[10.0])
+        self.assertEqual(counts[1.0], counts[40.0])   # та сама часова лінія шоків
+        expected = 0.01 * 6.0 * math.exp(0.5 ** 2 / 2) * 20.0   # rate * E[size] * tau
+        for dt, m in means.items():
+            self.assertAlmostEqual(m / expected, 1.0, delta=0.06, msg="dt=%s mean=%.3f expected=%.3f" % (dt, m, expected))
+
+    def test_D6_outage_counts_exact_down_time_in_any_slice_length(self):
+        o = dm.Outage()
+        o.add(100.0, 105.0)
+        o.add(103.0, 108.0)   # перекриття зливається
+        o.add(200.0, 201.0)
+        self.assertEqual(o.iv, [(100.0, 108.0), (200.0, 201.0)])
+        for dt in (1.0, 2.5, 10.0, 40.0, 100.0):
+            self.assertAlmostEqual(sum(o.down_in(i * dt, (i + 1) * dt) for i in range(int(400 / dt))), 9.0, delta=1e-9)
+        self.assertEqual(o.first_down(90.0, 101.0), 100.0)
+        self.assertIsNone(o.first_down(110.0, 150.0))
+        self.assertEqual(o.end_at(104.0), 108.0)
+        self.assertIsNone(o.end_at(108.0))
+        o.add(300.0, math.inf)
+        self.assertEqual(o.end_at(1e9), math.inf)
+        self.assertAlmostEqual(o.down_in(250.0, 400.0), 100.0, delta=1e-9)
+
+    def test_D6_weighted_percentile_equals_plain_percentile_for_equal_weights(self):
+        r = random.Random(2)
+        xs = [r.gauss(0, 1) for _ in range(57)]
+        for q in (0, 5, 50, 95, 100):
+            self.assertAlmostEqual(dm.wpctl(xs, [1.0] * len(xs), q), dm.pctl(xs, q), delta=1e-12)
+        self.assertAlmostEqual(dm.wpctl([1.0, 2.0, 3.0], [1.0, 0.0, 1.0], 50), 2.0, delta=1e-12)
+        self.assertEqual(dm.wpctl([5.0], [0.3], 95), 5.0)
+
+    def _dt_means(self, sets, dts, n=240, seed=1):
+        out = {}
+        for dt in dts:
+            e = vlib.neutral_engine(extra=sets, cfg_over={"dt_s": dt})
+            res = e.run(n, seed)
+            live = [r for r in res if not r["dead"]]
+            out[dt] = {"avail": sum(r["availability"] for r in res) / n, "res": sum(r["residual"] for r in res) / n,
+                       "down": sum(r["down_s"] for r in res) / n, "lat": sum(r["g2g_mean_ms"] for r in live) / len(live),
+                       "lat_over": sum(r["shares"]["lat_over"] for r in res) / n, "fec_bad": sum(r["shares"]["fec_bad"] for r in res) / n}
+        return out
+
+    def test_D6_session_outputs_and_flags_do_not_depend_on_dt(self):
+        # усі процеси ввімкнено помірно; ті самі draw параметрів, різний крок. Було: down_s, residual, availability і P(latency_creep) залежали від dt
+        sets = {"usb.drop_rate_per_h": 30.0, "ext.clash_rate_per_h": 30.0, "ext.clash_mean_s": 8.0, "proc.shock_rate_per_h": 30.0,
+                "timing.stall_rate_per_h": 40.0, "timing.stall_backlog_ms": 60.0, "usb.reenum_fail_prob": 0.0, "timing.catchup_ms_per_s": 1.0}
+        m = self._dt_means(sets, (5.0, 10.0, 40.0))
+        for k, tol in (("down", 1e-9), ("res", 0.03), ("avail", 0.07), ("lat_over", 0.08), ("fec_bad", 0.07)):
+            vals = [m[dt][k] for dt in m]
+            self.assertLessEqual(max(vals) - min(vals), tol + 1e-12, "%s залежить від dt: %s" % (k, m))
+        self.assertLess(max(m[dt]["lat"] for dt in m) - min(m[dt]["lat"] for dt in m), 8.0, m)  # середня затримка, мс
+
+    def test_D6_stall_backlog_does_not_vanish_inside_a_long_slice(self):
+        # стрибок затримки (stall) тримається ~backlog/catchup секунд незалежно від dt (раніше на dt = 40 с зникав у тому ж слайсі)
+        sets = {"timing.stall_rate_per_h": 60.0, "timing.stall_backlog_ms": 100.0, "timing.catchup_ms_per_s": 2.0, "timing.clock_ppm": 0.0}
+        lat = {dt: [] for dt in (5.0, 40.0)}
+        for dt in lat:
+            e = vlib.neutral_engine(extra=sets, cfg_over={"dt_s": dt, "duration_s": 1200.0})
+            for r in e.run(60, 2):
+                lat[dt].append(r["g2g_mean_ms"])
+        m = {dt: sum(v) / len(v) for dt, v in lat.items()}
+        self.assertLess(abs(m[5.0] - m[40.0]), 3.0, m)
+
+    def test_D6_state_flags_are_time_shares_not_any_slice(self):
+        e = eng()
+        n_checked = 0
+        for r in e.run(120, 5):
+            if r["dead"]:
+                continue
+            sh, share = r["shares"], e.cfg["spec"]["flag_share"]
+            self.assertEqual(r["flags"]["latency_creep"], sh["lat_over"] >= share)
+            self.assertEqual(r["flags"]["desense"], sh["desense"] >= share)
+            self.assertEqual(r["flags"]["agc_saturation"], sh["agc"] >= share)
+            self.assertEqual(r["flags"]["fec_exhaust"], sh["fec_bad"] >= share)
+            n_checked += 1
+        self.assertGreater(n_checked, 100)
+        # окремий слайс не піднімає прапор: один зі 120 слайсів - частка 0,8 % < flag_share
+        self.assertGreater(e.cfg["spec"]["flag_share"], 1.0 / 120.0)
+
+    def test_D6_usb_episodes_are_generated_in_continuous_time(self):
+        # трипи/відвали USB: ті самі моменти для будь-якого dt (раніше лічильник «поспіль» і час відключення залежали від слайсів)
+        sets = {"usb.pi5_trip_tx_weight": 1.0, "usb.pi5_trip_latch_n": 4.0}
+        evs = {}
+        for dt in (5.0, 20.0, 50.0):
+            e = vlib.engine("pi5_3a_weak_psu", sets=sets, cfg_over={"dt_s": dt})
+            th, rp = e.draw(2, 1, False)
+            ev = []
+            r = dm.run_session(th, e.cfg, rp, ev)
+            evs[dt] = ([(x["kind"], x["t_s"]) for x in ev if x["kind"] in ("usb_trip", "usb_drop", "usb_return", "usb_latched")], r["down_s"])
+        self.assertTrue(evs[5.0][0], "є епізод тріпу")
+        self.assertEqual(evs[5.0][0], evs[20.0][0])
+        self.assertEqual(evs[5.0][0], evs[50.0][0])
+        self.assertAlmostEqual(evs[5.0][1], evs[50.0][1], delta=1e-9)
+
+    # ------------------------------------------------------------ D7: LDPC впливає на результат
+    def test_D7_ldpc_gain_is_sampled_and_moves_the_link(self):
+        e = eng()
+        dims = {k: d for k, d, _p in e.space.dims}
+        self.assertIn("rf.ldpc_gain_db", dims)
+        s = dims["rf.ldpc_gain_db"].spec
+        self.assertEqual((dims["rf.ldpc_gain_db"].kind, s["lo"], s["mode"], s["hi"]), ("triangular", 0.0, 0.0, 2.0))
+        qs = [dims["rf.ldpc_gain_db"].ppf(u) for u in (0.01, 0.5, 0.99)]
+        self.assertTrue(0.0 <= qs[0] < qs[1] < qs[2] <= 2.0)
+        # рівно на кредит dB зростає запас лінка і дальність (LDPC увімкнено, SRC), без ldpc нічого не змінюється
+        for ldpc, expect in ((1, 1.5), (0, 0.0)):
+            m = []
+            for gain in (0.0, 1.5):
+                en = vlib.neutral_engine(extra={"rf.fading_model": "none", "rf.loss_model": "iid", "rf.ldpc": ldpc, "rf.ldpc_gain_db": gain})
+                th = en.space.median_theta()
+                plan = dm.prepare(th, en.cfg, Rng(1))
+                st = {"plin": th.get("rf.tx_power_dbm"), "p1db": plan["p1db0"], "evm_shift": 0.0, "ant": 0.0, "shadow": 0.0, "noise_extra": 0.0, "burst": False}
+                m.append((dm.link_eval(plan, 500.0, st)["margin"], dm.range_at_target(plan, st, en.cfg["spec"]["residual"])[0]))
+            self.assertAlmostEqual(m[1][0] - m[0][0], expect, delta=1e-6, msg="ldpc=%d" % ldpc)
+            if ldpc:
+                self.assertGreater(m[1][1], m[0][1] * 1.05)
+            else:
+                self.assertEqual(m[1][1], m[0][1])
+        a = rf_model.frame_per(common.load({"rf.ldpc": 0, "rf.ldpc_gain_db": 1.5}), 1, 8.0)
+        b = rf_model.frame_per(common.load({"rf.ldpc": 1, "rf.ldpc_gain_db": 1.5}), 1, 8.0)
+        self.assertLess(b, a)
+
+    # ------------------------------------------------------------ D10: M/D/1/K
+    def test_D10_md1k_is_exact(self):
+        for rho in (0.1, 0.7, 1.0, 1.6, 4.0):
+            self.assertAlmostEqual(dm.injection_block_prob_det(rho, 1), rho / (1 + rho), delta=1e-12)  # K = 1: Ерланг B для будь-якої служби
+        # незалежний еталон: пряма рекурсія балансу для вкладеного ланцюга в Decimal із 120 знаками (код тесту, не моделі)
+        from decimal import Decimal, getcontext
+        getcontext().prec = 120
+
+        def ref(rho, k):
+            r = Decimal(repr(rho))
+            term, a = (-r).exp(), []
+            for j in range(4 * k + 200):
+                a.append(term)
+                term = term * r / (j + 1)
+            pi = [Decimal(1)]
+            for j in range(k - 1):
+                v = pi[j] - pi[0] * a[j] - sum((pi[i] * a[j + 1 - i] for i in range(1, j + 1)), Decimal(0))
+                pi.append(v / a[0])
+            return float(1 - 1 / (pi[0] / sum(pi) + r))
+        for rho, k in ((0.5, 10), (0.9, 30), (1.0, 5), (1.0, 30), (1.05, 20), (1.5, 10), (2.0, 5), (3.0, 25), (1.2, 40), (0.95, 40)):
+            self.assertAlmostEqual(dm.injection_block_prob_det(rho, k), ref(rho, k), delta=1e-12, msg="rho=%s K=%s" % (rho, k))
+        # вигадані в доці числа: rho = 1, K = 5 -> 0,103 (M/M/1/K: 0,167); K = 288 -> 0,0017 (M/M/1/K: 0,0035)
+        self.assertAlmostEqual(dm.injection_block_prob_det(1.0, 5), 0.1034, delta=1e-4)
+        self.assertAlmostEqual(dm.injection_block_prob(1.0, 5) / dm.injection_block_prob_det(1.0, 5), 1.61, delta=0.02)
+        self.assertAlmostEqual(dm.injection_block_prob(1.0, 288) / dm.injection_block_prob_det(1.0, 288), 2.0, delta=0.15)
+
+    def test_D10_md1k_matches_event_simulation_and_is_monotone(self):
+        import studies
+        for rho, k in ((0.8, 3), (1.0, 5), (1.5, 10)):
+            mc = studies.queue_sim(rho, k, 120000, "det", 3)
+            self.assertAlmostEqual(dm.injection_block_prob_det(rho, k), mc, delta=0.006, msg="rho=%s K=%s" % (rho, k))
+        for k in (5, 40, 288):
+            prev = 0.0
+            for i in range(1, 80):
+                v = dm.injection_block_prob_det(i * 0.04, k)
+                self.assertTrue(0.0 <= v <= 1.0)
+                self.assertGreaterEqual(v, prev - 1e-12)
+                self.assertLessEqual(v, dm.injection_block_prob(i * 0.04, k) + 1e-12)   # детермінована служба блокує не більше за експоненціальну
+                prev = v
+        self.assertLess(dm.injection_block_prob_det(1.0, 300), dm.injection_block_prob_det(1.0, 100))
+        self.assertAlmostEqual(dm.injection_block_prob_det(80.0, 50), 1.0 - 1.0 / 80.0, delta=1e-12)
+
+    def test_D10_engine_defaults_to_deterministic_service_and_keeps_the_exponential_option(self):
+        e = vlib.neutral_engine(extra={"vid.bitrate_overshoot": 1.0})
+        th = e.space.median_theta()
+        plan = dm.prepare(th, e.cfg, Rng(1))
+        self.assertEqual(e.cfg["queue_service"], "det")
+        self.assertAlmostEqual(plan["block"], dm.injection_block_prob_det(plan["rho"], int(th.get("inj.queue_pkts"))), delta=1e-15)
+        e2 = vlib.neutral_engine(extra={"vid.bitrate_overshoot": 1.0}, cfg_over={"queue_service": "exp"})
+        plan2 = dm.prepare(th, e2.cfg, Rng(1))
+        self.assertAlmostEqual(plan2["block"], dm.injection_block_prob(plan2["rho"], int(th.get("inj.queue_pkts"))), delta=1e-15)
+        with self.assertRaises(ValueError):
+            dm.injection_block(1.0, 5, "gamma")
+
+    # ------------------------------------------------------------ D11: pi3bp - це проксі зі стовпця 3B, тег INF
+    def test_D11_pi3bp_current_rows_are_tagged_inf_not_src(self):
+        P = common.load()
+        for key in ("power.boards.pi3bp.board_idle_a", "power.boards.pi3bp.board_load_a"):
+            self.assertEqual(P.prov(key), "INF", key)
+            self.assertIn("3B", P.leaves[key]["note"])
+            self.assertIn("no 3B+", P.leaves[key]["note"].replace("NO 3B+", "no 3B+"))
+        self.assertEqual(P.get("power.boards.pi3bp.board_idle_a"), backtest.PI_DOC_TABLE["pi3b_column"]["idle_avg"])   # значення = стовпець 3B
+        self.assertEqual(P.get("power.boards.pi3bp.board_load_a"), backtest.PI_DOC_TABLE["pi3b_column"]["stress_avg"])
+        for key in ("power.boards.pi3bp.psu_recommended_a", "power.boards.pi3bp.usb_budget_a", "power.boards.pi3bp.board_active_a"):
+            self.assertEqual(P.prov(key), "SRC", key)   # ці рядки таблиці Pi справді для 3B+
+
+    # ------------------------------------------------------------ D12: слабкий БЖ дає інформативний розподіл
+    def test_D12_weak_psu_scenario_is_no_longer_degenerate(self):
+        e = eng("pi5_3a_weak_psu")
+        res = e.run(240, 1)
+        dead = sum(1 for r in res if r["dead"]) / len(res)
+        latched = sum(1 for r in res if r["flags"]["usb_latched"]) / len(res)
+        self.assertTrue(0.3 < dead < 0.9, "частка мертвих лінків %.2f: ні 0 %%, ні 100 %%" % dead)
+        self.assertTrue(0.3 < latched < 0.9)
+        alive = [r for r in res if not r["dead"]]
+        self.assertGreater(len(alive), 40)
+        av = [r["availability"] for r in alive]
+        self.assertGreater(max(av) - min(av), 0.2, "доступність живих draw має розкид")
+        s = se.summarize(e, res)
+        self.assertGreater(s["outputs"]["margin_db"]["p"][95] - s["outputs"]["margin_db"]["p"][5], 5.0)
+        self.assertGreater(s["outputs"]["range_m"]["p"][95], 100.0)
+        # вирішальний невідомий - частка струму TX, на яку реагує обмежувач: P(трип) зростає з w, w = 1 дає старий вердикт, w = 0 - жодного тріпу
+        pr = {}
+        for w in (0.0, 0.3, 0.6, 1.0):
+            ew = vlib.engine("pi5_3a_weak_psu", sets={"usb.pi5_trip_tx_weight": w})
+            rr = ew.run(60, 3)
+            pr[w] = sum(1 for r in rr if r["flags"]["usb_trip"]) / len(rr)
+        self.assertEqual(pr[0.0], 0.0)
+        self.assertTrue(pr[0.0] <= pr[0.3] <= pr[0.6] <= pr[1.0], pr)
+        self.assertGreater(pr[1.0], 0.9, "w = 1: кожен сплеск TX тріпає обмежувач (старий вердикт)")
+
+    def test_D12_trip_weight_prior_replaces_the_per_slice_coin_flip(self):
+        deg = priors.load_degrade()
+        self.assertNotIn("usb.gs_tx_burst_hz", deg.leaves)
+        lf = deg.leaves["usb.pi5_trip_tx_weight"]
+        self.assertEqual(lf["provenance"], "UNMEASURED")
+        self.assertIn("UNVERIFIED", lf["note"])
+        d = deg.dist("usb.pi5_trip_tx_weight")
+        self.assertEqual((d.kind, d.spec["a"], d.spec["b"]), ("beta", 0.5, 0.5))
+        self.assertTrue(any("usb.pi5_trip_tx_weight" in c["params"] for c in priors.load_degrade_doc()["sections"]["usb"]["calibration"]))
+
+    # ------------------------------------------------------------ g2g_ms мертвого лінка
+    def test_g2g_of_a_dead_link_is_none_not_the_typical_budget(self):
+        e = vlib.engine("pi5_3a_weak_psu")
+        res = e.run(80, 1)
+        dead = [r for r in res if r["dead"]]
+        self.assertGreater(len(dead), 25)
+        self.assertGreater(len(res) - len(dead), 10)
+        for r in dead:
+            self.assertIsNone(r["g2g_ms"])
+            self.assertIsNone(r["g2g_mean_ms"])
+        s = se.summarize(e, res)
+        self.assertEqual(s["outputs"]["g2g_ms"]["n"], len(res) - len(dead))
+        self.assertEqual(s["outputs"]["margin_db"]["n"], s["outputs"]["g2g_ms"]["n"])
+        txt = "\n".join(se.fmt_report(e, 80, 1, False, s))
+        self.assertIn("g2g_ms undefined", txt)
+        # живі draw мають скінченну затримку, і вона не дорівнює заглушці для всіх (є розкид)
+        live = [r["g2g_ms"] for r in res if not r["dead"]]
+        self.assertTrue(live and all(vlib.finite(x) and x > 0 for x in live))
+        # провал bring-up: теж None + dead
+        e2 = vlib.neutral_engine(extra={"bringup.usb_probe_fail_p": 1.0, "bringup.max_attempts": 1})
+        r = dm.run_session(e2.space.median_theta(), e2.cfg, Rng(1))
+        self.assertTrue(r["dead"] and r["g2g_ms"] is None and r["g2g_mean_ms"] is None and r["margin_db"] is None)
+        # Morris: перехід живий/мертвий не потрапляє в ефекти g2g_ms
+        key = "power.tx_peak_factor"
+
+        def fake(th, _rng):
+            dd = th.get(key) > e.space.median_theta().get(key)
+            r = {"g2g_ms": None if dd else 200.0, "dead": dd}
+            r.update({o: 0.5 for o in se.SENS_LINK if o != "g2g_ms"})
+            return r
+        with vlib.patched(e, "evaluate", fake):
+            tab, _noise = se.morris(e, 4, 1, list(se.SENS_LINK) + [se.SENS_DEAD])
+        self.assertTrue(all(mu == 0.0 for mu, _sg, _k, _p in tab["g2g_ms"]))
 
 
 class TestDocs(unittest.TestCase):

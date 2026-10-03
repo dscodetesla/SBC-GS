@@ -108,7 +108,7 @@ class Engine:
 def summarize(eng, res):
     out = {"outputs": {}, "modes": {}}
     for key, unit in eng.outputs:
-        # a dead link has no margin (None, D4): percentiles/mean are over the draws that have the quantity, `n` says how many
+        # a dead link has no margin and no latency (None, D4): percentiles/mean are over the draws that have the quantity, `n` says how many
         xs = [r[key] for r in res if r[key] is not None]
         out["outputs"][key] = {"unit": unit, "n": len(xs), "p": {q: dm.pctl(xs, q) for q in QS},
                                "mean": sum(xs) / len(xs) if xs else float("nan")}
@@ -127,9 +127,9 @@ def fmt_report(eng, n, seed, anti, summ):
     cfg = eng.cfg
     head = ["# scenario_engine: %s kind=%s n=%d seed=%d antithetic=%d" % (eng.sc["name"], eng.kind, n, seed, int(anti))]
     if eng.kind == "link":
-        head.append("# session: distance=%.0fm duration=%.0fs dt=%.0fs board=%s psu=%.1fA usb_max_current=%d codec=%s spec: residual<=%.3g g2g<=%.0fms freeze<=%.2g"
+        head.append("# session: distance=%.0fm duration=%.0fs dt=%.0fs board=%s psu=%.1fA usb_max_current=%d codec=%s queue=%s spec: residual<=%.3g g2g<=%.0fms freeze<=%.2g flag_share>=%.2g"
                     % (cfg["distance_m"], cfg["duration_s"], cfg["dt_s"], cfg["board"], cfg["psu_a"], int(cfg["usb_max_current"]), cfg["codec"],
-                       cfg["spec"]["residual"], cfg["spec"]["g2g_ms"], cfg["spec"]["freeze"]))
+                       cfg["queue_service"], cfg["spec"]["residual"], cfg["spec"]["g2g_ms"], cfg["spec"]["freeze"], cfg["spec"]["flag_share"]))
     head.append("# priors: %d sampled dims (%s); pinned: %s" % (len(sp.dims), " ".join("%s=%d" % (k, c[k]) for k in sorted(c)),
                                                                  ",".join(sorted(sp.pinned)) or "-"))
     out = head + ["output,unit,p5,p50,p95,p99,mean"]
@@ -138,8 +138,8 @@ def fmt_report(eng, n, seed, anti, summ):
         out.append("%s,%s,%s" % (key, unit, ",".join("%.4g" % o["p"][q] for q in QS) + ",%.4g" % o["mean"]))
     if eng.kind == "link":
         out.append("P(no failure in session)=%.3f  bring-up p50=%.1fs" % (summ["no_failure"], summ["bringup_s_p50"]))
-        out.append("P(dead link: no up slice, margin_db undefined)=%.3f; margin_db percentiles/mean are over the %d of %d draws with a link"
-                   % (summ["dead_frac"], summ["outputs"]["margin_db"]["n"], n))
+        out.append("P(dead link: no up slice, margin_db and g2g_ms undefined)=%.3f; their percentiles/means are over the %d (margin_db) / %d (g2g_ms) of %d draws with a link"
+                   % (summ["dead_frac"], summ["outputs"]["margin_db"]["n"], summ["outputs"]["g2g_ms"]["n"], n))
     out.append("failure_mode,probability")
     for m in eng.modes:
         out.append("%s,%.3f" % (m, summ["modes"][m]))
@@ -149,7 +149,7 @@ def fmt_report(eng, n, seed, anti, summ):
 
 # ---------------------------------------------------------------- Morris elementary effects
 def out_value(res, o):
-    """Numeric value of output `o` of one session result: None when it is undefined (a dead link has no margin, D4);
+    """Numeric value of output `o` of one session result: None when it is undefined (a dead link has no margin and no latency, D4);
     'dead' is the 0/1 indicator of the dead-link state (its own sensitivity row, kept apart from the physical margin)."""
     if o == "dead":
         return 1.0 if res["dead"] else 0.0
@@ -226,6 +226,9 @@ def prior_spread(eng, outputs, seed, n=24):
     spread = {}
     for o in outputs:
         xs = [v for v in (out_value(d, o) for d in res) if v is not None]
+        if len(xs) < 2:
+            spread[o] = float("nan")
+            continue
         m = sum(xs) / len(xs)
         spread[o] = math.sqrt(sum((v - m) ** 2 for v in xs) / (len(xs) - 1))
     return spread
@@ -239,7 +242,7 @@ def fmt_sensitivity(eng, r, seed, top=8):
            "# mu* = mean |effect| of moving one prior across ~2/3 of its quantile range, in OUTPUT units; share = mu*/sum(mu*); sigma = nonlinearity/interactions",
            "# noise = std of the output over 24 process seeds at the median parameters (what chance alone does)"]
     if eng.kind == "link":
-        out.append("# margin_db: effects only from pairs where the link works in both points; the alive<->dead step is the row `dead` (0/1, D4), kept out of `measure first`")
+        out.append("# margin_db, g2g_ms: effects only from pairs where the link works in both points; the alive<->dead step is the row `dead` (0/1, D4), kept out of `measure first`")
     measure_first = {}
     for o in outputs:
         rows = table[o]

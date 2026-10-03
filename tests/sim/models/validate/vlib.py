@@ -38,7 +38,7 @@ NEUTRAL = {
     "hw.air_board_heat_w": 0.0, "hw.air_rth_c_per_w": 0.1, "hw.tx_sag_knee_v": 0.0, "hw.air_supply_ripple_v": 0.0,
     "hw.air_supply_r_ohm": 0.0, "inj.ebusy_prob": 0.0, "inj.queue_pkts": 512.0, "inj.rate_cap_pps": 1e6,
     "bringup.usb_probe_fail_p": 0.0, "bringup.fw_fail_p": 0.0, "bringup.monitor_fail_p": 0.0, "bringup.inj_start_fail_p": 0.0,
-    "vid.bitrate_overshoot": 1.0, "usb.drop_rate_per_h": 1e-9, "usb.reenum_fail_prob": 0.0, "usb.pi5_trip_tol": 0.0,
+    "vid.bitrate_overshoot": 1.0, "usb.drop_rate_per_h": 1e-9, "usb.reenum_fail_prob": 0.0, "usb.pi5_trip_tol": 0.0, "usb.pi5_trip_tx_weight": 0.0,
     "rf.floor_per": 0.0, "timing.stall_rate_per_h": 0.0, "timing.reorder_prob": 0.0, "timing.sched_spike_prob": 0.0,
     "timing.clock_ppm": 0.0,
 }
@@ -126,6 +126,6 @@ def patched(mod, name, new):
 
 def clear_caches():
     dm.per_table.cache_clear()
-    dm._residual_q.cache_clear()
+    dm._residual_node.cache_clear()
     dm.fading_weights.cache_clear()
     dm.fading_per_table.cache_clear()

@@ -1,29 +1,29 @@
 # scenario_engine: nominal_pi5_5a_150m kind=link n=60 seed=1 antithetic=0
-# session: distance=150m duration=600s dt=20s board=pi5 psu=5.0A usb_max_current=0 codec=h265 spec: residual<=0.01 g2g<=250ms freeze<=1
-# priors: 145 sampled dims (INF=4 SYNTH=67 UNMEASURED=74); pinned: rf.fading_model,rf.loss_model
+# session: distance=150m duration=600s dt=20s board=pi5 psu=5.0A usb_max_current=0 codec=h265 queue=det spec: residual<=0.01 g2g<=250ms freeze<=1 flag_share>=0.1
+# priors: 146 sampled dims (INF=4 SYNTH=67 UNMEASURED=75); pinned: rf.fading_model,rf.loss_model
 output,unit,p5,p50,p95,p99,mean
-residual,frac,0.001196,0.04374,0.5113,0.9774,0.1179
-margin_db,dB,3.954,11.45,16.63,19.08,10.8
-range_m,m,81.03,351.3,1240,1479,416.2
-g2g_ms,ms,164,194.6,235.8,249.4,195.3
-availability,frac,0,0.8667,1,1,0.75
-ttff_s,s,0,120,600,600,215
-P(no failure in session)=0.150  bring-up p50=3.6s
-P(dead link: no up slice, margin_db undefined)=0.017; margin_db percentiles/mean are over the 59 of 60 draws with a link
+residual,frac,0.001049,0.04015,0.4149,0.734,0.1049
+margin_db,dB,2.727,12.57,20.03,20.65,11.43
+range_m,m,92.65,320,1134,1186,423.1
+g2g_ms,ms,162.6,192,231.9,251.5,195.9
+availability,frac,0,0.8613,1,1,0.7454
+ttff_s,s,0,110,600,600,214.3
+P(no failure in session)=0.133  bring-up p50=3.6s
+P(dead link: no up slice, margin_db and g2g_ms undefined)=0.017; their percentiles/means are over the 59 (margin_db) / 59 (g2g_ms) of 60 draws with a link
 failure_mode,probability
-bringup_fail,0.033
-thermal_derate,0.067
+bringup_fail,0.000
+thermal_derate,0.050
 thermal_shutdown,0.017
-usb_dropout,0.083
+usb_dropout,0.033
 usb_trip,0.000
 usb_latched,0.000
-undervoltage,0.167
-soc_throttle,0.033
+undervoltage,0.117
+soc_throttle,0.017
 agc_saturation,0.000
-desense,0.183
+desense,0.167
 burst_outage,0.300
-injection_overload,0.083
-idr_freeze,0.800
-latency_creep,0.117
-fec_exhaust,0.550
+injection_overload,0.050
+idr_freeze,0.833
+latency_creep,0.000
+fec_exhaust,0.533
 # SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99

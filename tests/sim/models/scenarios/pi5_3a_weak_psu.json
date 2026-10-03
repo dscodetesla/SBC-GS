@@ -1,6 +1,6 @@
 {
  "name": "pi5_3a_weak_psu",
- "description": "Same, but a 3 A PSU without usb_max_current_enable: Pi 5 USB limit 0.6 A (power_model budget).",
+ "description": "Same, but a 3 A PSU without usb_max_current_enable: Pi 5 USB limit 0.6 A (power_model budget). The outcome hinges on how much of the TX-burst current the port limiter reacts to (usb.pi5_trip_tx_weight, UNMEASURED; --set usb.pi5_trip_tx_weight=1 gives the worst case 'every TX burst trips it', D12).",
  "kind": "link",
  "cfg": {
   "distance_m": 150,

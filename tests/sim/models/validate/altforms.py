@@ -117,6 +117,21 @@ def thermal_two_pole(fast_share=0.4, fast_tau_ratio=0.2, slow_tau_ratio=2.5):
         dm.Thermal = orig
 
 
+@contextlib.contextmanager
+def queue_service(kind):
+    """Служба черги ін'єкції: 'exp' = M/M/1/K (форма до D10, песимістична), 'det' = M/D/1/K (типова для рушія). Підміняє dm.injection_block."""
+    orig = dm.injection_block
+
+    def alt(rho, k, service="det"):
+        return orig(rho, k, kind)
+
+    dm.injection_block = alt
+    try:
+        yield
+    finally:
+        dm.injection_block = orig
+
+
 FORMS = {
     "base": lambda: contextlib.nullcontext(),
     "per_logistic_k1.0": lambda: per_logistic(1.0),
@@ -125,4 +140,5 @@ FORMS = {
     "hazard_capped": lambda: hazard_form("capped"),
     "hazard_step": lambda: hazard_form("step"),
     "thermal_two_pole": lambda: thermal_two_pole(),
+    "queue_mm1k": lambda: queue_service("exp"),
 }
