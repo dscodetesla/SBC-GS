@@ -11,5 +11,6 @@ exit=0
 == file /etc/samba/smb.conf
 [global]
 == file /media/root-ro/etc/fstab
+== file /dev/ttyFIQ0
 == tree /etc/systemd/network
 D .

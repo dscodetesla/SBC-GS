@@ -21,9 +21,9 @@ sshd_config: PermitRootLogin yes
 chpasswd input: root:root
 == remaining known insecure defaults (ratchet: count may not increase)
 build/build.sh:238  ttyd runs as root (documented)
-gs/gs-init.sh:137  anonymous samba as root (documented)
-gs/gs-init.sh:146  anonymous samba as root (documented)
-gs/install.sh:30  public FPVue.key as working wfb key (documented)
+gs/gs-init.sh:160  anonymous samba as root (documented)
+gs/gs-init.sh:169  anonymous samba as root (documented)
+gs/install.sh:35  public FPVue.key as working wfb key (documented)
 gs/gs.conf:10  default AP password (documented)
 gs/gs.conf:118  default AP password (documented)
 gs/gs.conf:4  hotspot as default mode (documented)

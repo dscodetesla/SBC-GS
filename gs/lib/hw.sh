@@ -31,3 +31,10 @@ hw_fan_kernel_managed() { [ "$(_hw_get FAN_KERNEL_MANAGED 'no')" = 'yes' ]; }
 hw_dtbo_mode() { _hw_get DTBO_MODE 'rename'; }
 # partition table type: gpt (Radxa) or mbr (Pi OS images)
 hw_part_table() { _hw_get PART_TABLE 'gpt'; }
+# console device for the boot banner (Radxa: /dev/ttyFIQ0; Pi: the serial console of the profile)
+hw_console_tty() { _hw_get CONSOLE_TTY '/dev/ttyFIQ0'; }
+# network owner: networkd (systemd-networkd files, Radxa) or networkmanager (nmcli, Raspberry Pi OS)
+hw_net_backend() { _hw_get NET_BACKEND 'networkd'; }
+# label of the recording partition (Radxa: the partition made by gs-init.sh is labelled videos)
+hw_videos_label() { _hw_get PART_VIDEOS_LABEL 'videos'; }
+# partition number of the recording partition on the system disk (Radxa: 5 after gs-init.sh, but gs.sh used p4 as a legacy fallback)

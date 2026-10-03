@@ -53,3 +53,10 @@
 
 - ArduPilot Copter stable-4.7.0 (USER; тести SITL у проєкті на 4.7.1, різниця патчів не перевірена: UNVERIFIED), Mission Planner (USER: «1.3», ймовірно гілка 1.3.x), тип апарата FPV (мультикоптер).
 - Mission Planner як GCS шле heartbeat sysid 255 і може вмикати власне джойстик-перевизначення RC: той самий sysid, що й `MAV_GCS_SYSID` моста, тому Mission Planner НЕ повинен писати `RC_CHANNELS_OVERRIDE` одночасно з мостом (єдиний писач RC); heartbeat Mission Planner сам не вимикає GCS-failsafe при смерті моста (FS_GCS бачить будь-який heartbeat цього sysid): захист лишається на `RC_OVERRIDE_TIME`/RC-failsafe (`docs/SIM-TWIN.md`).
+
+## R7. Pi 3/4/5: NetworkManager лишається, `br0` через nmcli; профіль Pi 4 і Pi 5 зараз, Pi 3B+ пізніше
+
+- **Рішення (USER 2026-10-03):** на Raspberry Pi OS Bookworm мережею володіє NetworkManager (REPO: профілі `rpi4`/`rpi5`, `NET_BACKEND='networkmanager'`; SRC pi-gen@bookworm `stage2/02-net-tweaks` ставить `network-manager`). `gs-init.sh` створює `br0` через `gs/lib/net.sh` (`gs_net_nm_bridge`: nmcli, ідемпотентно, валідація імен і CIDR), а не файлами systemd-networkd, які лишаються для Radxa (`NET_BACKEND='networkd'`).
+- **Автовизначення плати (REPO `gs/lib/board.sh`):** `BOARD` env > `/etc/gs-board` (пише `gs/install.sh`) > `/proc/device-tree/model` за `DT_MODEL_PREFIX` профілю > `radxa-zero3`. Раніше на Pi нічого не виставляло `BOARD`, і скрипти тихо брали профіль Radxa. Покрито `tests/static/board-detect.sh` (L1/L2, не залізо).
+- **Не змінюється:** профіль Pi 3B+ (`rpi3bp`) відкладено; відеоплеєр на Pi (pixelpilot/mppvideodec Rockchip-специфічні; на Pi 5 декод на хості, R4) лишається відкритим; усі Pi-значення профілів UNVERIFIED до першого запуску на залізі (храповики rpi4 ≤ 8, rpi5 ≤ 4).
+- **Умова перегляду:** перший `gs-init` на реальному Pi: чи піднімається `br0` через nmcli після reboot, чи NetworkManager відповідає до gs-init (`gs_net_nm_wait 30`).

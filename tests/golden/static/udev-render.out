@@ -8,7 +8,7 @@ ok valid-pi
 <T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", KERNELS=="gadget", NAME="pigad0"
 <T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", ENV{ID_USB_DRIVER}=="cdc_ncm", NAME="usb0"
 <T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth*", ENV{ID_BUS}=="usb", NAME="eth1"
-<T>/pi/99-GS.rules:SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="wlan9", RUN+="/gs/wfb.sh $name"
+<T>/pi/99-GS.rules:SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="wlan9", RUN+="/usr/bin/systemd-run --no-block /gs/wfb.sh $name"
 <T>/pi/99-GS.rules:SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="remove", RUN+="/gs/wfb.sh"
 <T>/pi/99-GS.rules:ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEYBOARD}=="1", RUN+="/usr/bin/systemd-run /gs/button-kbd.py $devnode"
 <T>/pi/99-GS.rules:ACTION=="add", SUBSYSTEM=="block", KERNEL=="sda1", RUN+="/gs/button.sh mount_extdisk $devnode"

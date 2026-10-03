@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+function  not found
+== shim calls (sorted: background jobs make the order non-deterministic)
+gpiofind PIN_38
+gpiofind PIN_40
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

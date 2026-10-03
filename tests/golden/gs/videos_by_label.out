@@ -3,21 +3,21 @@
 exit=0
 == stdout
 start fan service
-start wfb in aggregator mode
+start wfb in standalone mode
 start stream service
 start button service
 gs service start completed
 == shim calls (sorted: background jobs make the order non-deterministic)
-findmnt -n -o SOURCE /
-fsck.exfat -a /dev/mmcblk0p4
+fsck.exfat -a <ROOT>/dev/disk/by-label/videos
 gpiofind PIN_22
 gpioset -D push-pull gpiochip0 22=0
 ip ro add 224.0.0.0/4 dev br0
-lsblk -no PKNAME /dev/mmcblk0p3
-mount /dev/mmcblk0p4 <ROOT>/Videos
+mount --bind <ROOT>/tmp/wifibroadcast.cfg <ROOT>/etc/wifibroadcast.cfg
+mount --bind <ROOT>/tmp/wifibroadcast.default <ROOT>/etc/default/wifibroadcast
+mount <ROOT>/dev/disk/by-label/videos <ROOT>/Videos
 stub gs-applyconf.sh 
 stub otg-gadget.sh 
-stub wfb.sh wifi0
+stub wfb.sh 
 systemctl enable --now ttyd
 systemctl is-enabled ttyd
 systemctl start webui
@@ -25,14 +25,4 @@ systemd-run --unit=button --property=Restart=on-failure --property=RestartSec=2 
 systemd-run --unit=fan --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/fan.sh
 systemd-run --unit=oled --property=Restart=on-failure --property=RestartSec=2 --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
 systemd-run --unit=stream --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/stream.sh
-systemd-run --unit=wfb-agg-mavlink --property=Restart=on-failure --property=RestartSec=2 wfb_rx -a 10001 -K /etc/gs.key -i 7669206 -c 224.0.0.1 -u 14550
-systemd-run --unit=wfb-agg-video --property=Restart=on-failure --property=RestartSec=2 wfb_rx -a 10000 -K /etc/gs.key -i 7669206 -c 224.0.0.1 -u 5600
 == gs.conf changes
-76c76
-< wfb_integrated_wnic=''
----
-> wfb_integrated_wnic='wifi0'
-89c89
-< wfb_mode='standalone'
----
-> wfb_mode='aggregator'

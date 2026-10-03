@@ -16,8 +16,8 @@ stub otg-gadget.sh
 systemctl enable --now ttyd
 systemctl is-enabled ttyd
 systemctl start webui
-systemd-run --unit=fan <ROOT>/gs/fan.sh
-systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=fan --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/fan.sh
+systemd-run --unit=oled --property=Restart=on-failure --property=RestartSec=2 --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
 == gs.conf changes
 22c22
 < video_on_boot='yes'

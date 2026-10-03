@@ -24,6 +24,6 @@ for f in 98-rename.rules 99-GS.rules; do
 		fi
 	done < <(grep -Ev '^[[:space:]]*(#|$)' "$f")
 done
-grep -q 'cp 99-GS.rules 98-rename.rules /etc/udev/rules.d/' install.sh && echo "ok install.sh ships both rule files" || { echo "FAIL install.sh rule copy"; bad=1; }
+grep -q 'boards/render-udev.sh "\$board_id" /etc/udev/rules.d/' install.sh && grep -q 'echo "\$board_id" > /etc/gs-board' install.sh && echo "ok install.sh renders the rules from the board profile and stores the id" || { echo "FAIL install.sh rule copy"; bad=1; }
 echo "bad=$bad"
 exit $bad

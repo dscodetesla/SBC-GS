@@ -1,0 +1,28 @@
+== precedence
+ok dt model Pi 5 -> rpi5
+ok dt model Pi 4 -> rpi4
+ok dt model Radxa -> radxa-zero3
+ok unknown dt model falls back to radxa-zero3 -> radxa-zero3
+ok no dt model, no file -> radxa-zero3
+ok /etc/gs-board beats dt model -> rpi4
+ok BOARD env beats /etc/gs-board -> rpi5
+== hostile input
+ok invalid /etc/gs-board ignored, dt model used -> rpi5
+ok nothing executed
+ok BOARD=../x rejected
+== profile keys the migration relies on
+ok radxa-zero3 DT_MODEL_PREFIX
+ok radxa-zero3 NET_BACKEND
+ok rpi4 DT_MODEL_PREFIX
+ok rpi4 NET_BACKEND
+ok rpi5 DT_MODEL_PREFIX
+ok rpi5 NET_BACKEND
+ok radxa NET_BACKEND -> networkd
+ok rpi5 NET_BACKEND -> networkmanager
+== nmcli bridge
+rc=0
+adds: 4
+net.sh: invalid bridge name or address: 'br0;x' '1.2.3.4/24' '5.6.7.8/24'
+net.sh: invalid bridge name or address: 'br0' '1.2.3.4' '5.6.7.8/24'
+net.sh: invalid port name 'e th'
+bad=0

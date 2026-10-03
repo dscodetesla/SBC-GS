@@ -4,7 +4,7 @@ ok rpi4 passes
 == mutation (copy): required key removed or emptied must be rejected
 ok 18 required keys: removal and emptying both rejected
 == every key has a src comment directly above
-ok 25 keys checked
+ok 27 keys checked
 == required keys all defined
 ok 18 required keys present
 == UNVERIFIED values (ratchet: must not grow)

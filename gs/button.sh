@@ -221,6 +221,12 @@ function execute_button_function() {
 	local single_press_function="${1}_single_press"
 	local long_press_function="${1}_long_press"
 	[ -z "${!single_press_function}" ] && [ -z "${!long_press_function}" ] && exit 0
+	# a pin without a GPIO line on this board (unknown name, an ID line, the wrong profile): gpiomon would fail at once and the loop below
+	# would spin at 100 % CPU. Report it and leave this button alone.
+	if [ -z "$(gpio_find "${!gpio_pin}" 2>/dev/null)" ]; then
+		echo "button ${1}: no GPIO line for pin '${!gpio_pin}' on this board, this button is disabled" >&2
+		exit 0
+	fi
 	while true; do
 		local action=$(button_action ${!gpio_pin})
 		case $action in
@@ -232,6 +238,7 @@ function execute_button_function() {
 				;;
 			*)
 				echo "unknow button action"
+				sleep 1   # never spin: a failing gpiomon would otherwise repeat this at full speed
 		esac
 
 	done

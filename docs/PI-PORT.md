@@ -169,3 +169,7 @@ Reference (не форкати): `OpenHD/OpenHD-ImageBuilder` (хрут-шабл
 - Профіль: GPIO через RP1 (`pinctrl-rp1`, лінії `GPIO<n>`, номер чипа не жорсткий), `OTG_CONTROLLER='none'` (обидва dwc3 лише host), вентилятор керує ядро (`pwm-fan`), консоль `/dev/ttyAMA10`, MBR-розмітка.
 
 **Умова перегляду:** якщо HEVC/GStreamer на Pi 5 під Bookworm не працює там, де потрібно (декод саме на Pi 5), або DKMS/виконання `88XXau_wfb` на 6.12/16K не проходить, перейти на Trixie (ядро 6.18, GStreamer 1.26.2); тоді переглянути профіль (libgpiod v2 без `gpiofind`, чорний список `rtw88_8812au`/`8821au`, патч `0001` стає зайвим).
+
+## 13. Що змінено для міграції Pi 3/4/5 (2026-10-03, REPO, не залізо)
+
+Див. `docs/DECISIONS.md` R7. Старт без Rockchip-припущень: плата визначається автоматично (`gs/lib/board.sh`), `gs-init.sh` не чіпає таблицю розділів MBR і оверлеї `config-txt`, `br0` через nmcli, консоль `/dev/ttyFIQ0` необов'язкова, блок gadget `radxa0` лише при `otg_supported`; `gs.sh` знаходить розділ відео за міткою (`/dev/disk/by-label/videos`), збій fsck/mount не зупиняє завантаження, служби вертаються через `Restart=on-failure`; `stream.sh` чекає будь-який HDMI-конектор (`card*-HDMI-A-*`, опційно `hdmi_wait_timeout`), порт OSD береться з `osd_mavlink_port`; udev-правило hotplug WiFi запускає `wfb.sh` через `systemd-run --no-block`. Необов'язкові ключі `gs.conf`: `hdmi_wait_timeout` (секунди, 0 = чекати вічно), `osd_mavlink_port` (за замовчуванням 14550). Профіль Pi 3B+ не робився.

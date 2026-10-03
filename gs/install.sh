@@ -23,7 +23,12 @@ cp gs.conf custom-sample.conf custom-bonnet.conf /config/
 [ -d /etc/pixelpilot ] || mkdir -p /etc/pixelpilot
 cp pixelpilot_osd.json pixelpilot_osd_simple.json pixelpilot_msposd.json pixelpilot_osd_osmon.json /etc/pixelpilot/
 cp gs.service gs-init.service /etc/systemd/system/
-cp 99-GS.rules 98-rename.rules /etc/udev/rules.d/
+# udev rules rendered from the board profile (the onboard WiFi name/driver differ: Radxa aicwf_sdio, Raspberry Pi brcmfmac): BOARD env, else
+# detected from the device tree (lib/board.sh); the id is stored in /etc/gs-board so that every script uses the same profile
+board_id="$(BOARD="${BOARD:-}" bash -c '. ./lib/board.sh && printf %s "$BOARD"')"
+echo "board profile: $board_id"
+./boards/render-udev.sh "$board_id" /etc/udev/rules.d/ || exit 1
+echo "$board_id" > /etc/gs-board
 cp ../pics/OpenIPC.png ${install_dir}/wallpaper.png
 systemctl enable gs-init.service
 systemctl enable gs.service

@@ -30,6 +30,16 @@ for casefile in "$HERE"/cases/*/*.sh; do
 	else echo "DIFF     $suite/$name"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 done
+# static check of the board auto-detection and the NetworkManager bridge helper (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/board-detect" ]; then
+	out="$(mktemp)"; "$HERE/static/board-detect.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/board-detect.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/board-detect"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/board-detect"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/board-detect"
+	else echo "DIFF     static/board-detect"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+fi
+
 # static check of the udev rules (no sandbox needed)
 if [ -z "$want" ] || [ "$want" = "static/udev" ]; then
 	out="$(mktemp)"; "$HERE/static/udev.sh" > "$out" 2>&1 || fail=1

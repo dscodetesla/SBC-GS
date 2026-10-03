@@ -116,10 +116,24 @@ check_record_freespace() {
 }
 
 gencmd
-# wait monitor connected
-while true; do
-	monitor_status=$(cat /sys/class/drm/card0-HDMI-A-1/status)
-	[ "$monitor_status" == "connected" ] && break
+# wait monitor connected: ANY HDMI connector (the DRM card number differs: Radxa card0, a Pi 4/5 usually card1 with the vc4 KMS driver), with a
+# log line every 30 s, and an optional give-up time (hdmi_wait_timeout seconds, 0 = wait forever as before)
+hdmi_connected() {
+	local f
+	for f in /sys/class/drm/card*-HDMI-A-*/status; do
+		[ -r "$f" ] || continue
+		[ "$(cat "$f")" == "connected" ] && return 0
+	done
+	return 1
+}
+hdmi_waited=0
+until hdmi_connected; do
+	hdmi_waited=$((hdmi_waited + 1))
+	[ $((hdmi_waited % 30)) -ne 0 ] || echo "stream.sh: still waiting for an HDMI monitor (${hdmi_waited} s)"
+	if [ "${hdmi_wait_timeout:-0}" -gt 0 ] && [ "$hdmi_waited" -ge "${hdmi_wait_timeout:-0}" ]; then
+		echo "stream.sh: no HDMI monitor after ${hdmi_waited} s, starting the player anyway"
+		break
+	fi
 	sleep 1
 done
 if [[ "$record_on" == "boot" && "$(check_record_freespace)" == "sufficient" ]]; then
@@ -143,7 +157,7 @@ if [ "$osd_enable" == "yes" ]; then
 			msposd --master 0.0.0.0:$msposd_gs_port --osd -r $msposd_gs_fps --ahi $msposd_gs_ahi
 		fi
 	elif [ "$video_player" == "gstreamer" ]; then
-		wfb-ng-osd -p 14550
+		wfb-ng-osd -p ${osd_mavlink_port:-14550}
 	fi
 fi
 ) &
@@ -155,15 +169,22 @@ fi
 [ -p /run/record_button.fifo ] || mkfifo /run/record_button.fifo
 while read record_button_action < /run/record_button.fifo; do
 	[ "$record_button_action" == "single" ] || continue
+	# a dead player cannot be signalled (kill would abort this script under set -e and nothing would bring the video back): exit non-zero so
+	# that systemd restarts the stream unit (systemd-run --property=Restart=on-failure in gs.sh) and with it the player and the OSD
+	if ! kill -0 "$pid_player" 2>/dev/null; then
+		echo "stream.sh: the player (pid $pid_player) is not running: exiting so that systemd restarts the stream service" >&2
+		echo "player stopped, restarting" > /run/pixelpilot.msg
+		exit 1
+	fi
 	if [ "$video_record" == "0" ]; then
 		if [ "$(check_record_freespace)" == "insufficient" ]; then
 			echo "No enough record space!" > /run/pixelpilot.msg
 			continue
 		fi
 		if [ "$video_player" == "pixelpilot" ]; then
-			kill -SIGUSR1 $pid_player
+			kill -SIGUSR1 $pid_player || true
 		else
-			kill -15 $pid_player
+			kill -15 $pid_player || true
 			sleep 0.2
 			gencmd
 			bash -c "$video_rec_cmd" &
@@ -184,9 +205,9 @@ while read record_button_action < /run/record_button.fifo; do
 		[ -z $pid_led ] || kill $pid_led
 		sleep 1.2 && gpioset -D $red_led_drive ${GPIO_RED_LED}=0 &
 		if [ "$video_player" == "pixelpilot" ]; then
-			kill -SIGUSR1 $pid_player
+			kill -SIGUSR1 $pid_player || true
 		else
-			kill -15 $pid_player
+			kill -15 $pid_player || true
 			sleep 0.2
 			bash -c "$video_play_cmd" &
 			pid_player=$!

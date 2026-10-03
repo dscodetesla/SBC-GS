@@ -19,8 +19,8 @@ stub wfb.sh
 systemctl enable --now ttyd
 systemctl is-enabled ttyd
 systemctl start webui
-systemd-run --unit=button <ROOT>/gs/button.sh
-systemd-run --unit=fan <ROOT>/gs/fan.sh
-systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
-systemd-run --unit=stream <ROOT>/gs/stream.sh
+systemd-run --unit=button --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/button.sh
+systemd-run --unit=fan --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/fan.sh
+systemd-run --unit=oled --property=Restart=on-failure --property=RestartSec=2 --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=stream --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/stream.sh
 == gs.conf changes

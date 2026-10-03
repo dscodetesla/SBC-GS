@@ -27,11 +27,11 @@ systemctl is-enabled ttyd
 systemctl start chrony gpsd
 systemctl start rtsp@h265
 systemctl start webui
-systemd-run --unit=alink /usr/local/bin/alink --config <ROOT>/etc/alink.conf
-systemd-run --unit=button <ROOT>/gs/button.sh
-systemd-run --unit=fan <ROOT>/gs/fan.sh
-systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
-systemd-run --unit=stream <ROOT>/gs/stream.sh
+systemd-run --unit=alink --property=Restart=on-failure --property=RestartSec=2 /usr/local/bin/alink --config <ROOT>/etc/alink.conf
+systemd-run --unit=button --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/button.sh
+systemd-run --unit=fan --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/fan.sh
+systemd-run --unit=oled --property=Restart=on-failure --property=RestartSec=2 --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=stream --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/stream.sh
 == gs.conf changes
 92c92
 < wfb_rtsp_server_enable='no'

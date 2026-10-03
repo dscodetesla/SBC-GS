@@ -19,8 +19,8 @@ mount /dev/mmcblk0p4 <ROOT>/Videos
 stub gs-applyconf.sh 
 stub wfb.sh 
 systemctl is-enabled ttyd
-systemd-run --unit=button <ROOT>/gs/button.sh
-systemd-run --unit=stream <ROOT>/gs/stream.sh
+systemd-run --unit=button --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/button.sh
+systemd-run --unit=stream --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/stream.sh
 == gs.conf changes
 184c184
 < webui_enable='yes'
