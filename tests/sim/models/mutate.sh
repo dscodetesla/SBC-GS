@@ -29,6 +29,14 @@ MUTS=(
 "M12 button long threshold 200 -> 100 cs|params.degrade.json|s=s.replace('\"value\": 200,','\"value\": 100,')"
 "M13 debounce filter disabled|gpio_bounce.py|s=s.replace('    if window_s <= 0:\n        return list(trace)','    return list(trace)')"
 "M14 bring-up never fails|degrade_model.py|s=s.replace('            if rng.u() >= p:','            if rng.u() >= 0.0 * p:')"
+"M15 AIR heat independent of the radiated power (D1 restored)|degrade_model.py|s=s.replace('p_dc = p_idle + p_rf_w / eta','p_dc = p_idle + p_rf_ref_w / eta')"
+"M16 AIR idle power may go negative (energy not conserved, D1b restored)|degrade_model.py|s=s.replace('p_idle = max(0.0, p_dc_ref - p_rf_ref_w / eta)','p_idle = p_dc_ref - p_rf_ref_w / eta')"
+"M17 measured current no longer wins over the efficiency prior (heat flat in the current)|degrade_model.py|s=s.replace('max(1.0 - diss_frac, 1e-3, p_rf_ref_w / p_dc_ref if p_dc_ref > 0 else 1.0)','max(1.0 - diss_frac, 1e-3)')"
+"M18 dead link reports the stub margin -60 dB again (D4 restored)|degrade_model.py|s=s.replace('\"margin_db\": sum(mar_l) / len(mar_l) if mar_l else None','\"margin_db\": sum(mar_l) / len(mar_l) if mar_l else -60.0')"
+"M19 Morris takes the alive<->dead step as a margin effect|scenario_engine.py|s=s.replace('if a is None or b is None:','if False:')"
+"M20 fading average loses the deep-fade tail (G >= -6 dB only, D9 restored)|degrade_model.py|s=s.replace('_FADE_JLO, _FADE_JHI, _FADE_SUB = -240, 40, 16','_FADE_JLO, _FADE_JHI, _FADE_SUB = -24, 40, 16')"
+"M21 fading average = 32 equiprobable quantiles again (D9 restored)|degrade_model.py|s=s.replace('        w.append(m)\n    tot = sum(w)','        w.append(m if j % 8 == 0 else 0.0)\n    tot = sum(w)')"
+"M22 dead flag lost (margin None but dead False)|degrade_model.py|s=s.replace('\"dead\": not mar_l,','\"dead\": False,')"
 )
 fail=0
 for m in "${MUTS[@]}"; do

@@ -72,6 +72,8 @@ def parse_file(path, rows, owner=None):
             line = line[:-1]
         if n == len(raw.split("\n")) and line == "":
             continue
+        if "\x00" in line:  # shell loader rejects any NUL in the file (bash `read` would drop it silently): same verdict, also in comments
+            raise ConfigError(f"{path}:{n}: control character in line")
         if _BLANK.match(line):
             continue
         if re.search(r"[\x00-\x08\x0a-\x1f\x7f]", line):

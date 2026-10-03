@@ -41,6 +41,7 @@ BUTTON_OUTPUTS = (("false_event", "frac"), ("false_event_single", "frac"), ("fal
 BUTTON_MODES = ("button_false_event",)
 QS = (5, 50, 95, 99)
 SENS_LINK = ("residual", "margin_db", "range_m", "g2g_ms", "availability", "ttff_s")
+SENS_DEAD = "dead"  # extra sensitivity row: 0/1 indicator of a link that never works (D4); not part of the "measure first" sum
 
 
 def list_scenarios():
@@ -107,11 +108,14 @@ class Engine:
 def summarize(eng, res):
     out = {"outputs": {}, "modes": {}}
     for key, unit in eng.outputs:
-        xs = [r[key] for r in res]
-        out["outputs"][key] = {"unit": unit, "p": {q: dm.pctl(xs, q) for q in QS}, "mean": sum(xs) / len(xs)}
+        # a dead link has no margin (None, D4): percentiles/mean are over the draws that have the quantity, `n` says how many
+        xs = [r[key] for r in res if r[key] is not None]
+        out["outputs"][key] = {"unit": unit, "n": len(xs), "p": {q: dm.pctl(xs, q) for q in QS},
+                               "mean": sum(xs) / len(xs) if xs else float("nan")}
     for m in eng.modes:
         out["modes"][m] = sum(1 for r in res if r["flags"][m]) / len(res)
     if eng.kind == "link":
+        out["dead_frac"] = sum(1 for r in res if r["dead"]) / len(res)
         out["no_failure"] = sum(1 for r in res if r["ttff_censored"]) / len(res)
         out["bringup_s_p50"] = dm.pctl([r["bringup_s"] for r in res], 50)
     return out
@@ -134,6 +138,8 @@ def fmt_report(eng, n, seed, anti, summ):
         out.append("%s,%s,%s" % (key, unit, ",".join("%.4g" % o["p"][q] for q in QS) + ",%.4g" % o["mean"]))
     if eng.kind == "link":
         out.append("P(no failure in session)=%.3f  bring-up p50=%.1fs" % (summ["no_failure"], summ["bringup_s_p50"]))
+        out.append("P(dead link: no up slice, margin_db undefined)=%.3f; margin_db percentiles/mean are over the %d of %d draws with a link"
+                   % (summ["dead_frac"], summ["outputs"]["margin_db"]["n"], n))
     out.append("failure_mode,probability")
     for m in eng.modes:
         out.append("%s,%.3f" % (m, summ["modes"][m]))
@@ -142,6 +148,14 @@ def fmt_report(eng, n, seed, anti, summ):
 
 
 # ---------------------------------------------------------------- Morris elementary effects
+def out_value(res, o):
+    """Numeric value of output `o` of one session result: None when it is undefined (a dead link has no margin, D4);
+    'dead' is the 0/1 indicator of the dead-link state (its own sensitivity row, kept apart from the physical margin)."""
+    if o == "dead":
+        return 1.0 if res["dead"] else 0.0
+    return res[o]
+
+
 def morris(eng, r, seed, outputs):
     """Morris screening in quantile space. Returns {output: [(mu_star, sigma, key, prov)] sorted desc}, noise {output: std}."""
     sp = eng.space
@@ -169,16 +183,22 @@ def morris(eng, r, seed, outputs):
             x2[i] = nx
             new = f(x2)
             for o in outputs:
-                ee[o][i].append((new[o] - cur[o]) / (lev[nx] - lev[x[i]]))
+                a, b = out_value(new, o), out_value(cur, o)
+                if a is None or b is None:  # no effect on an undefined quantity: the alive<->dead step is the row of "dead"
+                    continue
+                ee[o][i].append((a - b) / (lev[nx] - lev[x[i]]))
             x, cur = x2, new
     table = {}
     for o in outputs:
         rows = []
         for i, key in enumerate(sp.keys):
             e = ee[o][i]
+            if not e:
+                rows.append((0.0, 0.0, key, sp.prov_of[key]))
+                continue
             mu_star = sum(abs(v) for v in e) / len(e)
             m = sum(e) / len(e)
-            sig = math.sqrt(sum((v - m) ** 2 for v in e) / max(len(e) - 1, 1))
+            sig = math.sqrt(sum((v - m) ** 2 for v in e) / (max(len(e) - 1, 1)))
             # snap platform-dependent floating-point noise (libm/rounding differ between machines): equal effects must tie
             # (then ordered by key) and a sigma that is only rounding error is exactly 0, so the golden files are portable
             mu_star = float("%.9g" % mu_star)
@@ -191,7 +211,10 @@ def morris(eng, r, seed, outputs):
     outs = [eng.evaluate(med, Rng(subseed(seed, s, 7))) for s in range(24)]
     noise = {}
     for o in outputs:
-        xs = [d[o] for d in outs]
+        xs = [v for v in (out_value(d, o) for d in outs) if v is not None]
+        if len(xs) < 2:
+            noise[o] = float("nan")
+            continue
         m = sum(xs) / len(xs)
         noise[o] = math.sqrt(sum((v - m) ** 2 for v in xs) / (len(xs) - 1))
     return table, noise
@@ -202,19 +225,21 @@ def prior_spread(eng, outputs, seed, n=24):
     res = eng.run(n, seed + 11)
     spread = {}
     for o in outputs:
-        xs = [d[o] for d in res]
+        xs = [v for v in (out_value(d, o) for d in res) if v is not None]
         m = sum(xs) / len(xs)
         spread[o] = math.sqrt(sum((v - m) ** 2 for v in xs) / (len(xs) - 1))
     return spread
 
 
 def fmt_sensitivity(eng, r, seed, top=8):
-    outputs = [o for o, _u in eng.outputs] if eng.kind == "button" else list(SENS_LINK)
+    outputs = [o for o, _u in eng.outputs] if eng.kind == "button" else list(SENS_LINK) + [SENS_DEAD]
     table, noise = morris(eng, r, seed, outputs)
     out = ["# sensitivity (Morris elementary effects in prior-quantile space): scenario=%s kind=%s dims=%d r=%d seed=%d"
            % (eng.sc["name"], eng.kind, len(eng.space.dims), r, seed),
            "# mu* = mean |effect| of moving one prior across ~2/3 of its quantile range, in OUTPUT units; share = mu*/sum(mu*); sigma = nonlinearity/interactions",
            "# noise = std of the output over 24 process seeds at the median parameters (what chance alone does)"]
+    if eng.kind == "link":
+        out.append("# margin_db: effects only from pairs where the link works in both points; the alive<->dead step is the row `dead` (0/1, D4), kept out of `measure first`")
     measure_first = {}
     for o in outputs:
         rows = table[o]
@@ -224,11 +249,13 @@ def fmt_sensitivity(eng, r, seed, top=8):
         out.append("rank,parameter,provenance,mu_star,sigma,share_pct")
         for i, (mu, sg, key, prov) in enumerate(rows[:top]):
             out.append("%d,%s,%s,%.4g,%.4g,%.1f" % (i + 1, key, prov, mu, sg, 100.0 * mu / tot))
+        if o == SENS_DEAD:
+            continue
         for mu, _sg, key, prov in rows:
             if prov in ("UNMEASURED", "SYNTH"):
                 measure_first[key] = measure_first.get(key, 0.0) + 100.0 * mu / tot
     out.append("")
-    out.append("## measure first (UNMEASURED/SYNTH parameters ranked by summed share over %d outputs)" % len(outputs))
+    out.append("## measure first (UNMEASURED/SYNTH parameters ranked by summed share over %d outputs)" % len([o for o in outputs if o != SENS_DEAD]))
     out.append("rank,parameter,provenance,summed_share_pct")
     for i, (key, sh) in enumerate(sorted(measure_first.items(), key=lambda t: (-t[1], t[0]))[:12]):
         out.append("%d,%s,%s,%.1f" % (i + 1, key, eng.space.prov_of[key], sh))

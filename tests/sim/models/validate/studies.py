@@ -62,7 +62,7 @@ def convergence(quick=False, scn=SCN):
     out = ["## convergence (бутстреп 90 %% ДІ, пул %d draw, сценарій %s): півширина ДІ як частка (p95-p5) пулу" % (len(pool), scn),
            "output,q,pool_value,spread,n=50,100,200,400,800,1600 (півширина/spread); n* = мін. n з півширина<=0.10 spread"]
     for o in vlib.OUT_LINK:
-        xs = [r[o] for r in pool]
+        xs = [r[o] for r in pool if r[o] is not None]  # мертвий лінк не має margin (D4)
         sp = vlib.pctl(xs, 95) - vlib.pctl(xs, 5)
         for q in (5, 50, 95):
             row, nstar = [], None
@@ -140,7 +140,7 @@ def _anti_job(a):
     res = vlib.engine(scn).run(n, seed, anti)
     d = {}
     for o in vlib.OUT_LINK:
-        xs = [r[o] for r in res]
+        xs = [r[o] for r in res if r[o] is not None]  # мертвий лінк не має margin (D4)
         d[o] = (sum(xs) / len(xs), vlib.pctl(xs, 50), vlib.pctl(xs, 95))
     return d
 
@@ -193,7 +193,7 @@ def structural(quick=False, scn=SCN):
         for o in ("residual", "margin_db", "range_m", "g2g_ms", "availability"):
             p = s["outputs"][o]["p"]
             b = base_s["outputs"][o]["p"]
-            hw = vlib.bootstrap_halfwidth([x[o] for x in pool], n, 50, rnd, B=100)
+            hw = vlib.bootstrap_halfwidth([x[o] for x in pool if x[o] is not None], n, 50, rnd, B=100)  # мертвий лінк не має margin (D4)
             sig = abs(p[50] - b[50]) > hw
             out.append("%s,%s,%.4g,%.4g,%.4g  dp50=%+.3g (ДІ бази +-%.3g)%s" % (form, o, p[5], p[50], p[95], p[50] - b[50], hw,
                                                                            " ЗНАЧУЩА ЗМІНА" if sig and form != "base" else ""))

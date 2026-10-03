@@ -696,6 +696,162 @@ class TestCatalogAndDocs(unittest.TestCase):
             self.assertIn(w, txt)
 
 
+class TestAirEnergyBalance(unittest.TestCase):
+    """D1/D1b: AIR heat = P_dc - P_rf, grows with the radiated power; energy is conserved on every prior draw."""
+
+    def test_heat_identity_monotone_and_conserved(self):
+        r = Rng(11)
+        for _ in range(500):
+            v, i, dfr, ref, prf = 4.5 + r.u(), 0.4 + 1.5 * r.u(), 0.7 + 0.25 * r.u(), 0.05 + 1.2 * r.u(), 1.5 * r.u()
+            pdc, heat, eta = dm.air_tx_power_w(v, i, prf, ref, dfr)
+            self.assertAlmostEqual(pdc - prf, heat, places=12)
+            self.assertTrue(pdc >= prf and heat >= 0.0 and 0.0 < eta <= 1.0)
+            self.assertGreater(dm.air_tx_power_w(v, i, prf + 0.1, ref, dfr)[1], heat)
+            self.assertGreater(dm.air_tx_power_w(v, i + 0.1, prf, ref, dfr)[1], heat)
+
+    def test_current_at_rated_output_is_reproduced(self):
+        # at the rated output the model returns the sampled DC power (when the efficiency prior allows it): P_dc = V*I
+        pdc, heat, _eta = dm.air_tx_power_w(5.0, 1.0, 0.5, 0.5, 0.8)  # eta 0.2 -> PA DC 2.5 W <= 5 W
+        self.assertAlmostEqual(pdc, 5.0, places=12)
+        self.assertAlmostEqual(heat, 4.5, places=12)
+        pdc, _h, eta = dm.air_tx_power_w(5.0, 0.2, 0.5, 0.5, 0.8)  # PA would need 2.5 W > 1 W: the measured current wins
+        self.assertAlmostEqual(pdc, 1.0, places=12)
+        self.assertAlmostEqual(eta, 0.5, places=12)
+
+    def test_no_violation_on_prior_draws(self):
+        e = engine()
+        r = Rng(5)
+        k = len(e.space.dims)
+        for _ in range(400):
+            th = e.space.theta([r.u() for _ in range(k)])
+            g = th.get
+            prf = dm.dbm_to_mw(dm.pa_output_dbm(g("rf.tx_power_dbm"), g("hw.pa_p1db_out_dbm"), g("hw.pa_rapp_p"))) / 1000.0
+            pdc, heat, _eta = dm.air_tx_power_w(g("hw.air_bec_v"), g("power.devices.rtl8812_tx_a"), prf, dm.dbm_to_mw(g("hw.pa_p1db_out_dbm")) / 1000.0,
+                                                g("hw.air_diss_frac"))
+            self.assertLessEqual(prf + heat, pdc * (1 + 1e-12))
+
+    def test_junction_temperature_grows_with_rf_power_in_a_session(self):
+        tj = []
+        for tx in (20.0, 24.0, 27.0):
+            e = engine("hot_day_closed_case", sets={"rf.tx_power_dbm": tx})
+            o = dm.run_session(e.space.median_theta(), e.cfg, Rng(1))
+            tj.append(o["tj_end_c"])
+            self.assertAlmostEqual(o["air_energy"]["dc_w"] - o["air_energy"]["rf_w"], o["air_energy"]["heat_w"], places=12)
+        self.assertTrue(tj[0] + 1.0 < tj[1] and tj[1] + 1.0 < tj[2], tj)
+
+    def test_backing_off_cools_more_when_the_current_is_rf_proportional(self):
+        # the TX current is measured at the rated output; flight power is lower. A PA whose DC is mostly proportional to the RF output
+        # (low eta: the measured current wins, idle = 0) sheds more DC when backed off than a PA with a large fixed idle (eta 30 %)
+        tj = []
+        for dfr in (0.70, 0.95):
+            e = engine("hot_day_closed_case", sets={"hw.air_diss_frac": dfr})
+            tj.append(dm.run_session(e.space.median_theta(), e.cfg, Rng(1))["tj_end_c"])
+        self.assertGreater(tj[0], tj[1])
+
+
+class TestDeadLink(unittest.TestCase):
+    """D4: a link that never works has margin None + dead=True, never a stub number inside the physical range."""
+
+    def test_bringup_failure_is_dead_without_margin(self):
+        e = engine("nominal_pi5_5a_150m", sets={"bringup.usb_probe_fail_p": 1.0, "bringup.max_attempts": 1})
+        o = dm.run_session(e.space.median_theta(), e.cfg, Rng(1))
+        self.assertTrue(o["dead"] and o["margin_db"] is None and o["margin_p5_db"] is None)
+        self.assertEqual((o["availability"], o["residual"]), (0.0, 1.0))
+
+    def test_working_link_has_finite_margin_and_not_dead(self):
+        o = dm.run_session(engine().space.median_theta(), engine().cfg, Rng(1))
+        self.assertFalse(o["dead"])
+        self.assertTrue(math.isfinite(o["margin_db"]) and math.isfinite(o["margin_p5_db"]))
+
+    def test_summary_excludes_dead_draws_and_reports_their_share(self):
+        e = engine("pi5_3a_weak_psu")
+        res = e.run(24, 1)
+        s = se.summarize(e, res)
+        dead = sum(1 for r in res if r["dead"])
+        self.assertGreater(dead, 0)
+        self.assertEqual(s["outputs"]["margin_db"]["n"], len(res) - dead)
+        self.assertAlmostEqual(s["dead_frac"], dead / len(res))
+        txt = "\n".join(se.fmt_report(e, 24, 1, False, s))
+        self.assertIn("P(dead link", txt)
+        self.assertNotIn("-60,-60", txt)
+
+    def test_morris_keeps_the_dead_state_out_of_margin(self):
+        e = engine()
+        key = "power.tx_peak_factor"
+        med = e.space.median_theta().get(key)
+
+        def fake(th, _rng):
+            dead = th.get(key) > med
+            r = {"margin_db": None if dead else 10.0, "dead": dead}
+            r.update({o: 0.5 for o in se.SENS_LINK if o != "margin_db"})
+            return r
+        e.evaluate = fake
+        tab, noise = se.morris(e, 3, 1, list(se.SENS_LINK) + [se.SENS_DEAD])
+        self.assertTrue(all(mu == 0.0 for mu, _sg, _k, _p in tab["margin_db"]))
+        self.assertEqual(tab[se.SENS_DEAD][0][2], key)
+        self.assertEqual(noise["margin_db"], 0.0)
+
+    def test_sensitivity_report_has_dead_row_but_not_in_measure_first(self):
+        e = engine("nominal_pi5_5a_150m", cfg={"duration_s": 100.0, "dt_s": 50.0})
+        txt = "\n".join(se.fmt_sensitivity(e, 2, 1)[0])
+        self.assertIn("## output dead", txt)
+        self.assertIn("summed share over 6 outputs", txt)
+
+
+class TestFadingQuadrature(unittest.TestCase):
+    """D9: the fading average of the PER is an integral over the pdf, not 32 quantiles: the tail is right."""
+
+    @staticmethod
+    def rician_ref(tab, snr, kdb, n=20000, xmax=4.0):
+        k = 10 ** (kdb / 10.0)
+
+        def i0(z):
+            t, s, term, j = (z / 2.0) ** 2, 1.0, 1.0, 1
+            while term > 1e-17 * s:
+                term *= t / (j * j)
+                s += term
+                j += 1
+            return s
+        h = xmax / n
+        tot = mass = 0.0
+        for i in range(n):
+            x = (i + 0.5) * h
+            p = (k + 1) * math.exp(-k - (k + 1) * x) * i0(2 * math.sqrt(k * (k + 1) * x)) * h
+            mass += p
+            tot += p * dm.per_lookup(tab, snr + 10 * math.log10(x))
+        return tot / mass
+
+    def test_weights_are_a_probability_with_unit_mean_power(self):
+        for model, k in (("rician", 5.0), ("rician", 15.0), ("rayleigh", 0.0)):
+            w = dm.fading_weights(model, k)
+            self.assertAlmostEqual(sum(w), 1.0, places=12)
+            self.assertAlmostEqual(sum(x * 10 ** ((dm._FADE_JLO + i) * 0.25 / 10.0) for i, x in enumerate(w)), 1.0, delta=3e-3)
+        self.assertEqual(dm.fading_weights("none", 0.0)[-dm._FADE_JLO], 1.0)
+
+    def test_tail_matches_independent_integration(self):
+        tab = dm.per_table(1, False, 1456)
+        ft = dm.fading_per_table(1, False, 1456, "rician", 10.0)
+        for snr in (8.0, 15.0, 22.0):
+            ref = self.rician_ref(tab, snr, 10.0)
+            self.assertAlmostEqual(dm.per_lookup(ft, snr) / ref, 1.0, delta=0.04, msg="snr %s" % snr)
+        self.assertGreater(dm.per_lookup(ft, 15.0), 1.5e-3)  # the 32-quantile estimate was 2.4e-7 here
+
+    def test_deep_fade_tail_is_present_for_rayleigh_and_decays_like_1_over_snr(self):
+        ft = dm.fading_per_table(1, False, 1456, "rayleigh", 0.0)
+        p20, p30 = dm.per_lookup(ft, 20.0), dm.per_lookup(ft, 30.0)
+        self.assertAlmostEqual(math.log10(p20 / p30), 1.0, delta=0.2)  # Rayleigh diversity order 1: -10 dB per decade
+
+    def test_none_is_plain_table_and_tables_are_cached(self):
+        self.assertIs(dm.fading_per_table(1, False, 1456, "none", 0.0), dm.per_table(1, False, 1456))
+        self.assertIs(dm.fading_per_table(3, False, 1456, "rician", 7.5), dm.fading_per_table(3, False, 1456, "rician", 7.5))
+
+    def test_engine_uses_the_faded_table(self):
+        e = engine()
+        plan = dm.prepare(e.space.median_theta(), e.cfg, Rng(1))
+        self.assertIn("ftab", plan)
+        self.assertNotIn("gains", plan)
+
+
 class TestGolden(unittest.TestCase):
     """Four reference scenarios and two sensitivity tables, full text compared with golden/*.txt."""
 

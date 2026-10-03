@@ -29,6 +29,16 @@ gs_conf_merge_line() {
 	mv "$tmp" "$conf"
 }
 
+# An empty or truncated /etc/gs.conf (power loss while it was rewritten) must not be applied: with empty values the script would
+# rewrite fstab/samba/gpsd and ask for a reboot at every start (D16). Checked in a subshell (no side effects) BEFORE anything is
+# changed, also before custom.conf is consumed. The listed keys are spread over the whole file, so a cut anywhere is noticed.
+if ! ( source /etc/gs.conf && for v in wifi_mode rec_dir gps_uart gps_uart_baudrate; do
+	[ -n "${!v:-}" ] || { echo "[error]: gs.conf: '$v' is empty or missing" >&2; exit 1; }
+done ); then
+	echo "[error]: /etc/gs.conf is empty, truncated or unreadable: not applying any change" >&2
+	exit 1
+fi
+
 if [ -f /config/custom.conf ]; then
 	grep -E '^\s*[^#]' /config/custom.conf | while IFS='=' read -r ckey cvalue; do
 		gs_conf_merge_line "$ckey" "$cvalue" || true

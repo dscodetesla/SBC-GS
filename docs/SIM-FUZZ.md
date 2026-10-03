@@ -59,7 +59,7 @@ REPO, виміряно:
 | міст, 2 МБ сміття без `\n` | не стає зразком, SIGTERM обробляється, rc 0 |
 | міст, SIGKILL | rc −9; останній кадр = стіки `[1500,1500,1000,1500,65535…]`, release не надсилається (межа: захист лише RC_OVERRIDE_TIME на FC, INF); flock знімається ядром |
 | `gs-applyconf.sh`, `custom.conf` порожній / лише коментарі / CRLF / без кінцевого `\n` | зливається без втрат; без маркера |
-| `gs-applyconf.sh`, порожній `gs.conf` | exit 1, викликає `reboot` (D16) |
+| `gs-applyconf.sh`, порожній/усічений `gs.conf` | exit 1 з повідомленням, до будь-яких змін, без `reboot` (D16 виправлено; до виправлення викликав `reboot`) |
 | `gs-applyconf.sh`, `nmcli` завис | exit 124 (немає таймаута в скрипті) |
 | `fan.sh`, температура порожня/відсутня/`99` | exit 1 на першій ітерації, ШІМ лишається 8000/40000 = 20 % (D17) |
 | `fan.sh`, температура `abc` або `fan_overheat_temperature='x'` | цикл живий, але без захисту від перегріву: відсутнє порівняння дає помилку `[`; шпарність 12000 при 90° і поганому порозі |
@@ -75,7 +75,7 @@ REPO, виміряно:
 
 ### Конфіг-завантажувач (`config/`)
 
-**D1. Shell мовчки відкидає NUL, Python відхиляє** (низька). Файл `TX12_DEADMAN_MS=3<NUL>00`:
+**D1. ВИПРАВЛЕНО (тест `test_FIXED_D1_*`). Shell мовчки відкидає NUL, Python відхиляє** (низька). Файл `TX12_DEADMAN_MS=3<NUL>00`:
 ```
 printf 'TX12_DEADMAN_MS=3\x0000\n' > $W/nul.env
 config/sbc-gs-config check $W/nul.env     ->  ok: $W/nul.env (1 keys)         rc 0   (значення читається як 300)
@@ -83,7 +83,7 @@ python3 config/load.py check $W/nul.env   ->  error: ...:1: control character in
 ```
 Причина: `read` у bash відкидає NUL до перевірки `[[:cntrl:]]`. Пропозиція: перед розбором перевіряти `tr -d '\000' < "$file" | cmp -s - "$file"` і відхиляти файл із NUL.
 
-**D2. Вердикт залежить від локалі: U+2028 у значенні** (низька). `TX12_CONN="a<U+2028>b"`:
+**D2. ВИПРАВЛЕНО (тест `test_FIXED_D2_*`). Вердикт залежить від локалі: U+2028 у значенні** (низька). `TX12_CONN="a<U+2028>b"`:
 ```
 LC_ALL=C.UTF-8 config/sbc-gs-config check --syntax $W/u.env   ->  error: ...:1: control character in line   rc 2
 LC_ALL=C       config/sbc-gs-config check --syntax $W/u.env   ->  ok                                       rc 0
@@ -91,7 +91,7 @@ python3 config/load.py check $W/u.env                          ->  ok           
 ```
 Причина: `[[:cntrl:]]` залежить від локалі (U+2028 керівний у `C.UTF-8`). Пропозиція: `local LC_ALL=C` на початку `sbc_cfg_parse` і (за потреби) у Python відхиляти ті самі Unicode-керівні символи.
 
-**D3. Shell-перевірка enum приймає «склеєні» варіанти** (низька). Реєстр `enum:x|y`, значення `x|y`:
+**D3. ВИПРАВЛЕНО (тест `test_FIXED_D3_*`). Shell-перевірка enum приймає «склеєні» варіанти** (низька). Реєстр `enum:x|y`, значення `x|y`:
 ```
 SBC_GS_KE='a|b' SBC_CFG_REGISTRY=$W/reg.tsv config/sbc-gs-config show  ->  KE=a|b  # env:SBC_GS_KE      rc 0
 SBC_GS_KE='a|b' SBC_CFG_REGISTRY=$W/reg.tsv python3 config/load.py show ->  error: KE='a|b' must be one of a|b   rc 2
@@ -100,11 +100,11 @@ SBC_GS_KE='a|b' SBC_CFG_REGISTRY=$W/reg.tsv python3 config/load.py show ->  erro
 
 ### `gs/mavlink/gs-mavlink.sh` (власні валідатори діють через `--no-value-check`; суворіші типи реєстру обходяться)
 
-**D4. IPv4 з крапкою в кінці приймається** (низька): `SBC_GS_LISTEN_ADDR=1.2.3.4. gs/mavlink/gs-mavlink.sh --print | tail -1` -> `mavp2p udps:0.0.0.0:14550 udps:1.2.3.4.:14560 --hb-systemid=125` (rc 0). Причина: `set -- $2` з `IFS=.` не дає порожнього останнього поля. Пропозиція: regex `^[0-9]{1,3}(\.[0-9]{1,3}){3}$` як у `load.sh`.
+**D4. ВИПРАВЛЕНО (тест `test_FIXED_D4_*`). IPv4 з крапкою в кінці приймається** (низька): `SBC_GS_LISTEN_ADDR=1.2.3.4. gs/mavlink/gs-mavlink.sh --print | tail -1` -> `mavp2p udps:0.0.0.0:14550 udps:1.2.3.4.:14560 --hb-systemid=125` (rc 0). Причина: `set -- $2` з `IFS=.` не дає порожнього останнього поля. Пропозиція: regex `^[0-9]{1,3}(\.[0-9]{1,3}){3}$` як у `load.sh`.
 
-**D5. Дубль порту з ведучим нулем не виявляється** (низька): `SBC_GS_GCS_UDP_PORTS="4560 04560"` -> `mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:4560 udps:0.0.0.0:04560 --hb-systemid=125` (rc 0). Перевірка унікальності порівнює рядки. Пропозиція: нормалізувати `p=$((10#$p))` перед порівнянням або відхиляти ведучі нулі.
+**D5. ВИПРАВЛЕНО (тест `test_FIXED_D5_*`). Дубль порту з ведучим нулем не виявляється** (низька): `SBC_GS_GCS_UDP_PORTS="4560 04560"` -> `mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:4560 udps:0.0.0.0:04560 --hb-systemid=125` (rc 0). Перевірка унікальності порівнює рядки. Пропозиція: нормалізувати `p=$((10#$p))` перед порівнянням або відхиляти ведучі нулі.
 
-**D6. `..` у `SERIAL_DEV` і `DUMP_PATH` приймається** (середня для `DUMP_PATH`: служба від root, `/config` доступний анонімно за `docs/CONFIG.md` §3):
+**D6. ВИПРАВЛЕНО (тест `test_FIXED_D6_*`). `..` у `SERIAL_DEV` і `DUMP_PATH` приймається** (середня для `DUMP_PATH`: служба від root, `/config` доступний анонімно за `docs/CONFIG.md` §3):
 ```
 SBC_GS_SERIAL_DEV=/dev/../tmp/x SBC_GS_DUMP_ENABLE=1 SBC_GS_DUMP_PATH=/var/log/../../etc/x gs/mavlink/gs-mavlink.sh --print | tail -1
 -> mavp2p serial:/dev/../tmp/x:115200 udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125 --dump --dump-path=/var/log/../../etc/x
@@ -113,7 +113,7 @@ SBC_GS_SERIAL_DEV=/dev/../tmp/x SBC_GS_DUMP_ENABLE=1 SBC_GS_DUMP_PATH=/var/log/.
 
 ### Профіль плати (`gs/boards`, `gs/lib`)
 
-**D7. `validate.sh` схвалює `#`, приклеєний до значення; shell і Python читають по-різному** (низька):
+**D7. ВИПРАВЛЕНО (тест `test_FIXED_D7_*`). `validate.sh` схвалює `#`, приклеєний до значення; shell і Python читають по-різному** (низька):
 ```
 cp -r gs/boards/radxa-zero3 $W/b; printf "ZZ=abc#c\nZQ='q'#c\n" >> $W/b/board.conf
 bash gs/boards/validate.sh $W/b   ->  ok b
@@ -122,7 +122,7 @@ python3 -c '...board_conf.parse(...)'                      -> abc q         (Pyt
 ```
 Пропозиція: у `validate.sh` і `board_conf.py` вимагати пробіл перед `#`.
 
-**D8. `validate.sh` схвалює `"…\"`, а `source` ламається** (середня: профіль, який «пройшов валідацію», з'їдає наступні ключі):
+**D8. ВИПРАВЛЕНО (тест `test_FIXED_D8_*`). `validate.sh` схвалює `"…\"`, а `source` ламається** (середня: профіль, який «пройшов валідацію», з'їдає наступні ключі):
 ```
 printf 'ZZ="abc\\"\nZEND=1\n' >> $W/b/board.conf
 bash gs/boards/validate.sh $W/b   ->  ok b
@@ -131,23 +131,23 @@ board_conf.parse(...)["ZEND"]                         ->  1
 ```
 Пропозиція: виключити `\` із класу `[^"$`]` у regex `validate.sh` і `board_conf.py`.
 
-**D9. `BOARD` не валідується: `../`-шлях підключає чужий `board.conf` і виконує його** (низька: `BOARD` — змінна середовища):
+**D9. ВИПРАВЛЕНО (тест `test_FIXED_D9_*`). `BOARD` не валідується: `../`-шлях підключає чужий `board.conf` і виконує його** (низька: `BOARD` — змінна середовища):
 ```
 BOARD=../../../../../tmp/.../evil bash -c '. gs/lib/board.sh && board_get BOARD_ID'   ->  evil   (і створено маркер PWNED9)
 ```
 Пропозиція: у `_board_load` вимагати `[[ $BOARD =~ ^[a-z0-9][a-z0-9-]*$ ]]`.
 
-**D10. Ключ `board_get` обчислюється як арифметичний індекс** (низька: ключі літеральні, але `board_get` читає будь-яку змінну, зокрема `PATH`):
+**D10. ВИПРАВЛЕНО (тест `test_FIXED_D10_*`). Ключ `board_get` обчислюється як арифметичний індекс** (низька: ключі літеральні, але `board_get` читає будь-яку змінну, зокрема `PATH`):
 ```
 bash -c '. gs/lib/board.sh; board_get "a[\$(touch $1)]"' _ $W/PWNED10   ->  board.sh: key 'a[$(touch $W/PWNED10)]' is not defined ...  (файл створено)
 ```
 Пропозиція: перед `${!key}` перевіряти `[[ $key =~ ^[A-Z][A-Z0-9_]*$ ]]`.
 
-**D11. Значення в `render-udev.sh` не екрануються для синтаксису udev** (низька: `board.conf` довірений, INF): `WIFI_ONBOARD_IFACE='x", RUN+="/tmp/evil'` -> `rc=0`, у `99-GS.rules`: `... ENV{ID_NET_NAME}!="x", RUN+="/tmp/evil", RUN+="/gs/wfb.sh $name"`. Пропозиція: перевіряти значення за `^[A-Za-z0-9_.:-]+$`.
+**D11. ВИПРАВЛЕНО (тест `test_FIXED_D11_*`). Значення в `render-udev.sh` не екрануються для синтаксису udev** (низька: `board.conf` довірений, INF): `WIFI_ONBOARD_IFACE='x", RUN+="/tmp/evil'` -> `rc=0`, у `99-GS.rules`: `... ENV{ID_NET_NAME}!="x", RUN+="/tmp/evil", RUN+="/gs/wfb.sh $name"`. Пропозиція: перевіряти значення за `^[A-Za-z0-9_.:-]+$`.
 
 ### `build/lib/fetch.sh`
 
-**D12. Багаторядковий «pin» проходить формат-перевірку** (низька: pin береться з `versions.env`). `grep -E '^[0-9a-f]{64}$'` працює по рядках:
+**D12. ВИПРАВЛЕНО (тест `test_FIXED_D12_*`). Багаторядковий «pin» проходить формат-перевірку** (низька: pin береться з `versions.env`). `grep -E '^[0-9a-f]{64}$'` працює по рядках:
 ```
 GS_FETCH_CMD=cp bash -c '. build/lib/fetch.sh; fetch_file src out "not-a-hash
 <sha256 файла>"'   ->  fetch: ok out sha256=...   rc=0   (очікувано rc 2)
@@ -155,7 +155,7 @@ git_pin <repo> <dest> $'zzz\n'<40 hex>    ->  rc 1 після спроби git f
 ```
 Пропозиція: `[[ $want =~ ^[0-9a-f]{64}$ ]]` (весь рядок) замість `grep`; те саме для `ref` і `name`.
 
-**D13. SIGTERM під час завантаження лишає `$dest.part.<pid>`** (низька):
+**D13. ВИПРАВЛЕНО (тест `test_FIXED_D13_*`). SIGTERM під час завантаження лишає `$dest.part.<pid>`** (низька):
 ```
 GS_FETCH_CMD=slow.sh (пише 5 байт і спить)  setsid bash -c '. build/lib/fetch.sh; fetch_file src d13 <sha>' ; kill -TERM -- -<pgid>
 -> залишився $W/d13.part.20849, rc 143
@@ -180,7 +180,7 @@ stderr: sed: -e expression #1, char 29: unknown option to `s'
 ```
 Пропозиція: екранувати розділювач (або `awk`), опрацьовувати ключі незалежно, при помилці переносити файл у `custom-rejected.conf` із повідомленням.
 
-**D16. Порожній/усічений `gs.conf` не виявляється, `gs-applyconf.sh` просить перезавантаження** (середня: усічення при втраті живлення під час запису → `reboot` при кожному запуску, INF):
+**D16. ВИПРАВЛЕНО (тест `test_FIXED_D16_*`). Порожній/усічений `gs.conf` не виявляється, `gs-applyconf.sh` просить перезавантаження** (середня: усічення при втраті живлення під час запису → `reboot` при кожному запуску, INF):
 ```
 OVERLAY (etc/gs.conf порожній) ... gs-applyconf.sh  ->  exit=1; stdout: `[info]: Update rec_dir in fstab and need reboot`; shim.log: `reboot`
 ```
@@ -195,15 +195,15 @@ OVERLAY (etc/gs.conf порожній) ... gs-applyconf.sh  ->  exit=1; stdout: 
 
 ### Міст (`bench/tx12_bridge.py`), моделі
 
-**D18. `load_map` падає з `AttributeError`, а не `ValueError`, якщо значення осі не об'єкт** (низька): `{"axes": {"ABS_X": 5}}` -> `AttributeError: 'int' object has no attribute 'get'`; `main` ловить лише `(OSError, ValueError)`, тож замість `rc 2` отримуємо traceback. Пропозиція: `if not isinstance(cfg, dict): raise ValueError(...)`.
+**D18. ВИПРАВЛЕНО (тест `test_FIXED_D18_*`, див. «Виправлення D18–D22»). `load_map` падає з `AttributeError`, а не `ValueError`, якщо значення осі не об'єкт** (низька): `{"axes": {"ABS_X": 5}}` -> `AttributeError: 'int' object has no attribute 'get'`; `main` ловить лише `(OSError, ValueError)`, тож замість `rc 2` отримуємо traceback. Пропозиція: `if not isinstance(cfg, dict): raise ValueError(...)`.
 
-**D19. Обрізаний рядок stdin є дійсним зразком, і мале число піднімається до 1000** (середня для бенч-входу `--input stdin`, INF): `sanitize([1500.0, 15.0])` -> `[1500, 1000, 65535, 65535, 65535, 65535, 65535, 65535]`. Рядок `1500 1500 1000 1500`, обрізаний після `1500 15`, дає канал 2 = 1000 (крайнє відхилення). Причина: `TX12_SANE_MIN_US` типово 0, вікно 0..4000, значення нижче `LO` піднімаються до `LO`. Пропозиція: вимагати очікувану кількість полів у рядку і/або відкидати, а не піднімати значення нижче `LO`; або підняти типовий `TX12_SANE_MIN_US` (межа SAFETY до 1000).
+**D19. ВИПРАВЛЕНО (тест `test_FIXED_D19_*`). Обрізаний рядок stdin є дійсним зразком, і мале число піднімається до 1000** (середня для бенч-входу `--input stdin`, INF): `sanitize([1500.0, 15.0])` -> `[1500, 1000, 65535, 65535, 65535, 65535, 65535, 65535]`. Рядок `1500 1500 1000 1500`, обрізаний після `1500 15`, дає канал 2 = 1000 (крайнє відхилення). Причина: `TX12_SANE_MIN_US` типово 0, вікно 0..4000, значення нижче `LO` піднімаються до `LO`. Пропозиція: вимагати очікувану кількість полів у рядку і/або відкидати, а не піднімати значення нижче `LO`; або підняти типовий `TX12_SANE_MIN_US` (межа SAFETY до 1000).
 
-**D20. `map_axis` ділить на нуль при `center == max` і стіку в максимумі** (низька): `map_axis(100, {"min":0,"max":100,"center":100})` -> `ZeroDivisionError: float division by zero`; помилка виникає в основному циклі (`finally` ще встигає надіслати release). `load_map` не перевіряє `center`/`deadband`. Пропозиція: у `load_map` вимагати `min < center < max` і `0 <= deadband < 1`.
+**D20. ВИПРАВЛЕНО (тест `test_FIXED_D20_*`). `map_axis` ділить на нуль при `center == max` і стіку в максимумі** (низька): `map_axis(100, {"min":0,"max":100,"center":100})` -> `ZeroDivisionError: float division by zero`; помилка виникає в основному циклі (`finally` ще встигає надіслати release). `load_map` не перевіряє `center`/`deadband`. Пропозиція: у `load_map` вимагати `min < center < max` і `0 <= deadband < 1`.
 
-**D21. `power_model.budget` не відхиляє NaN-PSU і від'ємне число адаптерів** (низька, SYNTH): `budget(P,"pi4",psu_a=nan,adapters=1,state="tx",with_=("fc",))` -> `verdict OK`, `flags []`, `psu_margin_a nan`; `adapters=-3` -> `total_a −2.1 A`, `verdict OK`. Порівняння з NaN хибні, тож жоден прапорець не піднімається. Пропозиція: `ParamError` для нескінченних/NaN/неположних `psu_a` і від'ємних `adapters`; `type=` у argparse.
+**D21. ВИПРАВЛЕНО (тест `test_FIXED_D21_*`). `power_model.budget` не відхиляє NaN-PSU і від'ємне число адаптерів** (низька, SYNTH): `budget(P,"pi4",psu_a=nan,adapters=1,state="tx",with_=("fc",))` -> `verdict OK`, `flags []`, `psu_margin_a nan`; `adapters=-3` -> `total_a −2.1 A`, `verdict OK`. Порівняння з NaN хибні, тож жоден прапорець не піднімається. Пропозиція: `ParamError` для нескінченних/NaN/неположних `psu_a` і від'ємних `adapters`; `type=` у argparse.
 
-**D22. Оголошені діапазони `params.json` дозволяють струм idle > rx і rx > tx** (низька, SYNTH): `power.devices.rtl8812_idle_a` 0.15..0.5, `_rx_a` 0.25..0.7, `_tx_a` 0.5..1.6 перекриваються; при допустимих значеннях idle=0.5, rx=0.25 бюджет Pi 5: `idle total 1.30 A > rx total 1.05 A`. Вибірка рушія (`base_sampled` для `tx_a`, `rx_a`) теж не накладає порядок. Пропозиція: обмеження порядку в `common.validate` і в `priors.Space`, або непересічні діапазони.
+**D22. ВИПРАВЛЕНО (тест `test_FIXED_D22_*`). Оголошені діапазони `params.json` дозволяють струм idle > rx і rx > tx** (низька, SYNTH): `power.devices.rtl8812_idle_a` 0.15..0.5, `_rx_a` 0.25..0.7, `_tx_a` 0.5..1.6 перекриваються; при допустимих значеннях idle=0.5, rx=0.25 бюджет Pi 5: `idle total 1.30 A > rx total 1.05 A`. Вибірка рушія (`base_sampled` для `tx_a`, `rx_a`) теж не накладає порядок. Пропозиція: обмеження порядку в `common.validate` і в `priors.Space`, або непересічні діапазони.
 
 ## 5. Мутації (на КОПІЇ, `tests/sim/fuzz/mutate.sh`, ніколи in-place)
 
@@ -272,3 +272,30 @@ OVERLAY (etc/gs.conf порожній) ... gs-applyconf.sh  ->  exit=1; stdout: 
 - Тести: D14, D15, D17 з «закріплень дефектів» стали постійними регресійними (`test_FIXED_*`), плюс `test_hostile_values_are_stored_inert_and_bad_lines_rejected`. Нові мутації M23-M25 (старий `sed`, без охорони температури, без лапок) убиті.
 - Не змінено: D16 (порожній `gs.conf` -> `reboot`) та решта D1..D13, D18..D22.
 - Не перевірено на залізі (HW): поведінка на реальному `/etc/gs.conf` як симлінку на RO-root і наявність `awk`/`chmod --reference` в образі (BusyBox-варіант `awk` не перевірявся).
+
+## Виправлення D18–D22
+
+- D18 (`bench/tx12_bridge.py`, `load_map`): документ не об'єкт, елемент осі не об'єкт, нечислові/нескінченні `min`/`max`/`center`/`deadband`, `max <= min`, `center` поза `min..max`, `deadband` поза `[0,1)` дають `ValueError`; `main` перетворює його на `rc 2` і повідомлення `bad mapping`. Приклад `tx12_map.example.json` проходить без змін.
+- D19 (`parse_stdin_line`, `StdinSource`): рядок stdin коротший за 8 полів, у якому є значення нижче `LO` (крім 65535), відкидається (лише лог), а не піднімається до `LO`; неповний останній рядок без `\n` (EOF посеред запису) не береться. INF: це евристика, а не точний контроль довжини, бо короткі рядки `ch1..chN` задокументовані й їх використовують тести (`1100 1900`). Повний рядок із 8 полів і надалі обрізає `500 -> 1000` (поведінка не змінена); обрізаний 8-польний рядок, що завершився на межі поля, відрізнити неможливо. Коректні дані поводяться як раніше.
+- D20 (`map_axis`): коли сторона осі має нульову довжину (`center == max` чи `center == min`, стік на межі), `n = 0` (нейтраль), не `ZeroDivisionError`. Інша сторона мапиться як раніше. `clamp`, dead-man, single writer, sysid не змінювалися; вивід не став менш обмеженим.
+- D21 (`power_model.budget`): `psu_a` не скінченне число `> 0` (NaN, inf, 0, від'ємне, bool, рядок) і `adapters` не ціле `>= 0` дають `ParamError`; CLI повертає `rc 2` і `power_model: error: ...`. `psu_a=None` (рекомендований БЖ) і `adapters=0` працюють як раніше.
+- D22 (`params.json`): діапазони струму RTL8812 більше не перетинаються: `idle` 0.15..0.3 (було ..0.5), `rx` 0.3..0.5 (було 0.25..0.7), `tx` 0.5..1.6 (без змін); типові значення 0.3/0.45/0.9 і теги UNMEASURED лишилися. Це звуження INF-діапазонів, а не вимір; діапазони `rx` і `idle` не вигадані з нових даних, а лише зведені до спільних меж. Наслідок: вибірки рушія (priors/scenario) змінилися, тому оновлено golden `scenario_nominal_pi5_5a_150m`, `scenario_hot_day_closed_case`, `sensitivity_nominal_pi5_5a_150m` (зсуви в 3-4 значущій цифрі; правила не змінено).
+- Тести: D18-D22 з закріплень стали `test_FIXED_D18..D22_*`; мутації M26-M33 (кожна на копії) убиті; нові перевірки в `bench/tx12-bridge-test.sh` (D18 rc 2, D19 обрізаний рядок, D20 край центру).
+- Не перевірено на залізі (HW): справжній TX12/EdgeTX evdev (діапазони осей і центр лишаються placeholder UNVERIFIED); реальні струми RTL8812 (діапазони SYNTH/UNMEASURED).
+
+## Виправлення D1–D13, D16
+
+Теги: REPO (перевірено командами цього репозиторію). Усі 14 дефектів виправлено мінімально, за пропозиціями §4; поведінка для коректних вхідних даних не змінилась (наявні golden без змін).
+
+- D1 (`config/load.sh`, `config/load.py`): `sbc_cfg_parse` відхиляє файл, у якому є байт NUL (`tr -d '\000' | cmp`); Python відхиляє NUL і в рядках-коментарях, тож вердикт однаковий.
+- D2 (`config/load.sh`): `local LC_ALL=C` у `sbc_cfg_parse`: `[[:cntrl:]]` і `[[:space:]]` не залежать від локалі; U+2028 приймається в обох завантажувачах (як у Python).
+- D3 (`config/load.sh`): enum порівнюється з кожним варіантом окремо (`IFS='|' read -ra`), «склеєне» `a|b` відхиляється, як у Python.
+- D4, D5, D6 (`gs/mavlink/gs-mavlink.sh`): IPv4 лише повним збігом `^[0-9]{1,3}(\.[0-9]{1,3}){3}$` (+ кожен октет <= 255); унікальність портів за числовим значенням (`10#`); `..` як компонент шляху в `SERIAL_DEV` і `DUMP_PATH` відхиляється (`..` усередині імені, `a..b`, лишається дозволеним). Повідомлення для раніше відхилюваних значень не змінились.
+- D7, D8 (`gs/boards/validate.sh`, `gs/lib/board_conf.py`): коментар `#` вимагає пропуск перед собою; у `"..."` заборонено `\`. Обидва читачі мають однакові правила; профілі radxa-zero3 і rpi4 проходять.
+- D9, D10 (`gs/lib/board.sh`): `BOARD` має відповідати `^[a-z0-9][a-z0-9-]*$` (інакше `invalid board id`, `return 1`); ключ `board_get` має відповідати `^[A-Z][A-Z0-9_]*$` (інакше `invalid key`, `return 1`) до `${!key}`. `hw.sh`/`gpio.sh`/`otg.sh` викликають `board_get` лише з літеральними ключами й мають fallback, тож їхня поведінка не змінилась.
+- D11 (`gs/boards/render-udev.sh`): значення ключів шаблону мають відповідати `^[A-Za-z0-9_.:-]+$`, інакше exit 1 (замість екранування). Значення обох профілів (`wifi0`, `aicwf_sdio`, `radxa0`, `brcmfmac`, `rpi0`) проходять, вихід radxa-zero3 побайтово той самий.
+- D12 (`build/lib/fetch.sh`): формат sha256, 40-hex ref і імені `pin_from_manifest` перевіряється `[[ =~ ^...$ ]]` по всьому рядку, не `grep -E` по рядках; багаторядковий pin дає rc 2 до будь-якої дії.
+- D13 (`build/lib/fetch.sh`): `fetch_file` на час виклику ставить обробники INT/TERM (EXIT лише якщо в користувача нема свого), які видаляють `$dest.part.<pid>`, відновлюють trap-и викликача й повторно надсилають сигнал (виклик так само помирає від сигналу). Реалізація розбита на `fetch_file` (trap) і `_gs_fetch_file_impl` (колишнє тіло). Межа: якщо сигнал надіслано лише bash-процесу, а не групі, обробник чекає завершення дочірнього `curl`.
+- D16 (`gs/gs-applyconf.sh`): на початку (до злиття `custom.conf`, до будь-яких змін) у підоболонці `source /etc/gs.conf` і перевірка, що `wifi_mode`, `rec_dir`, `gps_uart`, `gps_uart_baudrate` непорожні (ключі з різних частин файлу, тож обрив будь-де помітний); інакше exit 1 і повідомлення `not applying any change`, `custom.conf` лишається для наступного запуску. Атомарний запис `gs.conf` (друга половина пропозиції) не робився: `gs.conf` пишуть й інші скрипти (`gs-init.sh`, `gsmenu`), це окрема зміна.
+- Тести: `test_DEFECT_D1..D13, D16` стали постійними `test_FIXED_*` (D13 тепер три тести: SIGTERM/SIGINT, caller з власним EXIT trap, відновлення trap-ів). Оракул `gs-mavlink` і генератори розширені (числові порти з нулями, `1.2.3.4.`, `..`, `#` приклеєний, `\` у `"..."`, `a|b` в enum). Нові мутації M40-M55 (кожна відновлює один дефект) усі убиті.
+- Не перевірено на залізі (HW): `gs-applyconf.sh` на реальному `/etc/gs.conf` (симлінк на RO-root, `gs-init.sh` первинне створення) і порядок записів у образі; `fetch.sh` з реальним `curl` (лише `cp`-шим і `sleep`-шим); `board.sh` на Pi 5 (профілю `rpi5` ще немає, лише `rpi4`).

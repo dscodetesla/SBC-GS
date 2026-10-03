@@ -628,16 +628,16 @@
       "unit": "A",
       "provenance": "UNMEASURED",
       "min": 0.15,
-      "max": 0.5,
-      "note": "placeholder, range is INF. adapter associated/monitor, no traffic"
+      "max": 0.3,
+      "note": "placeholder, range is INF. adapter associated/monitor, no traffic. Range max lowered 0.5 -> 0.3 (D22: idle <= rx <= tx must hold for any value inside the ranges; default unchanged, still UNMEASURED/SYNTH)"
      },
      "rtl8812_rx_a": {
       "value": 0.45,
       "unit": "A",
       "provenance": "UNMEASURED",
-      "min": 0.25,
-      "max": 0.7,
-      "note": "placeholder, range is INF. adapter receiving"
+      "min": 0.3,
+      "max": 0.5,
+      "note": "placeholder, range is INF. adapter receiving. Range narrowed 0.25..0.7 -> 0.3..0.5 so that it does not overlap idle (<=0.3) and tx (>=0.5) (D22); default unchanged, still UNMEASURED/SYNTH"
      },
      "rtl8812_tx_a": {
       "value": 0.9,

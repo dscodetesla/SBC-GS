@@ -85,6 +85,27 @@ def thermal_time_to(t0, t_amb, rth, p_w, tau, t_target):
     return -tau * math.log((tss - t_target) / (tss - t0))
 
 
+def air_tx_power_w(v_bec, i_tx_a, p_rf_w, p_rf_ref_w, diss_frac):
+    """AIR radio in TX: (P_dc, heat) in W for a radiated power p_rf_w, consistent with energy conservation (D1, D1b).
+
+    The measured TX current i_tx_a (UNMEASURED prior) is taken at the PA's rated output p_rf_ref_w (INF: the output at P1dB; the
+    reference point itself is UNMEASURED). The PA drain efficiency eta = 1 - diss_frac (INF range 5..30 %, value UNMEASURED) is the
+    INCREMENTAL efficiency: P_dc(P_rf) = P_idle + P_rf/eta_eff with P_idle = P_dc_ref - P_rf_ref/eta_eff >= 0. When the sampled
+    current is too small for eta (P_rf_ref/eta > P_dc_ref), eta is raised to the implied P_rf_ref/P_dc_ref (the measured current wins,
+    idle = 0, P_dc is proportional to P_rf). Hence P_dc >= P_rf for every input, heat = P_dc - P_rf >= 0 exactly, and BOTH P_dc and
+    the heat grow with the radiated power and with the current. Returns (p_dc_w, heat_w, eta_eff)."""
+    p_dc_ref = v_bec * i_tx_a
+    eta = min(1.0, max(1.0 - diss_frac, 1e-3, p_rf_ref_w / p_dc_ref if p_dc_ref > 0 else 1.0))
+    p_idle = max(0.0, p_dc_ref - p_rf_ref_w / eta)
+    p_dc = p_idle + p_rf_w / eta
+    return p_dc, p_dc - p_rf_w, eta
+
+
+def air_rx_heat_w(v_bec, i_rx_a):
+    """AIR radio not transmitting (queue empty / TX shut down): everything drawn from the BEC is heat (no RF out)."""
+    return v_bec * i_rx_a
+
+
 class Thermal:
     """Junction temperature of the adapter: Tj' = (Tamb + Rth*P - Tj)/tau, derating above a start temperature,
     shutdown at a threshold with hysteresis (the TX stops until Tj falls by `hyst`)."""
@@ -172,13 +193,74 @@ class BurstChain:
         return self.on
 
 
+def _i0_scaled(z):
+    """exp(-z)*I0(z) for z >= 0 (Abramowitz & Stegun 9.8.1/9.8.2, relative error < 2e-7): no overflow for large z."""
+    if z < 3.75:
+        t = (z / 3.75) ** 2
+        return math.exp(-z) * (1.0 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813))))))
+    t = 3.75 / z
+    return (0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565 + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537
+            + t * (-0.01647633 + t * 0.00392377)))))))) / math.sqrt(z)
+
+
+def _fade_pdf_x(x, k):
+    """Unit-mean power pdf of Rician fading with linear K factor k (k = 0 -> Rayleigh, exp(-x)): the noncentral chi-square pdf
+    (K+1) exp(-K-(K+1)x) I0(2 sqrt(K(K+1)x)), written with the scaled Bessel function so that it never overflows."""
+    z = 2.0 * math.sqrt(k * (k + 1.0) * x)
+    return (k + 1.0) * math.exp(-((math.sqrt((k + 1.0) * x) - math.sqrt(k)) ** 2)) * _i0_scaled(z)
+
+
+# the fading gain G (dB) lives on the same 0.25 dB grid as the PER table, so the average over fading is a discrete convolution
+_FADE_JLO, _FADE_JHI, _FADE_SUB = -240, 40, 16  # G from -60 dB (deep fades matter for the tail) to +10 dB
+
+
 @functools.lru_cache(maxsize=64)
-def fading_gains_db(model, k_db, n=32):
-    """n equiprobable power gains (dB) of rf_model's unit-mean fading draws (reuse of rf_model._gains)."""
+def fading_weights(model, k_db):
+    """Probability mass of the unit-mean power gain on the grid G_j = j*_STEP dB, j in [_FADE_JLO, _FADE_JHI] (sums to 1).
+
+    Exact pdf integration (midpoint rule with _FADE_SUB sub-bins per bin), not a draw count: the tail of the PER average is
+    resolved down to ~1e-6 probability, which the old 32 equiprobable quantiles (tail below 1/32 lost) and rf_model's 400 random
+    draws (noise x2) did not do (D9). Mass beyond the grid ends is added to the end nodes. 'none' -> all mass at G = 0 dB."""
+    n = _FADE_JHI - _FADE_JLO + 1
     if model == "none":
-        return (0.0,)
-    g = sorted(rf_model._gains(model, k_db, 256, 1))
-    return tuple(10.0 * math.log10(g[int((i + 0.5) * 256 / n)]) for i in range(n))
+        w = [0.0] * n
+        w[-_FADE_JLO] = 1.0
+        return tuple(w)
+    k = 0.0 if model == "rayleigh" else 10.0 ** (k_db / 10.0)
+    w = []
+    sub = _STEP / _FADE_SUB
+    ln10_10 = math.log(10.0) / 10.0
+    for j in range(_FADE_JLO, _FADE_JHI + 1):
+        m = 0.0
+        for s in range(_FADE_SUB):
+            g = j * _STEP - 0.5 * _STEP + (s + 0.5) * sub
+            x = 10.0 ** (g / 10.0)
+            m += _fade_pdf_x(x, k) * x * ln10_10 * sub
+        w.append(m)
+    tot = sum(w)
+    lost = max(0.0, 1.0 - tot)  # tails beyond the grid: lumped at the ends (deep fade: PER ~ 1; high gain: PER ~ lowest)
+    w[0] += 0.5 * lost
+    w[-1] += 0.5 * lost
+    tot = sum(w)
+    return tuple(x / tot for x in w)
+
+
+@functools.lru_cache(maxsize=64)
+def fading_per_table(mcs, vht, nbytes, model, k_db):
+    """log10 of the fading-averaged PER on the PER-table grid: E[PER(snr + G)] = sum_j w_j PER(snr + j*step). Interpolated by
+    per_lookup like the plain table; replaces the per-call average over 32 quantiles (one lookup per call instead of 32)."""
+    base = per_table(mcs, vht, nbytes)
+    if model == "none":
+        return base
+    w = fading_weights(model, k_db)
+    lin = [10.0 ** v for v in base]
+    ext = [lin[0]] * (-_FADE_JLO) + lin + [lin[-1]] * _FADE_JHI  # PER outside the table is clamped to the end values
+    n = len(lin)
+    out = []
+    for i in range(n):
+        seg = ext[i:i + len(w)]  # ext index i + (j - JLO) <-> table index i + j
+        out.append(math.log10(max(sum(a * b for a, b in zip(w, seg)), 1e-12)))
+    return tuple(out)
 
 
 def ageing_offsets(th):
@@ -215,10 +297,6 @@ def per_threshold_db(tab, target=0.1):
                 return _LO
             return _LO + _STEP * (i - 1 + (tab[i - 1] - lt) / (tab[i - 1] - v))
     return _HI
-
-
-def mean_per(tab, snr_db, gains_db):
-    return sum(per_lookup(tab, snr_db + g) for g in gains_db) / len(gains_db)
 
 
 @functools.lru_cache(maxsize=8192)
@@ -382,7 +460,7 @@ def prepare(th, cfg, rng):
     k, n = int(g("rf.fec_k")), int(g("rf.fec_n"))
     nbytes = rf_model.frame_bytes(th)
     tab = per_table(mcs, vht, nbytes)
-    gains = fading_gains_db(g("rf.fading_model"), round(g("rf.rician_k_db") * 2) / 2.0)
+    ftab = fading_per_table(mcs, vht, nbytes, g("rf.fading_model"), round(g("rf.rician_k_db") * 2) / 2.0)
     nf_age, pa_age = ageing_offsets(th)
     fps = int(g("video.fps"))
     t_pkt = (rf_model.frame_airtime_us(th, mcs) + g("rf.mac_access_us")) / 1000.0
@@ -415,7 +493,7 @@ def prepare(th, cfg, rng):
     e_duty = 1.0 - math.prod(1.0 - du for _d, du in srcs) if srcs else 0.0
     b_tx = power_model.budget(th, board, psu, 1, "tx", with_, "active", False, cfg["usb_max_current"])
     plan = {
-        "th": th, "mcs": mcs, "k": k, "n": n, "tab": tab, "gains": gains, "thr10": per_threshold_db(tab), "ge": g("rf.loss_model") == "ge",
+        "th": th, "mcs": mcs, "k": k, "n": n, "tab": tab, "ftab": ftab, "thr10": per_threshold_db(tab), "ge": g("rf.loss_model") == "ge",
         "burst": g("rf.ge_mean_burst_frames"), "floor": g("rf.floor_per"), "gtx": g("rf.tx_antenna_gain_dbi"),
         "grx": g("rf.rx_antenna_gain_dbi"), "misc": g("rf.misc_loss_db"), "pa_p": g("hw.pa_rapp_p"),
         "p1db0": g("hw.pa_p1db_out_dbm") - pa_age, "evm_floor": g("hw.evm_floor_db"), "evm_k": g("hw.evm_comp_coeff"),
@@ -454,12 +532,12 @@ def link_eval(plan, d, st):
     n1 = n0 + (noise_rise_db(n0, cont) if cont else 0.0)
     snr_a = rx - n1 - pen
     eff_a = rf_model.eff_snr_db(th, plan["mcs"], combine_snr_evm_db(snr_a, evm))
-    per = mean_per(plan["tab"], eff_a, plan["gains"])
+    per = per_lookup(plan["ftab"], eff_a)
     desense = n1b - n0
     if plan["elrs_duty"] > 0.0:
         n2 = n1 + noise_rise_db(n1, [plan["elrs_i"]])
         eff_b = rf_model.eff_snr_db(th, plan["mcs"], combine_snr_evm_db(rx - n2 - pen, evm))
-        per = (1.0 - plan["elrs_duty"]) * per + plan["elrs_duty"] * mean_per(plan["tab"], eff_b, plan["gains"])
+        per = (1.0 - plan["elrs_duty"]) * per + plan["elrs_duty"] * per_lookup(plan["ftab"], eff_b)
         desense += plan["elrs_duty"] * noise_rise_db(n1b, [plan["elrs_i"]])
     per = 1.0 - (1.0 - per) * (1.0 - plan["floor"]) * (1.0 - plan["p_inj"])
     return {"per": per, "margin": eff_a - plan["thr10"], "rx": rx, "pen": pen, "desense": desense, "comp": comp, "evm": evm}
@@ -504,7 +582,11 @@ def pctl(xs, q):
 
 
 def run_session(th, cfg, rng, events=None):
-    """One session: bring-up, then T seconds in slices of dt. Returns the per-draw output dict (see scenario_engine.OUTPUTS)."""
+    """One session: bring-up, then T seconds in slices of dt. Returns the per-draw output dict (see scenario_engine.OUTPUTS).
+
+    A link that never works (bring-up failed, or no slice with the link up) has NO link margin: margin_db and margin_p5_db are None
+    and the separate flag out["dead"] is True (D4: the old stub margin = -60 dB lay inside the physical range, down to -70 dB at
+    the corners of the prior hypercube). Consumers must test `dead` / None, never compare with a magic value."""
     plan = prepare(th, cfg, rng)
     th = plan["th"]
     g = th.get
@@ -526,18 +608,24 @@ def run_session(th, cfg, rng, events=None):
     log(0.0, "bringup", ok=bu["ok"], t_s_total=round(bu["t_s"], 3), failed_stage=bu["failed_stage"], attempts=bu["attempts"])
     if not bu["ok"]:
         flags["bringup_fail"] = True
-        out.update({"residual": 1.0, "margin_db": -60.0, "margin_p5_db": -60.0, "range_m": 0.0, "g2g_ms": plan["lat_total"],
+        out.update({"residual": 1.0, "margin_db": None, "margin_p5_db": None, "dead": True, "range_m": 0.0, "g2g_ms": plan["lat_total"],
                     "g2g_mean_ms": plan["lat_total"], "availability": 0.0, "ttff_s": 0.0, "ttff_censored": False,
                     "freeze": 1.0, "throttled": 0, "down_s": T})
         return out
     # AIR adapter thermal state after the ground soak (TX on)
     i_tx, i_rx = g("power.devices.rtl8812_tx_a"), g("power.devices.rtl8812_rx_a")
-    p_tx_w = g("hw.air_bec_v") * i_tx * g("hw.air_diss_frac") + g("hw.air_board_heat_w")
+    v_bec, dfrac, board_w = g("hw.air_bec_v"), g("hw.air_diss_frac"), g("hw.air_board_heat_w")
+    p_rf_ref_w = dbm_to_mw(g("hw.pa_p1db_out_dbm")) / 1000.0
+    # radiated power of the first slice: commanded power through the (aged, unsagged, underated) PA; later slices use the live state
+    p_rf_w = dbm_to_mw(pa_output_dbm(g("rf.tx_power_dbm"), plan["p1db0"], plan["pa_p"])) / 1000.0
+    p_dc_tx_w, heat_tx_w, _eta = air_tx_power_w(v_bec, i_tx, p_rf_w, p_rf_ref_w, dfrac)
+    out["air_energy"] = {"dc_w": p_dc_tx_w, "rf_w": p_rf_w, "heat_w": heat_tx_w, "board_w": board_w}
+    p_tx_w = heat_tx_w + board_w
     th_air = Thermal(plan["amb_air"], g("hw.air_rth_c_per_w"), g("hw.air_tau_s"), g("hw.thermal_derate_start_c"),
                      g("hw.thermal_derate_db_per_c"), g("hw.thermal_shutdown_c"), g("hw.thermal_hyst_c"))
     th_air.step(cfg["soak_s"], p_tx_w, plan["amb_air"])
     p_dc_duty = plan["util"] if plan["util"] < 1.0 else 1.0
-    p_air_w = g("hw.air_bec_v") * (p_dc_duty * i_tx + (1.0 - p_dc_duty) * i_rx) * g("hw.air_diss_frac") + g("hw.air_board_heat_w")
+    p_rx_w = air_rx_heat_w(v_bec, i_rx) + board_w
     nf, burst = NoiseFloor(th, r_nf), BurstChain(g("ext.clash_rate_per_h"), g("ext.clash_mean_s"), r_ch)
     ant = AntennaLoss(th, r_ant)
     lim = Pi5UsbLimiter(plan["limit"], g("usb.pi5_trip_tol"), int(g("usb.pi5_trip_latch_n")))
@@ -568,7 +656,11 @@ def run_session(th, cfg, rng, events=None):
         shadow = shadow * a_sh + sh_sig * math.sqrt(1.0 - a_sh * a_sh) * r_sh.z()
         ant_db = ant.step(dt)
         # ---- AIR adapter: thermal, supply sag
-        tj, derate, shut = th_air.step(dt, p_air_w if not th_air.shut else g("hw.air_bec_v") * i_rx * g("hw.air_diss_frac") + g("hw.air_board_heat_w"), plan["amb_air"])
+        if th_air.shut:
+            p_air_w = p_rx_w
+        else:  # TX share of the airtime dissipates P_dc - P_rf at the live radiated power; the rest is the receive-state heat
+            p_air_w = p_dc_duty * air_tx_power_w(v_bec, i_tx, p_rf_w, p_rf_ref_w, dfrac)[1] + (1.0 - p_dc_duty) * air_rx_heat_w(v_bec, i_rx) + board_w
+        tj, derate, shut = th_air.step(dt, p_air_w, plan["amb_air"])
         if derate > 1.0 and not derating:
             derating = True
             flags["thermal_derate"] = True
@@ -584,6 +676,7 @@ def run_session(th, cfg, rng, events=None):
         st = {"plin": g("rf.tx_power_dbm") - derate, "p1db": plan["p1db0"] - sag - 0.5 * derate,
               "evm_shift": g("hw.evm_temp_db_per_c") * max(0.0, tj - 25.0), "ant": ant_db, "shadow": shadow,
               "noise_extra": nx, "burst": on}
+        p_rf_w = dbm_to_mw(pa_output_dbm(st["plin"], st["p1db"], plan["pa_p"])) / 1000.0  # heat of the NEXT slice follows the live output
         # ---- GS side: Pi supply, USB limit, spontaneous drops, throttled word
         uv_now = plan["v_pk"] < g("power.undervolt_threshold_v")
         soft_now = soc >= g("hw.soc_soft_limit_c")
@@ -699,8 +792,8 @@ def run_session(th, cfg, rng, events=None):
     else:
         rng_m = 0.0
     out.update({
-        "residual": sum(res_l) / len(res_l), "margin_db": sum(mar_l) / len(mar_l) if mar_l else -60.0,
-        "margin_p5_db": pctl(mar_l, 5) if mar_l else -60.0, "range_m": rng_m,
+        "residual": sum(res_l) / len(res_l), "margin_db": sum(mar_l) / len(mar_l) if mar_l else None,
+        "margin_p5_db": pctl(mar_l, 5) if mar_l else None, "dead": not mar_l, "range_m": rng_m,
         "g2g_ms": pctl(lat_l, 95) if lat_l else plan["lat_total"], "g2g_mean_ms": sum(lat_l) / len(lat_l) if lat_l else plan["lat_total"],
         "availability": avail, "ttff_s": T if ttff is None else ttff, "ttff_censored": ttff is None,
         "freeze": freeze_acc / up_n if up_n else 1.0, "throttled": thr_sticky, "down_s": down_s, "creep_resets": resets,

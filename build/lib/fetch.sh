@@ -25,7 +25,39 @@ _gs_curl_fetch() {  # <url> <dest>
 		--output "$2" "$1"
 }
 
+# D13: a signal during the download must not leave "$dest.part.<pid>" behind. fetch_file installs INT/TERM (and EXIT, unless the
+# caller already has an EXIT trap) handlers for the duration of the call, then restores the caller's traps. The handler removes
+# the partial file and re-raises the signal so that the caller dies as before (a trap would otherwise swallow it).
+_GS_FETCH_TMP=""
+_GS_FETCH_OLD_TRAPS=""
+_gs_fetch_untrap() {
+	trap - EXIT INT TERM
+	[ -z "$_GS_FETCH_OLD_TRAPS" ] || eval "$_GS_FETCH_OLD_TRAPS"
+	_GS_FETCH_OLD_TRAPS=""
+}
+_gs_fetch_on_signal() {  # <signal>
+	[ -z "$_GS_FETCH_TMP" ] || rm -f "$_GS_FETCH_TMP"
+	_gs_fetch_untrap
+	kill -s "$1" "${BASHPID:-$$}"
+}
+
 fetch_file() {  # <url> <dest> <sha256>
+	local rc=0 old=""
+	# in a subshell (e.g. out="$(fetch_file ...)") `trap -p` reports the PARENT's traps, which are not in force there: restoring them
+	# would make the subshell run the caller's EXIT trap. So the caller's traps are saved and restored only in the main shell.
+	[ "${BASHPID:-$$}" != "$$" ] || old="$(trap -p EXIT INT TERM)"
+	_GS_FETCH_OLD_TRAPS="$old"
+	_GS_FETCH_TMP="${2:-}.part.$$"
+	trap '_gs_fetch_on_signal INT' INT
+	trap '_gs_fetch_on_signal TERM' TERM
+	case "$old" in *" EXIT"*) ;; *) trap '[ -z "$_GS_FETCH_TMP" ] || rm -f "$_GS_FETCH_TMP"' EXIT ;; esac
+	_gs_fetch_file_impl "$@" || rc=$?
+	_GS_FETCH_TMP=""
+	_gs_fetch_untrap
+	return "$rc"
+}
+
+_gs_fetch_file_impl() {  # <url> <dest> <sha256>
 	local url="${1:-}" dest="${2:-}" want="${3:-}" tmp got
 	if [ -z "$url" ] || [ -z "$dest" ]; then _gs_err "usage: fetch_file <url> <dest> <sha256>"; return 2; fi
 	want="$(printf '%s' "$want" | tr 'A-F' 'a-f')"
@@ -34,7 +66,7 @@ fetch_file() {  # <url> <dest> <sha256>
 			_gs_err "no sha256 pinned for $url (refusing; set GS_ALLOW_UNPINNED=1 to see the hash and pin it)"
 			return 2
 		fi
-	elif ! printf '%s' "$want" | grep -Eq '^[0-9a-f]{64}$'; then
+	elif ! [[ "$want" =~ ^[0-9a-f]{64}$ ]]; then   # whole string: grep -E would test each line of a multi-line value (D12)
 		_gs_err "not a sha256 (need 64 hex chars): '$want'"
 		return 2
 	fi
@@ -65,7 +97,7 @@ git_pin() {  # <repo-url> <dest> <40-hex-sha>
 	local repo="${1:-}" dest="${2:-}" ref="${3:-}" got
 	if [ -z "$repo" ] || [ -z "$dest" ]; then _gs_err "usage: git_pin <repo-url> <dest> <sha>"; return 2; fi
 	ref="$(printf '%s' "$ref" | tr 'A-F' 'a-f')"
-	if ! printf '%s' "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
+	if ! [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 		if [ "${GS_ALLOW_UNPINNED:-0}" != "1" ]; then
 			_gs_err "git ref '$ref' for $repo is not a 40-hex commit SHA (refusing; set GS_ALLOW_UNPINNED=1 to see the SHA and pin it)"
 			return 2
@@ -90,7 +122,7 @@ git_pin() {  # <repo-url> <dest> <40-hex-sha>
 		return 1
 	fi
 	got="$(git -C "$dest" rev-parse HEAD)" || return 1
-	if printf '%s' "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
+	if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 		if [ "$got" != "$ref" ]; then
 			_gs_err "HEAD is $got, expected $ref"
 			return 1
@@ -103,7 +135,7 @@ git_pin() {  # <repo-url> <dest> <40-hex-sha>
 
 pin_from_manifest() {  # <NAME> <dest>; reads NAME_REPO or NAME_URL, and NAME_PIN, from shell variables (e.g. after . build/versions.env)
 	local name="${1:-}" dest="${2:-}" rv uv pv
-	if ! printf '%s' "$name" | grep -Eq '^[A-Z][A-Z0-9_]*$' || [ -z "$dest" ]; then
+	if ! [[ "$name" =~ ^[A-Z][A-Z0-9_]*$ ]] || [ -z "$dest" ]; then
 		_gs_err "usage: pin_from_manifest <NAME> <dest> (NAME like WFB_NG)"
 		return 2
 	fi

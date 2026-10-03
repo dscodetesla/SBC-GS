@@ -2,17 +2,18 @@
 # session: distance=150m duration=600s dt=20s board=pi5 psu=5.0A usb_max_current=0 codec=h265 spec: residual<=0.01 g2g<=250ms freeze<=1
 # priors: 145 sampled dims (INF=4 SYNTH=67 UNMEASURED=74); pinned: rf.fading_model,rf.loss_model
 output,unit,p5,p50,p95,p99,mean
-residual,frac,0.001166,0.04392,0.8062,0.9774,0.1411
-margin_db,dB,1.525,11.36,16.61,19.03,9.465
-range_m,m,74.71,332.2,1127,1387,400.8
-g2g_ms,ms,164,192.6,235.8,249.4,194.8
-availability,frac,0,0.85,1,1,0.7228
-ttff_s,s,0,120,600,600,206.3
+residual,frac,0.001196,0.04374,0.5113,0.9774,0.1179
+margin_db,dB,3.954,11.45,16.63,19.08,10.8
+range_m,m,81.03,351.3,1240,1479,416.2
+g2g_ms,ms,164,194.6,235.8,249.4,195.3
+availability,frac,0,0.8667,1,1,0.75
+ttff_s,s,0,120,600,600,215
 P(no failure in session)=0.150  bring-up p50=3.6s
+P(dead link: no up slice, margin_db undefined)=0.017; margin_db percentiles/mean are over the 59 of 60 draws with a link
 failure_mode,probability
 bringup_fail,0.033
-thermal_derate,0.150
-thermal_shutdown,0.050
+thermal_derate,0.067
+thermal_shutdown,0.017
 usb_dropout,0.083
 usb_trip,0.000
 usb_latched,0.000
@@ -20,9 +21,9 @@ undervoltage,0.167
 soc_throttle,0.033
 agc_saturation,0.000
 desense,0.183
-burst_outage,0.317
+burst_outage,0.300
 injection_overload,0.083
-idr_freeze,0.783
-latency_creep,0.100
-fec_exhaust,0.600
+idr_freeze,0.800
+latency_creep,0.117
+fec_exhaust,0.550
 # SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99

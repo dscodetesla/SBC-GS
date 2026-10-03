@@ -123,7 +123,9 @@ def map_axis(raw, cfg):
     raw = max(lo, min(hi, float(raw)))
     if "center" in cfg:
         c = float(cfg["center"])
-        n = (raw - c) / (hi - c) if raw >= c else (raw - c) / (c - lo)
+        span = (hi - c) if raw >= c else (c - lo)
+        # span == 0 only when the stick is exactly at a centre that sits on min/max (raw is clamped to [min,max]): neutral, not 0/0
+        n = (raw - c) / span if span > 0 else 0.0
         db = float(cfg.get("deadband", 0.0))
         if abs(n) <= db:
             n = 0.0
@@ -141,15 +143,32 @@ def map_axis(raw, cfg):
 def load_map(path):
     with open(path, encoding="utf-8") as f:
         d = json.load(f)
+    if not isinstance(d, dict):
+        raise ValueError("mapping file must contain a JSON object")
     axes = d.get("axes")
     if not isinstance(axes, dict) or not axes:
         raise ValueError("mapping file needs a non-empty 'axes' object")
     for name, cfg in axes.items():
+        if not isinstance(cfg, dict):
+            raise ValueError(f"axis {name}: must be an object with channel/min/max")
         ch = cfg.get("channel")
         if not isinstance(ch, int) or not 1 <= ch <= NCH:
             raise ValueError(f"axis {name}: channel must be an integer 1-{NCH}")
         if "min" not in cfg or "max" not in cfg:
             raise ValueError(f"axis {name}: min and max are required")
+        nums = {}
+        for k in ("min", "max", "center", "deadband"):
+            if k in cfg:
+                v = cfg[k]
+                if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                    raise ValueError(f"axis {name}: {k} must be a finite number")
+                nums[k] = float(v)
+        if not nums["max"] > nums["min"]:
+            raise ValueError(f"axis {name}: max must be > min")
+        if "center" in nums and not nums["min"] <= nums["center"] <= nums["max"]:
+            raise ValueError(f"axis {name}: center must be within min..max")
+        if "deadband" in nums and not 0.0 <= nums["deadband"] < 1.0:
+            raise ValueError(f"axis {name}: deadband must be 0 <= deadband < 1")
     return axes
 
 
@@ -178,6 +197,21 @@ class SweepSource(Source):
         return sanitize(v), now
 
 
+def parse_stdin_line(line):
+    """One 'ch1 .. chN' line -> sanitized 8-list, or None to drop the frame (D19).
+
+    A line shorter than NCH fields is a legitimate partial mapping (unmapped channels = IGNORE), but a value below LO in
+    such a line is indistinguishable from a truncated number ('1500 15' cut from '1500 1500'): the frame is dropped instead of
+    being clamped UP to LO. Full NCH-field lines keep the documented clamp (e.g. 500 -> 1000)."""
+    try:
+        vals = [float(t) for t in line.split()]
+    except ValueError:
+        return None
+    if len(vals) < NCH and any(math.isfinite(v) and v != IGNORE and v < LO for v in vals):
+        return None
+    return sanitize(vals)
+
+
 class StdinSource(Source):
     def __init__(self, fh=None):
         self.fh = fh or sys.stdin
@@ -186,14 +220,13 @@ class StdinSource(Source):
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
-        for line in self.fh:
-            line = line.strip()
+        for raw in self.fh:
+            # an unterminated last line (EOF/cut mid-write) may be a truncated number: never trust it
+            truncated = not raw.endswith("\n")
+            line = raw.strip()
             if not line or line.startswith("#"):
                 continue
-            try:
-                s = sanitize([float(t) for t in line.split()])
-            except ValueError:
-                s = None
+            s = None if truncated else parse_stdin_line(line)
             if s is None:
                 log(f"input dropped (NaN/absurd/malformed): {line[:60]!r}")
                 continue

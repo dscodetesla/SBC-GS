@@ -52,8 +52,11 @@ sbc_cfg_registry() {
 sbc_cfg_parse() {
 	local file="$1" owner="${2:-}" line n=0 key val tmp
 	local sq="'" bt='`' dq='"' re seen=" "
+	local LC_ALL=C   # byte semantics: [[:cntrl:]] and [[:space:]] must not depend on the caller's locale (D2); python checks ASCII controls only
 	re="^[[:space:]]*([A-Z][A-Z0-9_]*)=(${sq}([^${sq}\$${bt}\\\\]*)${sq}|${dq}([^${dq}\$${bt}\\\\]*)${dq}|([A-Za-z0-9._:/@%+,-]*))([[:space:]]+#.*)?[[:space:]]*\$"
 	[ -r "$file" ] || sbc_die "cannot read $file"
+	# bash `read` silently drops NUL bytes (3<NUL>00 would be read as 300); python rejects them (D1): reject the whole file
+	tr -d '\000' <"$file" | cmp -s - "$file" || sbc_die "$file: NUL byte in file (control character)"
 	while IFS= read -r line || [ -n "$line" ]; do
 		n=$((n + 1))
 		line="${line%$'\r'}"
@@ -107,7 +110,10 @@ sbc_cfg_check() {
 		bool)
 			case "$v" in 0|1) return 0 ;; *) SBC_ERR="$k='$v' must be 0 or 1"; return 1 ;; esac ;;
 		enum:*)
-			case "|${t#enum:}|" in *"|$v|"*) return 0 ;; *) SBC_ERR="$k='$v' must be one of ${t#enum:}"; return 1 ;; esac ;;
+			local -a alts=(); local alt
+			IFS='|' read -ra alts <<<"${t#enum:}"
+			for alt in "${alts[@]}"; do [ "$v" = "$alt" ] && return 0; done   # compare with each alternative: "a|b" must not match enum:a|b (D3)
+			SBC_ERR="$k='$v' must be one of ${t#enum:}"; return 1 ;;
 		str) return 0 ;;
 		*) SBC_ERR="registry type '$t' of $k is unknown"; return 1 ;;
 	esac

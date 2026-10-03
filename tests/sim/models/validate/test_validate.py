@@ -6,9 +6,10 @@
   * крос-модельна узгодженість (power <-> degrade, rf <-> degrade при нульовій деградації, latency <-> рушій, замкнені формули <-> MC);
   * статистика (антитетика знижує дисперсію, детермінізм, бутстреп);
   * back-test проти зовнішніх довідкових даних (SRC, див. backtest.py);
-  * «DEFECT»-тести фіксують ЗНАЙДЕНІ невідповідності моделей (Dn у docs/SIM-VALIDATION.md): вони проходять, поки дефект є; коли
-    модель виправлять, тест впаде з повідомленням «виправлено — онови доку й тест».
-Моделі не змінюються. Тести проходять і під nobody на записуваній копії (нічого не пишуть у каталог моделей).
+  * «DEFECT»-тести (TestKnownDefects) фіксують ЗНАЙДЕНІ невідповідності моделей (Dn у docs/SIM-VALIDATION.md): вони проходять, поки дефект
+    є; коли модель виправлять, тест впаде з повідомленням «виправлено — онови доку й тест». Виправлені дефекти (D1, D1b, D4, D9)
+    перетворено на постійні «FIXED»-тести (TestFixedDefects): вони падають, якщо дефект повернеться.
+Моделі цим файлом не змінюються. Тести проходять і під nobody на записуваній копії (нічого не пишуть у каталог моделей).
 """
 import math
 import os
@@ -355,7 +356,11 @@ def theta_violations(th):
     eff = dm.combine_snr_evm_db(40.0, ev)
     if not (vlib.finite(ev) and eff <= min(40.0, -ev) + 1e-9):
         v.append("EVM ceiling")
-    p_w = g("hw.air_bec_v") * g("power.devices.rtl8812_tx_a") * g("hw.air_diss_frac") + g("hw.air_board_heat_w")
+    prf = dm.dbm_to_mw(dm.pa_output_dbm(g("rf.tx_power_dbm"), p1, rp)) / 1000.0
+    p_dc, heat, _eta = dm.air_tx_power_w(g("hw.air_bec_v"), g("power.devices.rtl8812_tx_a"), prf, dm.dbm_to_mw(p1) / 1000.0, g("hw.air_diss_frac"))
+    if not (prf + heat <= p_dc * (1 + 1e-12) and heat >= 0):
+        v.append("AIR energy balance")
+    p_w = heat + g("hw.air_board_heat_w")
     tss = g("ext.ambient_c") + g("hw.air_ambient_rise_c") + g("ext.solar_rise_c") + g("hw.air_rth_c_per_w") * p_w
     if not (vlib.finite(tss) and p_w >= 0 and tss >= g("ext.ambient_c")):
         v.append("thermal steady state")
@@ -421,7 +426,11 @@ class TestHypercube(unittest.TestCase):
                 self.assertTrue(0.0 <= r[k] <= 1.0, "%s=%r" % (k, r[k]))
             self.assertGreaterEqual(r["range_m"], 0.0)
             self.assertLessEqual(r["ttff_s"], 600.0 + 1e-9)
-            self.assertGreaterEqual(r["margin_db"], -150.0)  # заглушка -60 (D4) НЕ є нижньою межею: на вершинах гіперкуба бувають значення < -60
+            # D4 (ВИПРАВЛЕНО): мертвий лінк не має margin (None + dead=True); живий має скінченний margin, а не заглушку
+            self.assertEqual(r["margin_db"] is None, r["dead"], "margin_db None <=> dead")
+            self.assertEqual(r["margin_p5_db"] is None, r["dead"])
+            if not r["dead"]:
+                self.assertGreaterEqual(r["margin_db"], -150.0)
             self.assertGreater(r["g2g_ms"], 0.0)
             self.assertTrue(all(isinstance(x, bool) for x in r["flags"].values()))
             self.assertGreaterEqual(r["down_s"], 0.0)
@@ -439,6 +448,9 @@ class TestHypercube(unittest.TestCase):
             s = se.summarize(e, e.run(80, 1))
             for o, d in s["outputs"].items():
                 p = d["p"]
+                if d["n"] == 0:  # D4: усі draw мертві -> у margin_db немає що порівнювати (nan), але це не фізичне число
+                    self.assertTrue(all(math.isnan(x) for x in p.values()), o)
+                    continue
                 self.assertLessEqual(p[5], p[50] + 1e-12)
                 self.assertLessEqual(p[50], p[95] + 1e-12)
                 self.assertLessEqual(p[95], p[99] + 1e-12)
@@ -681,11 +693,16 @@ class TestStatistics(unittest.TestCase):
         rho = vlib.spearman([tabs[0][k] for k in keys], [tabs[1][k] for k in keys])
         self.assertGreater(rho, 0.3, "Morris кнопки нестабільний між seed: rho=%.2f" % rho)
 
-    def test_sentinel_values_documented(self):
-        # знак-гвинтик: margin=-60 і residual=1 при неробочому лінку це заглушки, не фізика (D4)
+    def test_dead_link_has_no_margin_not_a_sentinel(self):
+        # D4 (ВИПРАВЛЕНО): неробочий лінк = margin None + dead=True; residual=1 / availability=0 лишаються фізичними межами
         e = eng("pi5_3a_weak_psu")
         res = e.run(40, 2)
-        self.assertTrue(all(r["margin_db"] >= -60.0 for r in res))
+        for r in res:
+            if r["dead"]:
+                self.assertIsNone(r["margin_db"])
+                self.assertEqual(r["availability"], 0.0)
+                self.assertEqual(r["residual"], 1.0)
+        self.assertTrue(any(r["dead"] for r in res))
 
 
 # ================================================================ 4. back-test проти зовнішніх довідкових даних
@@ -770,28 +787,6 @@ class TestAlternativeForms(unittest.TestCase):
 class TestKnownDefects(unittest.TestCase):
     """Кожен тест = один пункт «Знайдені невідповідності» в docs/SIM-VALIDATION.md. Падіння = дефект виправлено: онови доку й тест."""
 
-    def test_D1_air_temperature_independent_of_rf_tx_power(self):
-        tj = []
-        for tx in (20.0, 27.0):
-            e = vlib.engine("hot_day_closed_case", sets={"rf.tx_power_dbm": tx})
-            tj.append(dm.run_session(e.space.median_theta(), e.cfg, Rng(1))["tj_end_c"])
-        self.assertAlmostEqual(tj[0], tj[1], delta=1e-9, msg="D1 виправлено? Tj тепер залежить від потужності TX: онови docs/SIM-VALIDATION.md")
-
-    def test_D1b_energy_conservation_violated_on_part_of_prior(self):
-        # P_rf + диссипація*P_dc > P_dc: струм AIR (rtl8812_tx_a) не залежить від ВЧ-потужності
-        e = eng()
-        ths = vlib.thetas(e, 3000, 3)
-        viol = 0
-        for th in ths:
-            g = th.get
-            pdc = g("hw.air_bec_v") * g("power.devices.rtl8812_tx_a")
-            prf = dm.dbm_to_mw(dm.pa_output_dbm(g("rf.tx_power_dbm"), g("hw.pa_p1db_out_dbm"), g("hw.pa_rapp_p"))) / 1000.0
-            if prf + g("hw.air_diss_frac") * pdc > pdc:
-                viol += 1
-        f = viol / len(ths)
-        self.assertGreater(f, 0.01, "D1b виправлено? частка порушень %.3f" % f)
-        self.assertLess(f, 0.08)
-
     def test_D2_usb_overcurrent_thresholds_disagree(self):
         P = common.load({"power.devices.fc_usb_a": 0.17})  # rx 0.45 + fc 0.17 = 0.62 А при ліміті 0.6 А
         b = power_model.budget(P, "pi5", 3.0, 1, "rx", ("fc",), "active", False, False)
@@ -811,10 +806,6 @@ class TestKnownDefects(unittest.TestCase):
         self.assertGreater(worst, 0.03, "D3 виправлено? макс. відносна похибка %.3f" % worst)
         self.assertLess(worst, 0.15)
 
-    def test_D4_sentinel_margin_present(self):
-        res = eng().run(200, 1)
-        self.assertTrue(any(r["margin_db"] == -60.0 for r in res), "D4: заглушка margin=-60 для неробочого лінка зникла")
-
     def test_D5_soc_prior_exceeds_documented_hard_limit(self):
         sp = backtest.soc_prior_rows()
         self.assertGreater(sp["hi"], backtest.PI_THERMAL_LIMIT_C)
@@ -833,7 +824,7 @@ class TestKnownDefects(unittest.TestCase):
         e = eng("pi5_3a_weak_psu")
         res = e.run(60, 1)
         dead = sum(1 for r in res if r["availability"] == 0.0) / len(res)
-        sent = sum(1 for r in res if r["margin_db"] == -60.0) / len(res)
+        sent = sum(1 for r in res if r["dead"]) / len(res)  # (D4: раніше margin == -60; тепер явний прапорець dead)
         self.assertGreater(dead, 0.9, "D12 виправлено? частка мертвих лінків %.2f" % dead)
         self.assertGreater(sent, 0.9)
 
@@ -855,28 +846,6 @@ class TestKnownDefects(unittest.TestCase):
     def _st(self, th, plan):
         return {"plin": th.get("rf.tx_power_dbm"), "p1db": plan["p1db0"], "evm_shift": 0.0, "ant": 0.0, "shadow": 0.0, "noise_extra": 0.0, "burst": False}
 
-    def test_D9_fading_discretisation_misses_the_per_tail(self):
-        # Райс K=10 дБ, eff-SNR 15 дБ: еталон = 100000 draw; рушій (32 квантилі) недооцінює хвіст PER на порядки, rf_model (400 draw) шумить x2
-        kdb = 10.0
-        e = vlib.neutral_engine(extra={"rf.fading_model": "rician", "rf.loss_model": "iid", "rf.rician_k_db": kdb})
-        th = e.space.median_theta()
-        plan = dm.prepare(th, e.cfg, Rng(1))
-        rnd = random.Random(99)
-        k = 10 ** (kdb / 10)
-        los, sg = math.sqrt(k / (k + 1)), math.sqrt(1 / (2 * (k + 1)))
-        g = [(los + sg * rnd.gauss(0, 1)) ** 2 + (sg * rnd.gauss(0, 1)) ** 2 for _ in range(100000)]
-        m = sum(g) / len(g)
-        tab = plan["tab"]
-        ref = sum(dm.per_lookup(tab, 15.0 + 10 * math.log10(x / m)) for x in g) / len(g)
-        eng_p = dm.mean_per(tab, 15.0, plan["gains"])
-        rf400 = sum(dm.per_lookup(tab, 15.0 + 10 * math.log10(x)) for x in rf_model._gains("rician", kdb, 400, 1)) / 400
-        self.assertGreater(ref, 1e-3)
-        self.assertLess(eng_p / ref, 0.05, "D9 виправлено? engine/ref=%.3g" % (eng_p / ref))
-        self.assertGreater(max(rf400 / ref, ref / rf400), 1.5)
-        # у робочій області (PER ~ 10 %, де діапазон при residual<=1 %) розбіжність мала
-        ref2 = sum(dm.per_lookup(tab, 8.0 + 10 * math.log10(x / m)) for x in g) / len(g)
-        self.assertAlmostEqual(dm.mean_per(tab, 8.0, plan["gains"]) / ref2, 1.0, delta=0.2)
-
     def test_D10_queue_ignores_deterministic_service(self):
         import studies
         cf = dm.injection_block_prob(1.0, 5)
@@ -888,6 +857,160 @@ class TestKnownDefects(unittest.TestCase):
         P = common.load()
         self.assertEqual(P.get("power.boards.pi3bp.board_idle_a"), backtest.PI_DOC_TABLE["pi3b_column"]["idle_avg"])
         self.assertEqual(P.prov("power.boards.pi3bp.board_idle_a"), "SRC")
+
+
+# ================================================================ 6b. ВИПРАВЛЕНІ невідповідності (постійні регресійні тести)
+def _rician_pdf_integral(tab, snr_db, k_db, n=240000, xmax=4.0):
+    """Незалежний еталон (не код рушія): середній PER по Райсу з унормованою щільністю, інтегрування по x (середина) з I0 рядом Тейлора."""
+    k = 10 ** (k_db / 10.0)
+
+    def i0(z):
+        t, s, term, j = (z / 2.0) ** 2, 1.0, 1.0, 1
+        while term > 1e-17 * s:
+            term *= t / (j * j)
+            s += term
+            j += 1
+        return s
+    h = xmax / n
+    tot = mass = 0.0
+    for i in range(n):
+        x = (i + 0.5) * h
+        p = (k + 1) * math.exp(-k - (k + 1) * x) * i0(2 * math.sqrt(k * (k + 1) * x)) * h
+        mass += p
+        tot += p * dm.per_lookup(tab, snr_db + 10 * math.log10(x))
+    return tot / mass
+
+
+class TestFixedDefects(unittest.TestCase):
+    """Виправлені невідповідності (D1, D1b, D4, D9; docs/SIM-VALIDATION.md §3): якщо дефект повернеться, тест упаде."""
+
+    def test_D1_air_temperature_grows_with_rf_tx_power(self):
+        tj, rf, dc = [], [], []
+        for tx in (20.0, 24.0, 27.0):
+            e = vlib.engine("hot_day_closed_case", sets={"rf.tx_power_dbm": tx})
+            r = dm.run_session(e.space.median_theta(), e.cfg, Rng(1))
+            tj.append(r["tj_end_c"])
+            rf.append(r["air_energy"]["rf_w"])
+            dc.append(r["air_energy"]["dc_w"])
+            self.assertAlmostEqual(r["air_energy"]["dc_w"] - r["air_energy"]["rf_w"], r["air_energy"]["heat_w"], delta=1e-12)
+        self.assertTrue(tj[0] + 1.0 < tj[1] and tj[1] + 1.0 < tj[2], "Tj має рости з потужністю TX: %s" % tj)  # було 98,012 у всіх трьох
+        self.assertTrue(rf[0] < rf[1] < rf[2] and dc[0] < dc[1] < dc[2], "P_dc і P_rf ростуть разом")
+
+    def test_D1_heat_is_dc_minus_rf_and_grows_with_power_and_current(self):
+        r = random.Random(7)
+        for _ in range(2000):
+            v, i, dfr = r.uniform(4.6, 5.4), r.uniform(0.3, 2.0), r.uniform(0.7, 0.95)
+            ref = r.uniform(0.05, 1.3)
+            prf = r.uniform(0.0, 1.5)
+            pdc, heat, eta = dm.air_tx_power_w(v, i, prf, ref, dfr)
+            self.assertAlmostEqual(pdc - prf, heat, delta=1e-12)
+            self.assertGreaterEqual(pdc, prf)
+            self.assertGreaterEqual(heat, 0.0)
+            self.assertLessEqual(eta, 1.0)
+            self.assertGreater(dm.air_tx_power_w(v, i, prf + 0.05, ref, dfr)[1], heat)       # більше ВЧ -> більше тепла
+            self.assertGreater(dm.air_tx_power_w(v, i + 0.05, prf, ref, dfr)[1], heat)       # більше струму -> більше тепла
+            self.assertGreater(dm.air_tx_power_w(v, i + 0.05, prf, ref, dfr)[0], pdc)
+
+    def test_D1b_energy_conserved_on_whole_prior(self):
+        # P_rf + heat == P_dc і P_rf <= P_dc на 3000 випадкових точках пріорів і 300 вершинах (було: порушення у ~3 % точок)
+        e = eng()
+        ths = vlib.thetas(e, 3000, 3) + vlib.corner_thetas(e, 300, 5)
+        clamped = 0
+        for th in ths:
+            g = th.get
+            prf = dm.dbm_to_mw(dm.pa_output_dbm(g("rf.tx_power_dbm"), g("hw.pa_p1db_out_dbm"), g("hw.pa_rapp_p"))) / 1000.0
+            pdc, heat, eta = dm.air_tx_power_w(g("hw.air_bec_v"), g("power.devices.rtl8812_tx_a"), prf, dm.dbm_to_mw(g("hw.pa_p1db_out_dbm")) / 1000.0, g("hw.air_diss_frac"))
+            self.assertLessEqual(prf + heat, pdc * (1 + 1e-12))
+            self.assertGreaterEqual(heat, 0.0)
+            self.assertLessEqual(prf / pdc, eta + 1e-12)
+            clamped += eta > 1.0 - g("hw.air_diss_frac") + 1e-12
+        # частка точок, де виміряний струм «виграє» в ККД-пріора (припущення моделі, див. SIM-VALIDATION D1b): інформаційно, не 100 %
+        self.assertLess(clamped / len(ths), 0.6)
+
+    def test_D4_dead_link_is_a_flag_not_a_stub_value(self):
+        e = eng("pi5_3a_weak_psu")
+        res = e.run(40, 1)
+        dead = [r for r in res if r["dead"]]
+        self.assertGreater(len(dead), 30)
+        for r in dead:
+            self.assertIsNone(r["margin_db"])
+            self.assertIsNone(r["margin_p5_db"])
+        s = se.summarize(e, res)
+        self.assertEqual(s["outputs"]["margin_db"]["n"], len(res) - len(dead))
+        self.assertAlmostEqual(s["dead_frac"], len(dead) / len(res))
+        txt = "\n".join(se.fmt_report(e, 40, 1, False, s))
+        self.assertIn("P(dead link", txt)
+        # на nominal живі draw не мають заглушки -60, а мертві (якщо є) - не мають margin взагалі
+        res = eng().run(200, 1)
+        self.assertFalse(any(r["margin_db"] == -60.0 for r in res))
+        self.assertTrue(all((r["margin_db"] is None) == r["dead"] for r in res))
+
+    def test_D4_morris_does_not_mix_dead_state_into_margin(self):
+        # синтетичний рушій: один параметр перемикає лінк «живий/мертвий», margin живого лінку = const 10 дБ. Стара заглушка -60
+        # давала б для margin_db mu* ~ 50 дБ; тепер margin_db не залежить ні від чого, а перемикання видно лише в рядку dead
+        e = eng()
+        key = "power.tx_peak_factor"
+
+        def fake(th, _rng):
+            dead = th.get(key) > e.space.median_theta().get(key)
+            r = {"margin_db": None if dead else 10.0, "dead": dead}
+            r.update({o: 0.5 for o in se.SENS_LINK if o != "margin_db"})
+            return r
+        with vlib.patched(e, "evaluate", fake):
+            tab, noise = se.morris(e, 4, 1, list(se.SENS_LINK) + [se.SENS_DEAD])
+        self.assertTrue(all(mu == 0.0 for mu, _sg, _k, _p in tab["margin_db"]))
+        self.assertEqual(tab[se.SENS_DEAD][0][2], key)
+        self.assertGreater(tab[se.SENS_DEAD][0][0], 0.5)
+        self.assertEqual(noise["margin_db"], 0.0)
+
+    def test_D9_fading_average_matches_independent_integration_in_the_tail(self):
+        # Райс K=10 дБ, MCS1, 1456 Б: еталон = пряме інтегрування щільності (код тесту, не рушія); рушій раніше 2,4e-7 проти 2,2e-3 при 15 дБ
+        kdb = 10.0
+        tab = dm.per_table(1, False, 1456)
+        ftab = dm.fading_per_table(1, False, 1456, "rician", kdb)
+        for snr, tol in ((5.0, 0.03), (8.0, 0.03), (12.0, 0.03), (15.0, 0.03), (20.0, 0.04), (25.0, 0.05)):
+            ref = _rician_pdf_integral(tab, snr, kdb, n=30000 if not LONG else 240000)
+            got = dm.per_lookup(ftab, snr)
+            self.assertAlmostEqual(got / ref, 1.0, delta=tol, msg="snr=%s ref=%.4g engine=%.4g" % (snr, ref, got))
+
+    def test_D9_engine_matches_monte_carlo_reference_and_beats_rf_model_noise(self):
+        kdb = 10.0
+        e = vlib.neutral_engine(extra={"rf.fading_model": "rician", "rf.loss_model": "iid", "rf.rician_k_db": kdb})
+        th = e.space.median_theta()
+        plan = dm.prepare(th, e.cfg, Rng(1))
+        rnd = random.Random(99)
+        k = 10 ** (kdb / 10)
+        los, sg = math.sqrt(k / (k + 1)), math.sqrt(1 / (2 * (k + 1)))
+        g = [(los + sg * rnd.gauss(0, 1)) ** 2 + (sg * rnd.gauss(0, 1)) ** 2 for _ in range(100000)]
+        m = sum(g) / len(g)
+        tab = plan["tab"]
+        for snr, tol in ((8.0, 0.1), (15.0, 0.3)):  # шумовий еталон 1e5 draw: хвіст 15 дБ має ~10 % статистичної похибки
+            ref = sum(dm.per_lookup(tab, snr + 10 * math.log10(x / m)) for x in g) / len(g)
+            self.assertAlmostEqual(dm.per_lookup(plan["ftab"], snr) / ref, 1.0, delta=tol, msg="snr=%s" % snr)
+
+    def test_D9_other_fading_models_and_weights(self):
+        w = dm.fading_weights("rician", 10.0)
+        self.assertAlmostEqual(sum(w), 1.0, delta=1e-12)
+        self.assertAlmostEqual(sum(x * 10 ** ((dm._FADE_JLO + i) * 0.25 / 10.0) for i, x in enumerate(w)), 1.0, delta=2e-3)  # одиничне середнє за потужністю
+        w0 = dm.fading_weights("rayleigh", 0.0)
+        self.assertAlmostEqual(sum(x * 10 ** ((dm._FADE_JLO + i) * 0.25 / 10.0) for i, x in enumerate(w0)), 1.0, delta=2e-3)
+        # Релей: еталон = рівноймовірнісні квантилі (точна формула -ln(1-u)), 100000 вузлів
+        tab = dm.per_table(1, False, 1456)
+        ft = dm.fading_per_table(1, False, 1456, "rayleigh", 0.0)
+        gs = [-math.log(1 - (i + 0.5) / 100000) for i in range(100000)]
+        for snr in (10.0, 20.0, 30.0):
+            ref = sum(dm.per_lookup(tab, snr + 10 * math.log10(x)) for x in gs) / len(gs)
+            self.assertAlmostEqual(dm.per_lookup(ft, snr) / ref, 1.0, delta=0.05, msg="rayleigh snr=%s" % snr)
+        self.assertEqual(dm.fading_per_table(1, False, 1456, "none", 0.0), tab)
+        self.assertTrue(all(b <= a + 1e-12 for a, b in zip(ft, ft[1:])))  # середній PER монотонно спадає з SNR
+
+    def test_D9_residual_tail_is_not_underestimated_by_orders(self):
+        # residual ~ p^5 (8/12): раніше недооцінювався на порядки при p ~ 1e-3; тепер масштаб p збігається з еталоном (див. тест вище)
+        kdb = 10.0
+        ft = dm.fading_per_table(1, False, 1456, "rician", kdb)
+        p15 = dm.per_lookup(ft, 15.0)
+        self.assertGreater(p15, 1.5e-3)
+        self.assertLess(p15, 3.0e-3)
 
 
 class TestDocs(unittest.TestCase):

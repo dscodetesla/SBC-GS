@@ -7,7 +7,7 @@ get() never raises: a missing board/file/key or an empty value returns the given
 import os
 import re
 
-_LINE = re.compile(r"""^([A-Z][A-Z0-9_]*)=('([^']*)'|"([^"$`]*)"|([A-Za-z0-9_./:@%+-]*))\s*(#.*)?$""")
+_LINE = re.compile(r"""^([A-Z][A-Z0-9_]*)=('([^']*)'|"([^"$`\\]*)"|([A-Za-z0-9_./:@%+-]*))(\s+#.*)?\s*$""")  # same rules as gs/boards/validate.sh: "#" needs blanks before it, no backslash in "..."
 
 
 def parse(path):

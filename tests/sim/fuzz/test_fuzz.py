@@ -192,7 +192,7 @@ class TestConfigDifferential(Tmp):
             "ip": ["0.0.0.0", "255.255.255.255", "256.0.0.0", "1.2.3", "1.2.3.4.5", "01.002.3.4", "1.2.3.4 ", "1..2.3", "a.b.c.d", "1.2.3.-4", "0000.1.1.1"],
             "path": ["/", "/a", "/a/../b", "/a/..", "/..", "../a", "a", "/a b", "/a;b", "/a$b", "/a\\b", "/%:+@,-._", "//", "/a/./b", "/é"],
             "bool": ["0", "1", "2", "01", "true", "", "-1", " 1"],
-            "enum:a|b": ["a", "b", "|", "", "A", "ab", "a b", "a|", "|b"],   # "a|b" itself is the pinned defect D3
+            "enum:a|b": ["a", "b", "|", "", "A", "ab", "a b", "a|", "|b", "a|b", "b|a"],   # "a|b" was the defect D3 (fixed)
             "str": ["", "x", "a b", "$(x)", "é"],
             "int?": ["", "5", "x"], "path?": ["", "/a", "x"],
         }
@@ -339,33 +339,38 @@ class TestConfigResolveDifferential(Tmp):
 class TestConfigPinnedDefects(Tmp):
     """Divergences between the two loaders that the differential fuzz found (REPO). See docs/SIM-FUZZ.md D1..D3."""
 
-    def test_DEFECT_D1_nul_byte_shell_strips_python_rejects(self):
-        p = write(os.path.join(self.d, "nul.env"), b"TX12_DEADMAN_MS=3\x0000\n")
-        sh = sh_parse([p])[p]
-        py = py_parse(p)
-        # shell: bash `read` drops the NUL silently, so "3\0 00" is read as 300; python: control character -> error
-        F.pinned(self, "D1", sh[0] == 0 and sh[1] == [["TX12_DEADMAN_MS", "300"]] and py[0] == 2, f"shell={sh} python={py}")
+    def test_FIXED_D1_nul_byte_is_rejected_by_both_loaders(self):
+        # before the fix bash `read` dropped the NUL silently ("3\0 00" was read as 300) while python rejected the file
+        for name, body in (("nul.env", b"TX12_DEADMAN_MS=3\x0000\n"), ("nulc.env", b"# a\x00b\nTX12_DEADMAN_MS=300\n")):
+            p = write(os.path.join(self.d, name), body)
+            sh = sh_parse([p])[p]
+            py = py_parse(p)
+            self.assertEqual((sh[0], py[0]), (2, 2), (name, sh, py))
 
-    def test_DEFECT_D2_unicode_line_separator_in_utf8_locale(self):
+    def test_FIXED_D2_unicode_line_separator_verdict_is_locale_independent(self):
         p = write(os.path.join(self.d, "u.env"), 'TX12_MAP="a b"\n')
         sh = sh_parse([p], loc="C.UTF-8")[p]
         shc = sh_parse([p], loc="C")[p]
         py = py_parse(p)
-        # [[:cntrl:]] of bash is locale dependent (U+2028 is cntrl under C.UTF-8): same file, different verdict per locale and vs python
-        F.pinned(self, "D2", sh[0] == 2 and shc[0] == 0 and py[0] == 0, f"C.UTF-8={sh[0]} C={shc[0]} python={py[0]}")
+        # [[:cntrl:]] of bash was locale dependent (U+2028 is cntrl under C.UTF-8); the parser now runs under LC_ALL=C: one verdict, as python
+        self.assertEqual(sh, shc)
+        self.assertEqual((sh[0], py[0]), (0, 0), (sh, py))
 
-    def test_DEFECT_D3_enum_accepts_joined_alternatives_in_shell(self):
+    def test_FIXED_D3_enum_rejects_joined_alternatives_in_shell(self):
         cases = os.path.join(self.d, "cases")
         reg = write(os.path.join(self.d, "reg.tsv"), "KE\ta\tenum:a|b\t-\t-\tu\tn\to\t-\td\n")
-        write(cases, "KE\ta|b\n")
+        write(cases, "KE\ta|b\nKE\ta\nKE\tb\nKE\t|\nKE\tb|a\n")
         rc, out, err = F.run(["bash", "-c", 'export SBC_CFG_REGISTRY="$1"; exec bash "$2" "$3" check "$4"', "_", reg, HARNESS, REPO, cases])
         rows = L.registry(reg)
-        try:
-            L.check_value(rows["KE"], "a|b")
-            py_ok = True
-        except L.ConfigError:
-            py_ok = False
-        F.pinned(self, "D3", out.startswith("0\t") and not py_ok, f"shell rc={out!r} python_accepts={py_ok}")
+        py = []
+        for v in ("a|b", "a", "b", "|", "b|a"):
+            try:
+                L.check_value(rows["KE"], v)
+                py.append("0")
+            except L.ConfigError:
+                py.append("1")
+        self.assertEqual([ln.split("\t")[0] for ln in out.splitlines()], py, out)
+        self.assertEqual(py, ["1", "0", "0", "1", "1"])
 
 
 # ====================================================================== config: injection / no code from data
@@ -455,7 +460,7 @@ def _is_port(s):
 
 def mav_oracle(c):
     """Independent re-statement of the documented validation (docs/GS-MAVLINK.md, script header). -> (rc, command line | None).
-    Assumes values without leading zeros and without '..' (those cases are the pinned defects D4..D6)."""
+    Ports are compared as numbers (04560 == 4560, D5 fixed), '..' path components are rejected (D6), IPv4 must match as a whole (D4)."""
     c = {**GM_DEFAULTS, **c}
     if c["ROUTER"] not in ("mavp2p", "mavlink-router"):
         return 2, None
@@ -466,11 +471,11 @@ def mav_oracle(c):
     if not (re.fullmatch(r"[0-9]+", c["HB_SYSID"]) and 1 <= int(c["HB_SYSID"]) <= 254) or c["HB_SYSID"] == "3":
         return 2, None
     ports = c["GCS_UDP_PORTS"].split()
-    used = [c["UPSTREAM_PORT"]] + ([c["TCP_PORT"]] if c["TCP_ENABLE"] == "1" else [])
+    used = [int(c["UPSTREAM_PORT"])] + ([int(c["TCP_PORT"])] if c["TCP_ENABLE"] == "1" else [])
     for p in ports:
-        if not _is_port(p) or p in used:
+        if not _is_port(p) or int(p) in used:
             return 2, None
-        used.append(p)
+        used.append(int(p))
     clients = c["GCS_UDP_CLIENTS"].split()
     for x in clients:
         ip, sep, pt = x.rpartition(":")
@@ -478,11 +483,11 @@ def mav_oracle(c):
             return 2, None
     dev = c["SERIAL_DEV"]
     if dev:
-        if not re.fullmatch(r"/dev/[A-Za-z0-9._/-]+", dev):
+        if not re.fullmatch(r"/dev/[A-Za-z0-9._/-]+", dev) or re.search(r"(^|/)\.\.(/|$)", dev):
             return 2, None
         if not (re.fullmatch(r"[0-9]+", c["SERIAL_BAUD"]) and 1200 <= int(c["SERIAL_BAUD"]) <= 3000000):
             return 2, None
-    if not re.fullmatch(r"/[A-Za-z0-9._/%:-]+", c["DUMP_PATH"]):
+    if not re.fullmatch(r"/[A-Za-z0-9._/%:-]+", c["DUMP_PATH"]) or re.search(r"(^|/)\.\.(/|$)", c["DUMP_PATH"]):
         return 2, None
     if c["ROUTER"] == "mavp2p":
         cmd = ["mavp2p"] + ([f"serial:{dev}:{c['SERIAL_BAUD']}"] if dev else []) + [f"udps:{c['UPSTREAM_BIND']}:{c['UPSTREAM_PORT']}"]
@@ -507,8 +512,8 @@ def mav_oracle(c):
 def mav_gen(R):
     def ch(good, bad):  # ~88 % valid values so that many configs reach the command-line builder
         return R.choice(good) if R.random() < 0.88 else R.choice(bad)
-    port = lambda: ch(["14550", "14560", "5760", "14561", "1", "65535", "14570"], ["0", "65536", "-1", "abc", "", " 12", "*", "?", "14550x"])  # noqa: E731
-    ip = lambda: ch(["0.0.0.0", "127.0.0.1", "192.168.4.1", "255.255.255.255"], ["256.1.1.1", "1.2.3", "1.2.3.4.5", "a.b.c.d", "", "1..2.3", "1.2.3.4/8", "-1.2.3.4"])  # noqa: E731
+    port = lambda: ch(["14550", "14560", "5760", "14561", "1", "65535", "14570", "04560", "4560", "00001"], ["0", "65536", "-1", "abc", "", " 12", "*", "?", "14550x"])  # noqa: E731
+    ip = lambda: ch(["0.0.0.0", "127.0.0.1", "192.168.4.1", "255.255.255.255"], ["256.1.1.1", "1.2.3", "1.2.3.4.5", "a.b.c.d", "", "1..2.3", "1.2.3.4/8", "-1.2.3.4", "1.2.3.4.", ".1.2.3.4", "1.2.3.4. "])  # noqa: E731
     c = {}
     pick = lambda k, v: c.__setitem__(k, v) if R.random() < 0.5 else None  # noqa: E731
     pick("ROUTER", ch(["mavp2p", "mavp2p", "mavlink-router"], ["mavp2", "", "MAVP2P"]))
@@ -521,9 +526,9 @@ def mav_gen(R):
     pick("GCS_UDP_PORTS", " ".join(port() for _ in range(R.randint(0, 3))))
     pick("GCS_UDP_CLIENTS", " ".join(ch(["1.2.3.4:14550", "10.0.0.2:1", "1.2.3.4:65535"], ["1.2.3.4", "a:1", "1.2.3.4:0", "1.2.3.4:5:6", ":5"]) for _ in range(R.randint(0, 2))))
     pick("HB_SYSID", ch(["1", "125", "254"], ["255", "0", "3", "abc", "", "12 3", "-5", "99999999999999999999"]))
-    pick("SERIAL_DEV", ch(["", "/dev/ttyUSB0", "/dev/serial/by-id/x-1"], ["/dev/", "tty0", "/dev/tty;x", "/dev/a b", "/dev/tty$x"]))
+    pick("SERIAL_DEV", ch(["", "/dev/ttyUSB0", "/dev/serial/by-id/x-1"], ["/dev/", "tty0", "/dev/tty;x", "/dev/a b", "/dev/tty$x", "/dev/../tmp/x", "/dev/a/..", "/dev/.."]))
     pick("SERIAL_BAUD", ch(["115200", "1200", "3000000"], ["1199", "3000001", "abc", "", "0"]))
-    pick("DUMP_PATH", ch(["/var/log/x.tlog", "/tmp/a%b:c"], ["rel", "/", "/a b", "/a;b", "/a$b"]))
+    pick("DUMP_PATH", ch(["/var/log/x.tlog", "/tmp/a%b:c"], ["rel", "/", "/a b", "/a;b", "/a$b", "/var/log/../../etc/x", "/a/..", "/.."]))
     return c
 
 
@@ -586,17 +591,31 @@ class TestGsMavlink(Tmp):
                 for m in re.finditer(r"(?:udps|udpc|tcps):[0-9.]+:([0-9]+)", lines[0]):
                     self.assertTrue(1 <= int(m.group(1)) <= 65535, lines)
 
-    def test_DEFECT_D4_ip_with_trailing_dot_accepted(self):
-        rc, lines, _ = self.run_print(self.conf(0, {"LISTEN_ADDR": "1.2.3.4."}))
-        F.pinned(self, "D4", rc == 0 and "udps:1.2.3.4.:14560" in lines[0], f"rc={rc} {lines}")
+    def test_FIXED_D4_ip_with_trailing_dot_is_rejected(self):
+        for i, v in enumerate(("1.2.3.4.", ".1.2.3.4", "1.2.3.4.5", "1..2.3")):
+            for key in ("LISTEN_ADDR", "UPSTREAM_BIND"):
+                rc, lines, err = self.run_print(self.conf(i, {key: v}))
+                self.assertEqual(rc, 2, (key, v, lines))
+                self.assertIn("is not an IPv4 address", err)
+        rc, lines, _ = self.run_print(self.conf(9, {"LISTEN_ADDR": "1.2.3.4"}))   # the valid neighbour still works
+        self.assertEqual((rc, "udps:1.2.3.4:14560" in lines[0]), (0, True))
 
-    def test_DEFECT_D5_duplicate_port_with_leading_zero_accepted(self):
-        rc, lines, _ = self.run_print(self.conf(0, {"GCS_UDP_PORTS": "4560 04560"}))
-        F.pinned(self, "D5", rc == 0 and "udps:0.0.0.0:4560 udps:0.0.0.0:04560" in lines[0], f"rc={rc} {lines}")
+    def test_FIXED_D5_duplicate_port_with_leading_zero_is_rejected(self):
+        for i, (key, c) in enumerate((("GCS_UDP_PORTS", {"GCS_UDP_PORTS": "4560 04560"}), ("UPSTREAM", {"UPSTREAM_PORT": "4550", "GCS_UDP_PORTS": "04550"}),
+                                      ("TCP", {"TCP_ENABLE": "1", "TCP_PORT": "5760", "GCS_UDP_PORTS": "05760"}))):
+            rc, lines, err = self.run_print(self.conf(i, c))
+            self.assertEqual(rc, 2, (key, lines))
+            self.assertIn("used twice", err)
+        rc, lines, _ = self.run_print(self.conf(9, {"GCS_UDP_PORTS": "4560 04561"}))
+        self.assertEqual(rc, 0, lines)
 
-    def test_DEFECT_D6_serial_dev_and_dump_path_traversal_accepted(self):
-        rc, lines, _ = self.run_print(self.conf(0, {"SERIAL_DEV": "/dev/../tmp/x", "DUMP_ENABLE": "1", "DUMP_PATH": "/var/log/../../etc/x"}))
-        F.pinned(self, "D6", rc == 0 and "serial:/dev/../tmp/x:115200" in lines[0] and "--dump-path=/var/log/../../etc/x" in lines[0], f"rc={rc} {lines}")
+    def test_FIXED_D6_serial_dev_and_dump_path_traversal_is_rejected(self):
+        for i, c in enumerate(({"SERIAL_DEV": "/dev/../tmp/x"}, {"SERIAL_DEV": "/dev/a/.."}, {"DUMP_PATH": "/var/log/../../etc/x"}, {"DUMP_PATH": "/a/.."})):
+            rc, lines, err = self.run_print(self.conf(i, {**c, "DUMP_ENABLE": "1"}))
+            self.assertEqual(rc, 2, (c, lines))
+            self.assertIn("'..'", err)
+        rc, lines, _ = self.run_print(self.conf(9, {"SERIAL_DEV": "/dev/serial/by-id/a..b", "DUMP_PATH": "/var/log/x..y/a.tlog"}))   # '..' inside a name is fine
+        self.assertEqual(rc, 0, lines)
 
     def test_registry_value_check_is_stricter_than_the_script(self):
         """INF: the registry types (path, ip) would reject DUMP_PATH with '..'; the script's own validators win (--no-value-check)."""
@@ -621,7 +640,7 @@ def make_board_dir(root, name, extra=""):
 
 class TestBoard(Tmp):
     def gen_value(self, R):
-        A = list("abZ09 _-./:@%+,=#'\"$`;()&|<>*?!~")
+        A = list("abZ09 _-./:@%+,=#'\"$`;()&|<>*?!~\\")
         kind = R.choice(["bare", "sq", "sq", "dq"])
         inner = "".join(R.choice(A) for _ in range(R.randint(0, 5)))
         pad = R.choice(["", "", " ", "  "]) if R.random() < 0.4 else ""   # leading/trailing blanks INSIDE the quotes must be kept verbatim
@@ -631,8 +650,8 @@ class TestBoard(Tmp):
             v = "'" + pad + inner.replace("'", "") + pad + "'"
         else:
             v = '"' + pad + inner.replace('"', "") + pad + '"'
-        # NOTE: no '#' glued to the value and no backslash inside "..." here: those are the pinned defects D7/D8
-        return v + R.choice(["", "", " #c", "  ", "\t"])
+        # a glued '#' (D7) and a backslash inside "..." (D8) are part of the generator now: validate.sh must reject them or read them identically
+        return v + R.choice(["", "", " #c", "  ", "\t", "#c", "\\"])
 
     def test_validate_boards_conf_python_and_shell_agree(self):
         R = F.rng("board")
@@ -659,24 +678,30 @@ class TestBoard(Tmp):
                 bad.append((rd(d + "/board.conf").splitlines()[-1], out, py))
         self.assertEqual(bad[:4], [], f"{len(bad)} validate.sh-approved profiles are read differently by shell and board_conf.py")
 
-    def test_DEFECT_D7_validate_accepts_glued_comment_python_and_shell_differ(self):
+    def test_FIXED_D7_validate_rejects_glued_comment(self):
         root = os.path.join(self.d, "boards")
         os.makedirs(root)
-        d = make_board_dir(root, "g", "ZZFUZZ=abc#c\nZZQ='q'#c\n")
+        # for the shell a glued "#" is part of the word (abc#c, q#c) while board_conf.py read it as a comment: validate.sh must reject the file
+        for i, body in enumerate(("ZZFUZZ=abc#c\n", "ZZQ='q'#c\n", 'ZZQ="q"#c\n')):
+            d = make_board_dir(root, f"g{i}", body)
+            rc, out, _ = F.run(["bash", F.path("gs", "boards", "validate.sh"), d])
+            self.assertEqual(rc, 1, (body, out))
+            self.assertIn("bad syntax", out)
+        d = make_board_dir(root, "ok", "ZZFUZZ=abc #c\nZZQ='q'\t# c\n")   # blanks before the comment: fine, and read identically
         rc, out, _ = F.run(["bash", F.path("gs", "boards", "validate.sh"), d])
         rc2, o2, _ = F.run(["bash", "-c", '. "$1"; printf "%s|%s" "$ZZFUZZ" "$ZZQ"', "_", d + "/board.conf"])
         py = board_conf.parse(d + "/board.conf")
-        F.pinned(self, "D7", out.startswith("ok") and o2 == "abc#c|q#c" and py.get("ZZFUZZ") == "abc" and py.get("ZZQ") == "q", f"validate={out!r} shell={o2!r} python={py.get('ZZFUZZ')!r},{py.get('ZZQ')!r}")
+        self.assertEqual((rc, o2, py.get("ZZFUZZ"), py.get("ZZQ")), (0, "abc|q", "abc", "q"), out)
 
-    def test_DEFECT_D8_validate_accepts_backslash_before_closing_dquote(self):
+    def test_FIXED_D8_validate_rejects_backslash_in_double_quotes(self):
         root = os.path.join(self.d, "boards")
         os.makedirs(root)
         d = make_board_dir(root, "g", 'ZZFUZZ="abc\\"\nZZEND=1\n')
         rc, out, _ = F.run(["bash", F.path("gs", "boards", "validate.sh"), d])
-        rc2, o2, e2 = F.run(["bash", "-c", '. "$1"; printf "%s" "${ZZEND-unset}"', "_", d + "/board.conf"])
+        self.assertEqual(rc, 1, out)   # before the fix: "ok", yet sourcing the file left the quote open and ZZEND was swallowed
+        self.assertIn("bad syntax", out)
         py = board_conf.parse(d + "/board.conf")
-        # validate.sh says ok, but sourcing the file leaves the double quote open: ZZEND is swallowed (or the source fails)
-        F.pinned(self, "D8", out.startswith("ok") and (rc2 != 0 or o2 == "unset") and py.get("ZZEND") == "1", f"validate={out!r} source rc={rc2} ZZEND={o2!r} {e2[:60]!r}")
+        self.assertNotIn("ZZFUZZ", py)   # python no longer reads the line as a value either
 
     def test_board_get_returns_value_or_fails_loudly(self):
         R = F.rng("board-get")
@@ -699,17 +724,24 @@ class TestBoard(Tmp):
             self.assertIn(rc, (0, 1), (b, rc, err))
             self.no_marker(b)
 
-    def test_DEFECT_D9_BOARD_path_traversal_sources_foreign_conf(self):
+    def test_FIXED_D9_BOARD_path_traversal_is_rejected(self):
         evil = os.path.join(self.d, "evil")
         os.makedirs(evil)
         write(os.path.join(evil, "board.conf"), f"touch {self.marker}\nBOARD_ID=evil\n")
         rel = os.path.relpath(evil, F.path("gs", "boards"))
         rc, out, err = F.run(["bash", "-c", '. "$1/gs/lib/board.sh" && board_get BOARD_ID', "_", REPO], env={"BOARD": rel}, cwd=self.d)
-        F.pinned(self, "D9", os.path.exists(self.marker) and out.strip() == "evil", f"BOARD={rel} rc={rc} out={out!r}")
+        # BOARD must be an identifier: a "../" path used to source (= execute) a board.conf from anywhere
+        self.assertFalse(os.path.exists(self.marker), "a foreign board.conf was sourced")
+        self.assertEqual((rc, out.strip()), (1, ""), (rel, err))
+        self.assertIn("invalid board id", err)
 
-    def test_DEFECT_D10_board_get_key_is_evaluated_as_arithmetic_subscript(self):
+    def test_FIXED_D10_board_get_key_is_not_evaluated_as_arithmetic_subscript(self):
         rc, out, err = F.run(["bash", "-c", '. "$1/gs/lib/board.sh"; board_get "a[\\$(touch $2)]"', "_", REPO, self.marker], cwd=self.d)
-        F.pinned(self, "D10", os.path.exists(self.marker), f"rc={rc} err={err!r}")
+        self.assertFalse(os.path.exists(self.marker), f"the key was evaluated: rc={rc} err={err!r}")
+        self.assertEqual(rc, 1)
+        self.assertIn("invalid key", err)
+        rc, out, err = F.run(["bash", "-c", '. "$1/gs/lib/board.sh"; board_get BOARD_ID', "_", REPO], cwd=self.d)   # a plain key still works
+        self.assertEqual((rc, out.strip()), (0, "radxa-zero3"), err)
 
     def test_gpio_map_lookup_returns_digits_or_fails(self):
         R = F.rng("gpio-map")
@@ -759,7 +791,7 @@ class TestUdevRender(Tmp):
 
     def test_safe_values_substitute_exactly_and_deterministically(self):
         R = F.rng("udev")
-        al = "abcdefghijklmnopqrstuvwxyz0123456789_-./:+%,&\\ "
+        al = "abcdefghijklmnopqrstuvwxyzABC0123456789_-.:"   # the set render-udev.sh accepts (D11)
         cases = []
         for i in range(F.n(16)):
             vals = {k: "".join(R.choice(al) for _ in range(R.randint(1, 10))).strip() or "w" for k in ("WIFI_ONBOARD_IFACE", "GADGET_IFNAME", "WIFI_ONBOARD_DRIVER")}
@@ -786,11 +818,29 @@ class TestUdevRender(Tmp):
                 self.assertEqual(rc, 1, (v, se))
         self.no_marker()
 
-    def test_DEFECT_D11_values_are_not_escaped_for_udev_syntax(self):
-        rc, so, se, out = self.render("WIFI_ONBOARD_IFACE='x\", RUN+=\"/tmp/evil'\n", "q")
-        rules = rd(os.path.join(out, "99-GS.rules")) if rc == 0 else ""
+    def test_unresolved_placeholder_in_a_template_fails(self):
+        # the values can no longer carry '@' (D11), so an unresolved @KEY@ has to come from the template: use a copy of the script with a modified template
+        import shutil
+        g = os.path.join(self.d, "gcopy")
+        os.makedirs(os.path.join(g, "boards"))
+        shutil.copy(self.RENDER, os.path.join(g, "boards", "render-udev.sh"))
+        for name in ("98-rename.rules.in", "99-GS.rules.in"):
+            shutil.copy(F.path("gs", name), os.path.join(g, name))
+        with open(os.path.join(g, "98-rename.rules.in"), "a", encoding="utf-8") as f:
+            f.write('# unknown @NO_SUCH_KEY@ placeholder\n')
+        d = make_board_dir(self.d, "bd")
+        rc, so, se = F.run(["bash", os.path.join(g, "boards", "render-udev.sh"), d, os.path.join(self.d, "o-unres")], cwd=self.d)
+        self.assertEqual(rc, 1, se)
+        self.assertIn("unresolved placeholder @NO_SUCH_KEY@", se)
+
+    def test_FIXED_D11_values_with_udev_syntax_characters_are_rejected(self):
         # a double quote in a value closes the udev string and injects an extra assignment (INF: board.conf is repo-trusted)
-        F.pinned(self, "D11", rc == 0 and 'RUN+="/tmp/evil"' in rules, f"rc={rc} {se!r}")
+        for i, v in enumerate(['x", RUN+="/tmp/evil', 'a"b', "a b", "a\\\\b", "a,b", "a/b", "a&b"]):
+            rc, so, se, out = self.render(f"WIFI_ONBOARD_IFACE='{v}'\n", f"q{i}")
+            rules = rd(os.path.join(out, "99-GS.rules")) if os.path.exists(os.path.join(out, "99-GS.rules")) else ""
+            self.assertEqual(rc, 1, (v, se))
+            self.assertNotIn("/tmp/evil", rules)
+            self.assertIn("outside [A-Za-z0-9_.:-]", se)
 
 
 
@@ -878,28 +928,64 @@ class TestFetch(Tmp):
             self.assertEqual(rc, 2, f"ref {r!r}: {err!r}")
         self.assertFalse(os.path.exists(os.path.join(self.d, "g", ".git")), "git init ran for a rejected ref")
 
-    def test_DEFECT_D12_multiline_pin_is_accepted_by_grep(self):
+    def test_FIXED_D12_multiline_pin_is_rejected(self):
         dest = os.path.join(self.d, "ml")
-        rc, out, err = fetch_call('fetch_file "$1" "$2" "$3"', self.d, args=(self.src, dest, "not-a-hash\n" + self.sha))
-        ref = "zzz\n" + "a" * 40
-        rc2, o2, e2 = fetch_call('git_pin "$1" "$2" "$3"', self.d, args=(os.path.join(self.d, "norepo"), os.path.join(self.d, "g2"), ref))
-        # grep -E '^[0-9a-f]{64}$' is line-based: one valid line in a multi-line "pin" passes the format check (should be rc 2)
-        F.pinned(self, "D12", rc == 0 and os.path.exists(dest) and rc2 == 1, f"fetch_file rc={rc} git_pin(multi-line ref) rc={rc2} (expected 2) {e2[-80:]!r}")
+        # grep -E '^[0-9a-f]{64}$' was line-based: one valid line in a multi-line "pin" passed the format check
+        for pin in ("not-a-hash\n" + self.sha, self.sha + "\nzzz", "\n" + self.sha + "\n" + self.sha):
+            rc, out, err = fetch_call('fetch_file "$1" "$2" "$3"', self.d, args=(self.src, dest, pin))
+            self.assertEqual((rc, os.path.exists(dest)), (2, False), (pin, err))
+        for ref in ("zzz\n" + "a" * 40, "a" * 40 + "\nzzz", "\n" + "a" * 40):
+            rc2, o2, e2 = fetch_call('git_pin "$1" "$2" "$3"', self.d, args=(os.path.join(self.d, "norepo"), os.path.join(self.d, "g2"), ref))
+            self.assertEqual(rc2, 2, (ref, e2))
+        self.assertFalse(os.path.exists(os.path.join(self.d, "g2", ".git")), "git init ran for a rejected ref")
+        rc3, o3, e3 = fetch_call('pin_from_manifest "$1" "$2"', self.d, args=("A\nB", os.path.join(self.d, "m")))
+        self.assertEqual(rc3, 2, e3)
 
-    def test_DEFECT_D13_sigterm_leaves_partial_download(self):
+    def sigterm_run(self, name, sig, code='fetch_file "$2" "$3" "$4"'):
         slow = write(os.path.join(self.d, "slow.sh"), '#!/bin/sh\nhead -c 5 "$1" > "$2"\nexec sleep 30\n')
         os.chmod(slow, 0o755)
-        dest = os.path.join(self.d, "d-term")
+        dest = os.path.join(self.d, name)
         env = dict(os.environ, GS_FETCH_CMD=slow)
-        p = subprocess.Popen(["bash", "-c", '. "$1"; fetch_file "$2" "$3" "$4"', "_", FETCH, self.src, dest, self.sha], env=env, cwd=self.d,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        p = subprocess.Popen(["bash", "-c", '. "$1"; ' + code, "_", FETCH, self.src, dest, self.sha], env=env, cwd=self.d,
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True,
+                             preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))   # a background shard ignores SIGINT
         t0 = time.time()
         while time.time() - t0 < 5 and not self.leftovers():
             time.sleep(0.02)
-        os.killpg(p.pid, signal.SIGTERM)
-        p.wait(timeout=10)
-        left = self.leftovers()
-        F.pinned(self, "D13", p.returncode in (-15, 143) and len(left) == 1 and not os.path.exists(dest), f"rc={p.returncode} leftovers={left} (no trap in fetch_file)")
+        self.assertTrue(self.leftovers(), "the download never started")
+        os.killpg(p.pid, sig)
+        out = p.communicate(timeout=10)[0].decode()
+        return p, dest, out
+
+    def test_FIXED_D13_signal_removes_partial_download_and_still_kills(self):
+        for name, sig, rcs in (("d-term", signal.SIGTERM, (-15, 143)), ("d-int", signal.SIGINT, (-2, 130))):
+            p, dest, _ = self.sigterm_run(name, sig)
+            self.assertIn(p.returncode, rcs, name)   # the signal is re-raised: the caller still dies of it (a bare trap would swallow it)
+            self.assertEqual(self.leftovers(), [], name)
+            self.assertFalse(os.path.exists(dest), name)
+        # a caller that already owns an EXIT trap: the INT/TERM handlers still clean up, and the caller's EXIT trap still runs
+        p, dest, out = self.sigterm_run("d-exit", signal.SIGTERM, "trap 'echo CALLER_EXIT' EXIT; fetch_file \"$2\" \"$3\" \"$4\"")
+        self.assertIn(p.returncode, (-15, 143))
+        self.assertEqual(self.leftovers(), [])
+        self.assertIn("CALLER_EXIT", out)
+
+    def test_FIXED_D13_callers_exit_trap_does_not_run_in_a_command_substitution(self):
+        # out="$(fetch_file ...)" is a subshell: restoring the parent's EXIT trap there would run it (it once deleted the caller's temp dir)
+        code = "trap 'echo CALLER_EXIT' EXIT; out=\"$(fetch_file \"$2\" \"$3\" \"$4\" 2>&1)\"; echo \"rc=$? [$out]\""
+        rc, out, err = fetch_call(code, self.d, args=("x", self.src, os.path.join(self.d, "cs"), self.sha))
+        self.assertEqual(out.count("CALLER_EXIT"), 1, out)   # once: at the end of the caller itself
+        self.assertTrue(out.startswith("rc=0"), out)
+
+    def test_FIXED_D13_callers_traps_are_restored_after_fetch_file(self):
+        code = ("trap 'echo CALLER_EXIT' EXIT; trap 'echo CALLER_TERM' TERM; fetch_file \"$2\" \"$3\" \"$4\" >/dev/null; "
+                "trap -p EXIT TERM | sed 's/SIGTERM/TERM/'")
+        rc, out, err = fetch_call(code, self.d, args=("x", self.src, os.path.join(self.d, "tr"), self.sha))
+        self.assertEqual(rc, 0, err)
+        self.assertIn("echo CALLER_EXIT", out)
+        self.assertIn("echo CALLER_TERM", out)
+        self.assertNotIn("_gs_fetch", out)
+        self.assertTrue(os.path.exists(os.path.join(self.d, "tr")))
+        self.assertEqual(self.leftovers(), [])
 
 
 
@@ -959,6 +1045,8 @@ class TestApplyconfFaults(unittest.TestCase):
             "empty_custom": ({"config/custom.conf": ""}, {}),
             "comment_only": ({"config/custom.conf": "# nothing\n  # x\n"}, {}),
             "empty_gsconf": ({"etc/gs.conf": ""}, {}),
+            "empty_gsconf_custom": ({"etc/gs.conf": "", "config/custom.conf": "wifi_ssid=zz\n"}, {}),
+            "truncated_gsconf": ({"etc/gs.conf": "wifi_mode='hotspot'\nrec_dir='/Videos'\n"}, {}),
             "baseline": ({}, {}),
             "hang_nmcli": ({}, {"HANG": "nmcli", "TMO": "2"}),
         }
@@ -1017,12 +1105,21 @@ class TestApplyconfFaults(unittest.TestCase):
         self.assertIn("wifi_mode=a/b", conf)
         self.assertIn("wifi_ssid=zz", conf, "later keys must not be lost after a value with a slash")
 
-    def test_DEFECT_D16_empty_gsconf_is_not_detected_and_requests_a_reboot(self):
-        r = self.r["empty_gsconf"]
-        log = r.f("shim.log")
-        F.measure("applyconf.empty_gsconf", {"exit": r.exit, "reboot_called": "reboot" in log})
-        # a truncated/empty /etc/gs.conf (power loss while it is rewritten) is treated as valid: rec_dir is empty -> "need reboot" -> reboot
-        F.pinned(self, "D16", re.search(r"^reboot", log, re.M) is not None and "Update rec_dir in fstab" in r.f("stdout"), f"exit={r.exit}")
+    def test_FIXED_D16_empty_or_truncated_gsconf_is_refused_before_any_change(self):
+        # a truncated/empty /etc/gs.conf (power loss while it is rewritten) used to be treated as valid: rec_dir empty -> "need reboot" -> reboot
+        for k in ("empty_gsconf", "empty_gsconf_custom", "truncated_gsconf"):
+            r = self.r[k]
+            log = r.f("shim.log")
+            F.measure(f"applyconf.{k}", {"exit": r.exit, "reboot_called": "reboot" in log})
+            self.assertEqual(r.exit, 1, k)
+            self.assertIsNone(re.search(r"^(reboot|mount|chroot|systemctl)", log, re.M), (k, log))
+            self.assertNotIn("Update rec_dir in fstab", r.f("stdout"), k)
+            self.assertIn("not applying any change", r.f("stderr"), k)
+        r = self.r["empty_gsconf_custom"]
+        self.assertTrue(r.exists("config/custom.conf") and not r.exists("config/custom-merged.conf"), "custom.conf must stay for the next run")
+        self.assertEqual((r.read("etc/gs.conf") or ""), "")
+        # a normal gs.conf is not affected by the check
+        self.assertNotIn("not applying any change", self.r["baseline"].f("stderr"))
 
     def test_hanging_nmcli_blocks_forever_no_timeout_in_script(self):
         r = self.r["hang_nmcli"]
@@ -1377,7 +1474,7 @@ class TestBridgeInputValidation(unittest.TestCase):
             for v in out:
                 self.assertTrue(isinstance(v, int) and (v == 65535 or b.LO <= v <= b.HI), (vals, out))
 
-    def test_DEFECT_D18_load_map_raises_attributeerror_on_non_object_axes(self):
+    def test_FIXED_D18_load_map_raises_only_valueerror_on_malformed_maps(self):
         import json
         R = F.rng("map")
         d = F.tmpdir()
@@ -1395,15 +1492,34 @@ class TestBridgeInputValidation(unittest.TestCase):
             except Exception as e:  # noqa: BLE001 - anything else would be an undocumented crash path of the bridge
                 bad.append((doc, type(e).__name__))
         F.measure("bridge.load_map.undocumented_exceptions", sorted({t for _d, t in bad}))
-        F.pinned(self, "D18", len(bad) > 0 and all(t == "AttributeError" for _d, t in bad), f"{bad[:3]}")
+        # fixed: only ValueError/OSError are raised (main() turns them into rc 2); the non-object axis case is covered explicitly
+        self.assertEqual(bad, [], f"undocumented exception from load_map: {bad[:3]}")
+        p = write(os.path.join(d, "nonobj.json"), json.dumps({"axes": {"ABS_X": 5}}))
+        with self.assertRaises(ValueError):
+            self.b.load_map(p)
+        p = write(os.path.join(d, "okmap.json"), json.dumps({"axes": {"ABS_X": {"channel": 1, "min": 0, "max": 100, "center": 100}}}))
+        self.assertIn("ABS_X", self.b.load_map(p))   # centre on the edge is legal (map_axis handles it, see D20)
 
-    def test_DEFECT_D19_truncated_stdin_line_is_a_valid_sample(self):
-        # "1500 1500 1000 1500" cut after "1500 15" is NOT dropped: 15 is inside the sane window (0..4000) and is clamped UP to 1000
-        out = self.b.sanitize([float(t) for t in "1500 15".split()])
-        F.measure("bridge.truncated_line", out)
-        F.pinned(self, "D19", out is not None and out[1] == 1000 and out[2:] == [65535] * 6, f"{out}")
+    def test_FIXED_D19_truncated_stdin_line_is_dropped_not_raised_to_lo(self):
+        # "1500 1500 1000 1500" cut after "1500 15": a short line with a value below LO used to be clamped UP to 1000 (extreme deflection)
+        b = self.b
+        F.measure("bridge.truncated_line", b.parse_stdin_line("1500 15"))
+        for cut in ("1500 15", "1500 1", "1500 1500 100", "1500 1500 1000 1", "15", "1500 0", "1500 -5"):
+            self.assertIsNone(b.parse_stdin_line(cut), cut)
+        # unchanged behaviour for correct data
+        self.assertEqual(b.parse_stdin_line("1100 1900"), [1100, 1900] + [65535] * 6)
+        self.assertEqual(b.parse_stdin_line("2500 500 1500 1500 1500 1500 1500 1500"), [2000, 1000] + [1500] * 6)
+        self.assertEqual(b.parse_stdin_line("1500 65535 1500"), [1500, 65535, 1500] + [65535] * 5)
+        self.assertIsNone(b.parse_stdin_line("nan 1500"))
+        self.assertIsNone(b.parse_stdin_line("1500 abc"))
+        # an unterminated last line (EOF in the middle of a write) is not trusted either
+        import io
+        src = b.StdinSource(io.StringIO("1500 1500 1500 1500\n" + "1500 " * 7 + "15"))   # 8 fields: only the EOF rule can catch it
+        time.sleep(0.3)
+        vals, _ts = src.poll()
+        self.assertEqual(vals, [1500] * 4 + [65535] * 4, "the unterminated truncated line must not replace the last complete frame")
 
-    def test_DEFECT_D20_map_axis_center_equal_max_divides_by_zero(self):
+    def test_FIXED_D20_map_axis_center_equal_max_is_neutral_not_a_crash(self):
         R = F.rng("axis")
         b = self.b
         bad, exc = [], set()
@@ -1421,10 +1537,16 @@ class TestBridgeInputValidation(unittest.TestCase):
                 exc.add("ZeroDivisionError")
                 bad.append((cfg, raw))
                 continue
+            except ValueError:
+                continue   # documented: max <= min is rejected (not generated here)
             self.assertTrue(isinstance(v, int) and b.LO <= v <= b.HI, (cfg, raw, v))
         F.measure("bridge.map_axis.exceptions", sorted(exc))
-        # center == max with the stick at (or beyond) max: 0/0 (the mapping loader does not validate center/deadband)
-        F.pinned(self, "D20", bool(bad) and all(c.get("center") == c["max"] and r >= c["max"] for c, r in bad), f"{len(bad)} cases, first {bad[:1]}")
+        self.assertEqual(bad, [], f"ZeroDivisionError in map_axis: {bad[:1]}")
+        # centre on max (stick at/over max) and centre on min: neutral 1500 at the edge, never a crash
+        self.assertEqual(b.map_axis(100, {"min": 0, "max": 100, "center": 100}), 1500)
+        self.assertEqual(b.map_axis(0, {"min": 0, "max": 100, "center": 0}), 1500)
+        self.assertEqual(b.map_axis(0, {"min": 0, "max": 100, "center": 100}), 1000)   # the other side still maps to full deflection
+        self.assertEqual(b.map_axis(100, {"min": 0, "max": 100, "center": 0}), 2000)
 
 
 
@@ -1586,16 +1708,23 @@ class TestModelProperties(unittest.TestCase):
             self.assertLessEqual(self.SEV[stronger["verdict"]], self.SEV[b["verdict"]], f"bigger PSU made it worse {kw}")
             self.assertGreaterEqual(stronger["psu_margin_a"], b["psu_margin_a"] - EPS)
 
-    def test_DEFECT_D22_declared_ranges_allow_idle_current_above_rx_current(self):
+    def test_FIXED_D22_declared_ranges_keep_idle_le_rx_le_tx(self):
         pm, mc = self.pm, self.mc
         base = mc.load()
         lv = {s: (base.leaves[f"power.devices.rtl8812_{s}_a"]["min"], base.leaves[f"power.devices.rtl8812_{s}_a"]["max"]) for s in ("idle", "rx", "tx")}
-        overlap = lv["idle"][1] > lv["rx"][0] and lv["rx"][1] > lv["tx"][0]
-        P = mc.load({"power.devices.rtl8812_idle_a": lv["idle"][1], "power.devices.rtl8812_rx_a": lv["rx"][0]})   # both inside their declared ranges
-        idle = pm.budget(P, "pi5", psu_a=5.0, adapters=1, state="idle")["total_a"]
-        rx = pm.budget(P, "pi5", psu_a=5.0, adapters=1, state="rx")["total_a"]
-        F.measure("power.range_overlap", {"ranges": lv, "idle_total_a": round(idle, 3), "rx_total_a": round(rx, 3)})
-        F.pinned(self, "D22", overlap and idle > rx, f"ranges {lv}: idle total {idle:.2f} A > rx total {rx:.2f} A at allowed values")
+        # fixed: ranges no longer overlap, so the worst corner (idle at its max, rx at its min, ...) still keeps the physical order
+        self.assertLessEqual(lv["idle"][1], lv["rx"][0], lv)
+        self.assertLessEqual(lv["rx"][1], lv["tx"][0], lv)
+        P = mc.load({"power.devices.rtl8812_idle_a": lv["idle"][1], "power.devices.rtl8812_rx_a": lv["rx"][0], "power.devices.rtl8812_tx_a": lv["tx"][0]})
+        tot = [pm.budget(P, "pi5", psu_a=5.0, adapters=1, state=s)["total_a"] for s in ("idle", "rx", "tx")]
+        F.measure("power.range_order", {"ranges": lv, "totals_a": [round(x, 3) for x in tot]})
+        self.assertLessEqual(tot[0], tot[1] + EPS)
+        self.assertLessEqual(tot[1], tot[2] + EPS)
+        # the defaults stay inside their (narrowed) ranges and in order
+        d = {s: base.leaves[f"power.devices.rtl8812_{s}_a"]["value"] for s in ("idle", "rx", "tx")}
+        self.assertTrue(d["idle"] <= d["rx"] <= d["tx"])
+        for s in ("idle", "rx", "tx"):
+            self.assertTrue(lv[s][0] <= d[s] <= lv[s][1], (s, d[s], lv[s]))
 
     def test_power_reproducible_timeline_by_seed(self):
         pm = self.pm
@@ -1608,15 +1737,27 @@ class TestModelProperties(unittest.TestCase):
         self.assertNotIn("nan", txt.lower())
         self.assertNotIn("inf", txt.lower())
 
-    def test_DEFECT_D21_nonfinite_or_negative_inputs_are_not_rejected_by_power_budget(self):
+    def test_FIXED_D21_nonfinite_or_negative_inputs_are_rejected_by_power_budget(self):
         pm, mc = self.pm, self.mc
         P = mc.load()
-        nan_ok = pm.budget(P, "pi4", psu_a=float("nan"), adapters=1, state="tx", with_=("fc",))
-        neg_adapters = pm.budget(P, "pi4", psu_a=3.0, adapters=-3, state="tx")
-        F.measure("power.nan_psu_pi4", {"verdict": nan_ok["verdict"], "flags": nan_ok["flags"], "margin": str(nan_ok["psu_margin_a"])})
-        F.measure("power.negative_adapters", {"verdict": neg_adapters["verdict"], "total_a": neg_adapters["total_a"]})
-        # a NaN supply rating yields no PSU flag at all (every comparison with NaN is False) and a negative adapter count gives negative current
-        F.pinned(self, "D21", nan_ok["verdict"] == "OK" and not nan_ok["flags"] and neg_adapters["total_a"] < 0, f"nan -> {nan_ok['verdict']} {nan_ok['flags']}; adapters=-3 -> total {neg_adapters['total_a']:.2f} A {neg_adapters['verdict']}")
+        for bad in (float("nan"), float("inf"), float("-inf"), 0.0, -1.0, True, "3"):
+            with self.assertRaises(mc.ParamError, msg=f"psu_a={bad!r}"):
+                pm.budget(P, "pi4", psu_a=bad, adapters=1, state="tx", with_=("fc",))
+        for bad in (-3, -1, 1.5, float("nan"), True, "1"):
+            with self.assertRaises(mc.ParamError, msg=f"adapters={bad!r}"):
+                pm.budget(P, "pi4", psu_a=3.0, adapters=bad, state="tx")
+        # valid inputs are unchanged (None = documented recommendation, 0 adapters, int or float PSU)
+        self.assertEqual(pm.budget(P, "pi4", adapters=0)["psu_a"], P.get("power.boards.pi4.psu_recommended_a"))
+        self.assertIn(pm.budget(P, "pi4", psu_a=3, adapters=2, state="tx")["verdict"], ("OK", "WARN", "FAIL"))
+        # the CLI turns the error into rc 2 and a clear message, not a silent OK
+        import io
+        import contextlib
+        for args in (["report", "--board", "pi4", "--psu-a", "nan"], ["report", "--board", "pi4", "--adapters", "-3"]):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                rc = pm.main(args)
+            self.assertEqual(rc, 2, args)
+            self.assertIn("power_model: error:", err.getvalue())
 
     # -------------------------------------------------------------- latency
     def test_latency_terms_ordered_finite_and_monotone(self):

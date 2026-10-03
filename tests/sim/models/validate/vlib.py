@@ -127,4 +127,5 @@ def patched(mod, name, new):
 def clear_caches():
     dm.per_table.cache_clear()
     dm._residual_q.cache_clear()
-    dm.fading_gains_db.cache_clear()
+    dm.fading_weights.cache_clear()
+    dm.fading_per_table.cache_clear()

@@ -94,14 +94,33 @@ assert b.map_axis(1000, dict(lin, reverse=True)) == 1000
 assert b.sanitize([float("nan")]) is None and b.sanitize([1500, 1e9]) is None and b.sanitize([]) is None
 assert b.sanitize([2500, 500]) == [2000, 1000] + [65535] * 6
 assert len(b.load_map("%s/tx12_map.example.json" % __import__("os").environ["BENCH_DIR"])) == 4
+# D20: centre on max/min with the stick on that edge is neutral, not a ZeroDivisionError
+assert b.map_axis(100, {"min": 0, "max": 100, "center": 100}) == 1500 and b.map_axis(0, {"min": 0, "max": 100, "center": 0}) == 1500  # cfg-ok: test data
+assert b.map_axis(0, {"min": 0, "max": 100, "center": 100}) == 1000 and b.map_axis(100, {"min": 0, "max": 100, "center": 0}) == 2000  # cfg-ok: test data
+# D19: a short line with a value below LO (truncated number) is dropped, never clamped up; correct lines are unchanged
+for cut in ("1500 15", "1500 1", "1500 1500 100", "1500 0"):  # cfg-ok: test data
+    assert b.parse_stdin_line(cut) is None, cut
+assert b.parse_stdin_line("1100 1900") == [1100, 1900] + [65535] * 6  # cfg-ok: test data
+assert b.parse_stdin_line("2500 500 1500 1500 1500 1500 1500 1500") == [2000, 1000] + [1500] * 6  # cfg-ok: test data
 EOF
-check $? "axis mapping / sanitize unit checks"
+check $? "axis mapping / sanitize unit checks (D19, D20 incl.)"
+
+# ---- 3b. D18: a malformed mapping file is rc 2 with a message, not a traceback ----
+echo '{"axes": {"ABS_X": 5}}' >"$tmp/badmap1.json"
+echo '[1, 2]' >"$tmp/badmap2.json"
+echo '{"axes": {"ABS_X": {"channel": 1, "min": 0, "max": 100, "center": 200}}}' >"$tmp/badmap3.json"  # cfg-ok: test data
+for n in 1 2 3; do
+	"$PY" "$BR" --input evdev:/dev/null --map "$tmp/badmap$n.json" --confirm-props-off --lock "$tmp/l0" >"$tmp/bm$n.log" 2>&1; rc=$?
+	[ "$rc" = 2 ] && grep -q "bad mapping" "$tmp/bm$n.log" && ! grep -q Traceback "$tmp/bm$n.log"
+	check $? "bad mapping file $n: rc 2 with a message, no traceback (rc=$rc)"
+done
 
 # ---- 4. stdin: clamping, NaN/absurd dropped, dead-man timing ----
 nextport; start_sniff 9 "$tmp/s4.log"
 {
 	sleep 1.2
 	for _ in $(seq 10); do echo "2500 500 1500 1500 1500 1500 1500 1500"; echo "nan 1500 1500"; echo "99999 1500"; sleep 0.05; done
+	for _ in $(seq 3); do echo "1500 15"; sleep 0.05; done   # cfg-ok: truncated-line test data (D19)
 	for _ in $(seq 6); do echo "1100 1900"; sleep 0.05; done
 	for _ in $(seq 6); do echo "1200 1800 1500 1500 1500 1500 1500 1500"; sleep 0.05; done
 	date +%s.%N >"$tmp/t_last"
@@ -123,7 +142,8 @@ def check(name, cond):
 check("frames received", len(fr) > 20)
 check("all values in {0,65535,1000..2000}", all(ok(v) for _, _, vs in fr for v in vs))
 check("target sysid is the FC (1)", all(s == 1 for _, s, _ in fr))
-check("2500/500 arrive clamped to 2000/1000", any(vs[0] == 2000 and vs[1] == 1000 for _, _, vs in fr))
+check("2500/500 arrive clamped to 2000/1000", any(vs[0] == 2000 and vs[1] == 1000 for _, _, vs in fr))  # cfg-ok: test data
+check("truncated line 1500 15 is dropped, not clamped up to 1000 (D19)", not any(vs[0] == 1500 and vs[1] == 1000 and vs[2:] == [65535] * 6 for _, _, vs in fr))
 check("short line: unmapped channels = 65535", any(vs[0] == 1100 and vs[1] == 1900 and vs[2:] == [65535] * 6 for _, _, vs in fr))
 after = [(t, vs) for t, _, vs in fr if t > t_last + 0.02]
 fs = [t for t, vs in after if vs == [0, 0, 1000, 0, 0, 0, 0, 0]]

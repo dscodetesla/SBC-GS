@@ -39,6 +39,12 @@ MUTS=(
 "V20 поріг undervoltage 4.63 -> 4.40 В|params.json|import re; s=re.sub(r'(\"undervolt_threshold_v\": \{\s*\"value\": )4\.63', r'\g<1>4.4', s)"
 "V21 SNR від шуму: інтерференція віднімається|rf_model.py|s=s.replace('n_mw += 10 ** (i / 10.0)','n_mw -= 10 ** (i / 10.0) * 0.5')"
 "V22 PER не залежить від довжини кадру|rf_model.py|s=s.replace('return -math.expm1(8 * nbytes * math.log1p(-pe))','return -math.expm1(8 * 100 * math.log1p(-pe))')"
+"V23 тепло AIR не залежить від ВЧ-потужності (D1)|degrade_model.py|s=s.replace('p_dc = p_idle + p_rf_w / eta','p_dc = p_idle + p_rf_ref_w / eta')"
+"V24 виміряний струм більше не домінує над ККД-пріором: тепло не росте зі струмом (D1/D1b)|degrade_model.py|s=s.replace('max(1.0 - diss_frac, 1e-3, p_rf_ref_w / p_dc_ref if p_dc_ref > 0 else 1.0)','max(1.0 - diss_frac, 1e-3)')"
+"V25 мертвий лінк знову дає margin -60 (D4)|degrade_model.py|s=s.replace('\"margin_db\": sum(mar_l) / len(mar_l) if mar_l else None','\"margin_db\": sum(mar_l) / len(mar_l) if mar_l else -60.0')"
+"V26 усереднення завмирання втрачає хвіст глибоких завмирань (D9)|degrade_model.py|s=s.replace('_FADE_JLO, _FADE_JHI, _FADE_SUB = -240, 40, 16','_FADE_JLO, _FADE_JHI, _FADE_SUB = -24, 40, 16')"
+"V27 Morris змішує перехід живий/мертвий з margin (D4)|scenario_engine.py|s=s.replace('if a is None or b is None:','if False:')"
+"V28 вага Райса не нормована до одиничної середньої потужності (D9)|degrade_model.py|s=s.replace('    return tuple(x / tot for x in w)\n\n\n@functools.lru_cache(maxsize=64)\ndef fading_per_table','    return tuple(x / tot * 1.05 for x in w)\n\n\n@functools.lru_cache(maxsize=64)\ndef fading_per_table')"
 )
 fail=0
 n=0

@@ -75,6 +75,7 @@
    "assumptions": [
     "Rapp AM-AM curve (smoothness p), EVM^2 = floor + (k*amplitude error)^2, SNR_eff = 1/(1/SNR + EVM^2) (INF, textbook)",
     "Adapter thermal = first-order RC (Rth, tau) with derating above a start temperature and shutdown with hysteresis (INF)",
+    "AIR heat = P_dc - P_rf (energy conservation, INF): P_dc = P_idle + P_rf/eta, eta = 1 - air_diss_frac is the PA's INCREMENTAL drain efficiency (range 5..30 %, INF; value UNMEASURED), P_rf is the radiated power after Rapp compression, derating and supply sag. The sampled TX current (power.devices.rtl8812_tx_a) is taken as measured at the PA's rated output (P1dB output, INF: HOWTO Note1 quotes 1.6 A at the maximum power index; the real reference point is UNMEASURED). If the current is too small for eta, the measured current wins (eta is raised to P_rf_ref/P_dc_ref, idle = 0). Hence P_rf + heat = P_dc for every draw and the temperature grows with the commanded power (D1, D1b). No new parameter: the UNMEASURED/SYNTH ratchets are unchanged",
     "TX output droops when the AIR supply is below a knee: k1*dV + k2*dV^2 dB (INF shape, SYNTH coefficients)",
     "ELRS 900 MHz and the Multi 2.4 GHz module reach the 5 GHz receiver only via harmonics/intermod/ADC overload: one lumped coupling loss each, duty-cycled (INF)",
     "Antenna losses = pattern null + polarisation mismatch + body shadow, persistent for ~tens of seconds (INF)"
@@ -174,7 +175,7 @@
       "lo": 0.7,
       "hi": 0.95
      },
-     "note": "share of DC input power dissipated as heat (the rest is RF out); INF from PA efficiency 5..30 %"
+     "note": "1 - eta, eta = incremental drain efficiency of the AIR PA: DC power the PA draws per radiated watt is 1/eta (degrade_model.air_tx_power_w); the heat is P_dc - P_rf, not diss_frac * P_dc any more (D1/D1b fixed). INF range from PA efficiency 5..30 %; the real value is UNMEASURED (calibration hw-pa-efficiency)"
     },
     "air_board_heat_w": {
      "value": 1.5,
@@ -612,6 +613,18 @@
      "command": "iw dev wlan0 set txpower fixed <mBm> at 17..28 dBm; capture with a spectrum analyser/power meter",
      "tool": "power meter or SDR + 30 dB attenuator",
      "how": "Fit the Rapp curve to Pout vs Pin: P1dB = the point where gain is 1 dB lower; EVM from the analyser at MCS 1 and 7"
+    },
+    {
+     "id": "hw-pa-efficiency",
+     "measure": "AIR input power (BEC current x voltage) against the radiated power at each commanded txpower step",
+     "params": [
+      "hw.air_diss_frac",
+      "hw.pa_p1db_out_dbm",
+      "hw.air_board_heat_w"
+     ],
+     "command": "iw dev wlan0 set txpower fixed <mBm> at 17..28 dBm in 1 dB steps; at each step log the BEC V and A (inline meter or the FC power module) and the radiated power (power meter / SDR)",
+     "tool": "inline USB/DC power meter + RF power meter or SDR with a calibrated tap",
+     "how": "Fit P_dc = P_idle + P_rf/eta by linear regression of the input power on the radiated power in mW: slope = 1/eta (hw.air_diss_frac = 1 - eta), intercept = P_idle (and, with the board off, hw.air_board_heat_w); take the current at the rated step as power.devices.rtl8812_tx_a. A slope below 1 means the meter or the power reading is wrong"
     },
     {
      "id": "hw-thermal",

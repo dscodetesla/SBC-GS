@@ -21,6 +21,8 @@ for name in 98-rename.rules 99-GS.rules; do
 	for k in $KEYS; do
 		v="${!k:-}"
 		[ -n "$v" ] || { if [[ "$content" == *"@$k@"* ]]; then echo "render-udev.sh: key $k is empty in $dir/board.conf" >&2; exit 1; fi; continue; }
+		# the value lands inside a double-quoted udev string: a quote, backslash, space or newline would inject rule syntax (D11)
+		[[ "$v" =~ ^[A-Za-z0-9_.:-]+$ ]] || { echo "render-udev.sh: key $k has a value outside [A-Za-z0-9_.:-] in $dir/board.conf" >&2; exit 1; }
 		content="${content//"@$k@"/"$v"}"
 	done
 	if [[ "$content" =~ @[A-Z][A-Z0-9_]*@ ]]; then echo "render-udev.sh: unresolved placeholder ${BASH_REMATCH[0]} in $name.in" >&2; exit 1; fi

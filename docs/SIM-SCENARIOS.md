@@ -40,13 +40,13 @@ degrade_model.run_session(Theta, cfg): bring-up -> N зрізів dt: серед
 |---|---|---|
 | **Нелінійність PA (AM-AM)** | Rapp: `Pout = Plin / (1+(Plin/Psat)^p)^(1/p)`, `Psat` з виходу-віднесеної P1dB; `hw.pa_p1db_out_dbm`, `hw.pa_rapp_p` | `Pout` монотонно зростає, підсилення не зростає, 1 дБ стиснення точно в P1dB, лінійно при малому драйві |
 | **EVM і стеля SNR** | `EVM² = floor + (k·похибка амплітуди)²`; `1/SNR_eff = 1/SNR + EVM²` | `SNR_eff ≤ -EVM` завжди; більше стиснення або вища температура дає гірший EVM |
-| **Тепловий дрейф і дерейтинг** | `Tj' = (Tамб + Rth·P − Tj)/τ`; вище `thermal_derate_start_c` потужність падає на `k` дБ/°C; вище `thermal_shutdown_c` TX вимикається, повернення після гістерезису | час до порогу збігається з аналітикою; вища температура дає раніший зупин |
+| **Тепловий дрейф і дерейтинг** | `Tj' = (Tамб + Rth·P − Tj)/τ`, де `P = P_dc − P_rf + P_плати` (збереження енергії: `P_dc = P_простою + P_rf/η`, `η = 1 − hw.air_diss_frac` ККД PA за приростом, `P_rf` ВЧ-вихід після стиснення/дерейтингу/провалу; виміряний струм береться на номінальному виході P1dB; D1/D1b виправлено); вище `thermal_derate_start_c` потужність падає на `k` дБ/°C; вище `thermal_shutdown_c` TX вимикається, повернення після гістерезису | час до порогу збігається з аналітикою; вища температура дає раніший зупин |
 | **Провал живлення AIR** | `sag = k1·ΔV + k2·ΔV²` нижче коліна, знижує P1dB (більше стиснення, гірший EVM) | монотонно в напрузі |
 | **AGC/ADC поблизу передавача** | штраф SNR = `min(cap, (Rx − коліно)·нахил)` | монотонно в рівні; тільки на ближній відстані |
 | **Десенсибілізація** | підйом шуму `10·lg(1+ΣI/N)`; джерела: модуль ELRS 900 МГц і Multi 2,4 ГГц (ефективні коефіцієнти зв'язку, робочий цикл), USB3-шум (ймовірність присутності) | нуль без завад, монотонно в потужності завади |
 | **Антена** | нуль діаграми (ймовірність, експоненційна глибина) + поляризація (рівномірний кут, `-20·lg cos`) + тіло/планер; стан тримається ~десятки секунд | втрата ≥ 0, хвіст, обмеження кута |
 | **Шум і шоки** | дрейф Орнштейна-Уленбека + пуассонівські шоки (логнормальний розмір, спад експонентою) + старіння (години·dB/кгод) | без шоків при rate=0, лічильник зростає з rate |
-| **Багатопроменевість, пакетні втрати** | повторне використання `rf_model._gains` (Rayleigh/Rician) для усереднення PER і `rf_model.residual_ge/iid` (Gilbert-Elliott, FEC k/n) | при вимкнених деградаціях PER збігається з `rf_model.frame_per` (2 %), діапазон з `rf_model.max_range` (3 %) |
+| **Багатопроменевість, пакетні втрати** | усереднення PER по завмиранню Райса/Релея **інтегруванням щільності** (вагові коефіцієнти на сітці 0,25 дБ, згортка з таблицею PER, `degrade_model.fading_weights/fading_per_table`; хвіст до ~1e-6, D9 виправлено; раніше 32 квантилі) і `rf_model.residual_ge/iid` (Gilbert-Elliott, FEC k/n) | при вимкнених деградаціях PER збігається з `rf_model.frame_per` (2 %), діапазон з `rf_model.max_range` (3 %) |
 | **Епізоди завад (клаш каналу)** | двостанова ланка на рівні зрізів: інтенсивність/година, середня тривалість, INR | P(burst_outage) зростає з навантаженням |
 | **USB/живлення GS** | `power_model.budget` (піковий струм, ліміт 0,6 або 1,6 А Pi 5), небезпека відвалу `base·exp(−запас_V/Vs)·exp(−запас_I/Is)`, перелічування (логнормальний час, ймовірність не повернутись), автомат Pi 5: OK → TRIPPED → OK → LATCHED, слово `get_throttled` з липкими бітами | небезпека спадає із запасом; автомат за таблицею станів; слово розкодовується `power_model.decode_throttled` |
 | **Збої запуску** | USB probe, завантаження прошивки, monitor, перша ін'єкція: Bernoulli на спробу, таймаут + експоненційний backoff, `max_attempts` | MC збігається з `Π(1−p^n)`; більше спроб краще |
@@ -118,7 +118,7 @@ degrade_model.run_session(Theta, cfg): bring-up -> N зрізів dt: серед
 | `hw.air_ambient_rise_c` | C | uniform(lo=2.0, hi=15.0) | SYNTH | airframe interior temperature rise above outside air (SYNTH) |
 | `hw.air_bec_v` | V | normal(mu=5.0, sigma=0.12, lo=4.5, hi=5.5) | UNMEASURED | voltage the BEC delivers to the VTX (DC 9-22 V input, BEC recommended: SRC docs.openipc.org) |
 | `hw.air_board_heat_w` | W | uniform(lo=0.5, hi=2.5) | UNMEASURED | SoC + sensor heat sharing the radio's heat path (SSC338Q + IMX415) |
-| `hw.air_diss_frac` |  | uniform(lo=0.7, hi=0.95) | INF | share of DC input power dissipated as heat (the rest is RF out); INF from PA efficiency 5..30 % |
+| `hw.air_diss_frac` |  | uniform(lo=0.7, hi=0.95) | INF | 1 - eta, eta = incremental drain efficiency of the AIR PA: DC power the PA draws per radiated watt is 1/eta (degrade_model.air_tx_power_w); the heat is P_dc - P_rf, not diss_frac * P_dc any more (D1/D1b fixed). INF range from PA efficiency 5..30 %; the real value is UNMEASURED (calibration hw-pa-efficiency) |
 | `hw.air_rth_c_per_w` | C/W | lognormal(median=7.0, sigma=0.35, lo=3, hi=30) | UNMEASURED | case-to-ambient thermal resistance of the WiFiLink2 radio incl. heatsink and fan (fan 25/30 g is SRC-listed per docs/SIM-BLOCKERS.md, Rth unknown) |
 | `hw.air_supply_r_ohm` | ohm | lognormal(median=0.05, sigma=0.5, lo=0.01, hi=0.3) | UNMEASURED | AIR supply path resistance (BEC output, wire, connector) seen by the TX current pulse |
 | `hw.air_supply_ripple_v` | V | lognormal(median=0.04, sigma=0.5, lo=0.005, hi=0.3) | UNMEASURED | BEC ripple / noise std per slice (ESC and motor load) |
@@ -209,6 +209,7 @@ degrade_model.run_session(Theta, cfg): bring-up -> N зрізів dt: серед
 | Запис | Що міряти | Параметри | Команда | Інструмент | Як |
 |---|---|---|---|---|---|
 | hw-tx-power-sweep | AIR conducted/radiated power vs commanded txpower (power meter or SDR), and EVM per MCS | `hw.pa_p1db_out_dbm`, `hw.pa_rapp_p`, `hw.evm_floor_db`, `hw.evm_comp_coeff` | iw dev wlan0 set txpower fixed <mBm> at 17..28 dBm; capture with a spectrum analyser/power meter | power meter or SDR + 30 dB attenuator | Fit the Rapp curve to Pout vs Pin: P1dB = the point where gain is 1 dB lower; EVM from the analyser at MCS 1 and 7 |
+| hw-pa-efficiency | AIR input power (BEC current x voltage) against the radiated power at each commanded txpower step | `hw.air_diss_frac`, `hw.pa_p1db_out_dbm`, `hw.air_board_heat_w` | iw dev wlan0 set txpower fixed <mBm> at 17..28 dBm in 1 dB steps; at each step log the BEC V and A (inline meter or the FC power module) and the radiated power (power meter / SDR) | inline USB/DC power meter + RF power meter or SDR with a calibrated tap | Fit P_dc = P_idle + P_rf/eta by linear regression of the input power on the radiated power in mW: slope = 1/eta (hw.air_diss_frac = 1 - eta), intercept = P_idle (and, with the board off, hw.air_board_heat_w); take the current at the rated step as power.devices.rtl8812_tx_a. A slope below 1 means the meter or the power reading is wrong |
 | hw-thermal | adapter case temperature vs time at flight TX power in the closed enclosure (thermal camera or NTC on the heatsink) | `hw.air_rth_c_per_w`, `hw.air_tau_s`, `hw.air_board_heat_w`, `hw.air_ambient_rise_c`, `hw.evm_temp_db_per_c`, `hw.thermal_derate_start_c`, `hw.thermal_derate_db_per_c`, `hw.thermal_shutdown_c`, `hw.thermal_hyst_c` | run TX at flight power 30 min; log vtx temperature (majestic/telemetry) every 5 s; repeat at 40 C ambient (warm box) | thermocouple/NTC, thermal camera | Rth = (Tss - Tamb)/P; tau = time to 63 % of the rise; derate/shutdown from the first power drop seen by the power meter |
 | hw-supply-sag | VTX 5 V rail during TX bursts (scope on the BEC output) | `hw.air_bec_v`, `hw.air_supply_r_ohm`, `hw.air_supply_ripple_v`, `hw.tx_sag_knee_v`, `hw.tx_sag_k1_db_per_v`, `hw.tx_sag_k2_db_per_v2` | scope on the VTX 5 V pad while txpower steps; lab supply stepped 5.0->4.2 V to measure output power | scope, adjustable lab supply, power meter | R = dV/dI at the burst; sag coefficients from Pout vs rail voltage |
 | hw-rx-agc | GS RX SNR/PER vs received level at very short range (conducted with attenuators) | `hw.rx_agc_knee_dbm`, `hw.rx_agc_slope`, `hw.rx_agc_cap_db` | AIR TX -> variable attenuator 0..60 dB -> GS RX; log PER in wfb-cli gs | RF attenuators | knee = level where PER starts to rise as attenuation decreases |
@@ -256,7 +257,7 @@ degrade_model.run_session(Theta, cfg): bring-up -> N зрізів dt: серед
 
 ## 7. Еталонні сценарії (golden) і що з них видно
 
-Усе: n = 60, seed = 1, зріз 20 с, сесія 600 с після bring-up. Стовпчики p5/p50/p95/p99 за draw; для «поганого малого» (запас, дальність, доступність) читати p5, для «поганого великого» (втрати, затримка) p95/p99. `-60 дБ` у запасі та `residual = 1` це сентинел «лінк не піднявся/закріплений вимкнено».
+Усе: n = 60, seed = 1, зріз 20 с, сесія 600 с після bring-up. Стовпчики p5/p50/p95/p99 за draw; для «поганого малого» (запас, дальність, доступність) читати p5, для «поганого великого» (втрати, затримка) p95/p99. Для лінку, що не працює (bring-up не вдався або жодного зрізу з піднятим лінком), `margin_db` **не визначений**: у виході його немає (`dead`-прапорець, рядок `P(dead link ...)`; перцентилі `margin_db` лише по draw з лінком, у таблиці `nan`, якщо таких немає); `residual = 1` і `availability = 0` це фізичні межі, а не заглушка (D4 виправлено; стара заглушка `-60 дБ` лежала всередині фізичного діапазону).
 
 **nominal_pi5_5a_150m**: 150 м, MCS1, FEC 8/12, 720p 4000 кбіт/с, Pi 5 з БЖ 5 А.
 
@@ -265,17 +266,18 @@ degrade_model.run_session(Theta, cfg): bring-up -> N зрізів dt: серед
 # session: distance=150m duration=600s dt=20s board=pi5 psu=5.0A usb_max_current=0 codec=h265 spec: residual<=0.01 g2g<=250ms freeze<=1
 # priors: 145 sampled dims (INF=4 SYNTH=67 UNMEASURED=74); pinned: rf.fading_model,rf.loss_model
 output,unit,p5,p50,p95,p99,mean
-residual,frac,0.001166,0.04392,0.8062,0.9774,0.1411
-margin_db,dB,1.525,11.36,16.61,19.03,9.465
-range_m,m,74.71,332.2,1127,1387,400.8
-g2g_ms,ms,164,192.6,235.8,249.4,194.8
-availability,frac,0,0.85,1,1,0.7228
-ttff_s,s,0,120,600,600,206.3
+residual,frac,0.001196,0.04374,0.5113,0.9774,0.1179
+margin_db,dB,3.954,11.45,16.63,19.08,10.8
+range_m,m,81.03,351.3,1240,1479,416.2
+g2g_ms,ms,164,194.6,235.8,249.4,195.3
+availability,frac,0,0.8667,1,1,0.75
+ttff_s,s,0,120,600,600,215
 P(no failure in session)=0.150  bring-up p50=3.6s
+P(dead link: no up slice, margin_db undefined)=0.017; margin_db percentiles/mean are over the 59 of 60 draws with a link
 failure_mode,probability
 bringup_fail,0.033
-thermal_derate,0.150
-thermal_shutdown,0.050
+thermal_derate,0.067
+thermal_shutdown,0.017
 usb_dropout,0.083
 usb_trip,0.000
 usb_latched,0.000
@@ -283,11 +285,12 @@ undervoltage,0.167
 soc_throttle,0.033
 agc_saturation,0.000
 desense,0.183
-burst_outage,0.317
+burst_outage,0.300
 injection_overload,0.083
-idr_freeze,0.783
-latency_creep,0.100
-fec_exhaust,0.600
+idr_freeze,0.800
+latency_creep,0.117
+fec_exhaust,0.550
+# SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99
 ```
 
 
@@ -299,16 +302,17 @@ fec_exhaust,0.600
 # priors: 145 sampled dims (INF=4 SYNTH=67 UNMEASURED=74); pinned: rf.fading_model,rf.loss_model
 output,unit,p5,p50,p95,p99,mean
 residual,frac,1,1,1,1,1
-margin_db,dB,-60,-60,-60,-60,-60
+margin_db,dB,nan,nan,nan,nan,nan
 range_m,m,0,0,0,0,0
 g2g_ms,ms,145.9,169.7,190.4,208.8,169.2
 availability,frac,0,0,0,0,0
 ttff_s,s,0,0,0,0,0
 P(no failure in session)=0.000  bring-up p50=3.6s
+P(dead link: no up slice, margin_db undefined)=1.000; margin_db percentiles/mean are over the 0 of 60 draws with a link
 failure_mode,probability
 bringup_fail,0.033
-thermal_derate,0.150
-thermal_shutdown,0.050
+thermal_derate,0.067
+thermal_shutdown,0.017
 usb_dropout,0.200
 usb_trip,1.000
 usb_latched,1.000
@@ -316,11 +320,12 @@ undervoltage,0.167
 soc_throttle,0.033
 agc_saturation,0.000
 desense,0.183
-burst_outage,0.317
+burst_outage,0.300
 injection_overload,0.083
 idr_freeze,0.000
 latency_creep,0.000
 fec_exhaust,0.000
+# SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99
 ```
 
 
@@ -331,17 +336,18 @@ fec_exhaust,0.000
 # session: distance=150m duration=600s dt=20s board=pi5 psu=5.0A usb_max_current=0 codec=h265 spec: residual<=0.01 g2g<=250ms freeze<=1
 # priors: 144 sampled dims (INF=4 SYNTH=67 UNMEASURED=73); pinned: rf.fading_model,rf.loss_model,rf.tx_power_dbm
 output,unit,p5,p50,p95,p99,mean
-residual,frac,0.002301,0.09612,1,1,0.3003
-margin_db,dB,-60,8.269,15.72,18,-3.624
-range_m,m,0,234.1,993.4,1162,301.9
-g2g_ms,ms,159.5,195.2,247,264.6,195.6
-availability,frac,0,0.7667,1,1,0.5517
-ttff_s,s,0,60,600,600,142
-P(no failure in session)=0.083  bring-up p50=3.6s
+residual,frac,0.002661,0.06552,1,1,0.197
+margin_db,dB,0.6508,9.531,16.77,18.46,9.81
+range_m,m,0,277.5,959.9,1212,355.4
+g2g_ms,ms,161.8,197.6,243.3,266.7,198.5
+availability,frac,0,0.8167,1,1,0.65
+ttff_s,s,0,60,600,600,158.7
+P(no failure in session)=0.100  bring-up p50=3.6s
+P(dead link: no up slice, margin_db undefined)=0.100; margin_db percentiles/mean are over the 54 of 60 draws with a link
 failure_mode,probability
 bringup_fail,0.000
-thermal_derate,0.600
-thermal_shutdown,0.233
+thermal_derate,0.450
+thermal_shutdown,0.117
 usb_dropout,0.033
 usb_trip,0.000
 usb_latched,0.000
@@ -349,11 +355,12 @@ undervoltage,0.083
 soc_throttle,0.233
 agc_saturation,0.000
 desense,0.200
-burst_outage,0.367
+burst_outage,0.350
 injection_overload,0.067
-idr_freeze,0.667
+idr_freeze,0.800
 latency_creep,0.150
-fec_exhaust,0.550
+fec_exhaust,0.633
+# SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99
 ```
 
 
@@ -472,40 +479,40 @@ button_false_event,1.000
 
 ## 9. Рейтинг чутливості: що міряти першим
 
-Метод: **Morris** (елементарні ефекти) у просторі квантилів пріорів; рівні 0,02..0,98 з кроком 2/3; μ* = середнє |ефект| переміщення одного пріору через ~2/3 його діапазону **в одиницях виходу**; σ = нелінійність/взаємодії; частка = μ*/Σμ*. Усі проходи в траєкторії використовують **спільні випадкові числа** (підпотоки), тож ефект параметричний, а не шумовий. «Шум процесу» = std виходу за 24 seed при медіанних параметрах (що робить сама випадковість). Для виходів зі стрибками (відвал USB, виведення з ладу, сентинел `-60 дБ`) μ* і σ великі: це клиф, а не плавний вплив. Файли: `golden/sensitivity_nominal_pi5_5a_150m.txt` (r=3, сесія 300 с, зріз 30 с), `golden/sensitivity_button_nominal.txt` (r=6). **r малий, ранги наближені**: між сусідніми рангами різниця часто в межах шуму Morris; надійні лише лідери.
+Метод: **Morris** (елементарні ефекти) у просторі квантилів пріорів; рівні 0,02..0,98 з кроком 2/3; μ* = середнє |ефект| переміщення одного пріору через ~2/3 його діапазону **в одиницях виходу**; σ = нелінійність/взаємодії; частка = μ*/Σμ*. Усі проходи в траєкторії використовують **спільні випадкові числа** (підпотоки), тож ефект параметричний, а не шумовий. «Шум процесу» = std виходу за 24 seed при медіанних параметрах (що робить сама випадковість). Для виходів зі стрибками (відвал USB, виведення з ладу) μ* і σ великі: це клиф, а не плавний вплив. Мертвий лінк не має `margin_db`: ефекти `margin_db` рахуються лише з пар точок, де лінк працює в обох, а перехід живий/мертвий має власний рядок `dead` (0/1, не входить у «що міряти першим»); стара заглушка `-60 дБ` давала в `margin_db` μ* 34,8 дБ для `power.tx_peak_factor`: це стрибок заглушки, не фізика. Файли: `golden/sensitivity_nominal_pi5_5a_150m.txt` (r=3, сесія 300 с, зріз 30 с), `golden/sensitivity_button_nominal.txt` (r=6). **r малий, ранги наближені**: між сусідніми рангами різниця часто в межах шуму Morris; надійні лише лідери.
 
 ### 9.1 Канал: топ-5 по кожному виходу (nominal_pi5_5a_150m)
 
 
-**residual** (шум процесу, std = 0.04227)
+**residual** (шум процесу, std = 0.04219)
 
 | № | Параметр | Походження | μ* | σ | частка, % |
 |---|---|---|---|---|---|
 | 1 | `power.devices.rtl8812_tx_a` | UNMEASURED | 0.3642 | 0.6308 | 13.7 |
 | 2 | `usb.drop_v_scale` | SYNTH | 0.3121 | 0.5406 | 11.8 |
-| 3 | `rf.noise_figure_db` | UNMEASURED | 0.256 | 0.3644 | 9.6 |
-| 4 | `hw.ant_null_mean_db` | SYNTH | 0.2463 | 0.2209 | 9.3 |
-| 5 | `power.tx_peak_factor` | UNMEASURED | 0.2081 | 0.3604 | 7.8 |
+| 3 | `rf.noise_figure_db` | UNMEASURED | 0.2541 | 0.361 | 9.6 |
+| 4 | `hw.ant_null_mean_db` | SYNTH | 0.2448 | 0.2191 | 9.2 |
+| 5 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 0.2089 | 0.08581 | 7.9 |
 
-**margin_db** (шум процесу, std = 1.608)
-
-| № | Параметр | Походження | μ* | σ | частка, % |
-|---|---|---|---|---|---|
-| 1 | `power.tx_peak_factor` | UNMEASURED | 34.83 | 60.32 | 26.2 |
-| 2 | `power.devices.rtl8812_tx_a` | UNMEASURED | 31.98 | 55.22 | 24.1 |
-| 3 | `rf.path_loss_exponent` | INF | 8.185 | 7.207 | 6.2 |
-| 4 | `hw.ant_null_mean_db` | SYNTH | 5.663 | 5.555 | 4.3 |
-| 5 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 5.416 | 1.107 | 4.1 |
-
-**range_m** (шум процесу, std = 48.63)
+**margin_db** (шум процесу, std = 1.618)
 
 | № | Параметр | Походження | μ* | σ | частка, % |
 |---|---|---|---|---|---|
-| 1 | `rf.path_loss_exponent` | INF | 435.8 | 655.2 | 12.5 |
-| 2 | `rf.tx_antenna_gain_dbi` | UNMEASURED | 388.4 | 475.3 | 11.2 |
-| 3 | `rf.misc_loss_db` | UNMEASURED | 261.2 | 144.4 | 7.5 |
-| 4 | `rf.rician_k_db` | UNMEASURED | 248.9 | 247.5 | 7.1 |
-| 5 | `hw.elrs900_coupling_db` | UNMEASURED | 231.4 | 399.2 | 6.6 |
+| 1 | `rf.path_loss_exponent` | INF | 12.69 | 2.427 | 17.0 |
+| 2 | `hw.ant_null_mean_db` | SYNTH | 5.67 | 5.565 | 7.6 |
+| 3 | `rf.tx_power_dbm` | UNMEASURED | 5.445 | 7.7 | 7.3 |
+| 4 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 5.431 | 1.094 | 7.3 |
+| 5 | `rf.tx_antenna_gain_dbi` | UNMEASURED | 4.61 | 3.103 | 6.2 |
+
+**range_m** (шум процесу, std = 48.67)
+
+| № | Параметр | Походження | μ* | σ | частка, % |
+|---|---|---|---|---|---|
+| 1 | `rf.path_loss_exponent` | INF | 437.8 | 658.1 | 12.7 |
+| 2 | `rf.tx_antenna_gain_dbi` | UNMEASURED | 382.1 | 468.8 | 11.1 |
+| 3 | `rf.misc_loss_db` | UNMEASURED | 259.4 | 143.1 | 7.6 |
+| 4 | `rf.rician_k_db` | UNMEASURED | 229.8 | 225.4 | 6.7 |
+| 5 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 213.2 | 132 | 6.2 |
 
 **g2g_ms** (шум процесу, std = 4.242)
 
@@ -514,43 +521,53 @@ button_false_event,1.000
 | 1 | `latency.encode_frames` | UNMEASURED | 44.18 | 2.829 | 15.3 |
 | 2 | `power.devices.rtl8812_tx_a` | UNMEASURED | 36.64 | 63.46 | 12.7 |
 | 3 | `timing.catchup_ms_per_s` | UNMEASURED | 29.01 | 50.24 | 10.0 |
-| 4 | `latency.capture_frames` | UNMEASURED | 25.4 | 4.452e-14 | 8.8 |
-| 5 | `latency.display_queue_frames` | UNMEASURED | 25.4 | 2.775e-14 | 8.8 |
+| 4 | `latency.capture_frames` | UNMEASURED | 25.4 | 0 | 8.8 |
+| 5 | `latency.display_queue_frames` | UNMEASURED | 25.4 | 0 | 8.8 |
 
 **availability** (шум процесу, std = 0.08065)
 
 | № | Параметр | Походження | μ* | σ | частка, % |
 |---|---|---|---|---|---|
-| 1 | `usb.drop_v_scale` | SYNTH | 0.3125 | 0.5413 | 11.8 |
-| 2 | `rf.path_loss_exponent` | INF | 0.2604 | 0.3253 | 9.8 |
-| 3 | `power.tx_peak_factor` | UNMEASURED | 0.2083 | 0.3608 | 7.8 |
-| 4 | `rf.misc_loss_db` | UNMEASURED | 0.2083 | 0.1804 | 7.8 |
-| 5 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 0.2083 | 0.3608 | 7.8 |
+| 1 | `usb.drop_v_scale` | SYNTH | 0.3125 | 0.5413 | 12.0 |
+| 2 | `rf.path_loss_exponent` | INF | 0.2604 | 0.3253 | 10.0 |
+| 3 | `power.tx_peak_factor` | UNMEASURED | 0.2083 | 0.3608 | 8.0 |
+| 4 | `rf.implementation_loss_db` | UNMEASURED | 0.2083 | 0.2387 | 8.0 |
+| 5 | `rf.misc_loss_db` | UNMEASURED | 0.2083 | 0.1804 | 8.0 |
 
 **ttff_s** (шум процесу, std = 112.8)
 
 | № | Параметр | Походження | μ* | σ | частка, % |
 |---|---|---|---|---|---|
 | 1 | `rf.misc_loss_db` | UNMEASURED | 203.1 | 189.4 | 21.0 |
-| 2 | `usb.drop_v_scale` | SYNTH | 140.6 | 243.6 | 14.5 |
-| 3 | `hw.ant_body_prob` | SYNTH | 125 | 216.5 | 12.9 |
-| 4 | `hw.ant_null_mean_db` | SYNTH | 125 | 216.5 | 12.9 |
-| 5 | `hw.multi24_tx_dbm` | UNMEASURED | 78.13 | 135.3 | 8.1 |
+| 2 | `hw.multi24_tx_dbm` | UNMEASURED | 156.2 | 270.6 | 16.1 |
+| 3 | `usb.drop_v_scale` | SYNTH | 140.6 | 243.6 | 14.5 |
+| 4 | `hw.ant_body_prob` | SYNTH | 125 | 216.5 | 12.9 |
+| 5 | `hw.ant_null_mean_db` | SYNTH | 125 | 216.5 | 12.9 |
+
+**dead** (0/1: лінк ніколи не працює; не входить у «що міряти першим»; шум процесу, std = 0)
+
+| № | Параметр | Походження | μ* | σ | частка, % |
+|---|---|---|---|---|---|
+| 1 | `power.devices.rtl8812_tx_a` | UNMEASURED | 0.5208 | 0.9021 | 50.0 |
+| 2 | `power.tx_peak_factor` | UNMEASURED | 0.5208 | 0.9021 | 50.0 |
+| 3 | `bringup.backoff_base_s` | SYNTH | 0 | 0 | 0.0 |
+| 4 | `bringup.backoff_factor` | SYNTH | 0 | 0 | 0.0 |
+| 5 | `bringup.fw_fail_p` | SYNTH | 0 | 0 | 0.0 |
 
 **Що міряти першим** (UNMEASURED/SYNTH, сума часток по виходах)
 
 | № | Параметр | Походження | сума часток, % |
 |---|---|---|---|
-| 1 | `power.devices.rtl8812_tx_a` | UNMEASURED | 60.5 |
-| 2 | `power.tx_peak_factor` | UNMEASURED | 50.1 |
-| 3 | `rf.misc_loss_db` | UNMEASURED | 43.2 |
-| 4 | `usb.drop_v_scale` | SYNTH | 41.6 |
-| 5 | `hw.ant_null_mean_db` | SYNTH | 33.0 |
-| 6 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 29.6 |
-| 7 | `latency.encode_frames` | UNMEASURED | 22.4 |
-| 8 | `rf.noise_figure_db` | UNMEASURED | 22.3 |
-| 9 | `rf.tx_antenna_gain_dbi` | UNMEASURED | 20.0 |
-| 10 | `rf.implementation_loss_db` | UNMEASURED | 18.2 |
+| 1 | `rf.misc_loss_db` | UNMEASURED | 45.7 |
+| 2 | `usb.drop_v_scale` | SYNTH | 41.9 |
+| 3 | `power.devices.rtl8812_tx_a` | UNMEASURED | 36.7 |
+| 4 | `hw.ant_null_mean_db` | SYNTH | 36.4 |
+| 5 | `rf.rx_antenna_gain_dbi` | UNMEASURED | 33.2 |
+| 6 | `power.tx_peak_factor` | UNMEASURED | 24.1 |
+| 7 | `rf.noise_figure_db` | UNMEASURED | 24.1 |
+| 8 | `hw.multi24_tx_dbm` | UNMEASURED | 23.2 |
+| 9 | `rf.tx_antenna_gain_dbi` | UNMEASURED | 22.7 |
+| 10 | `latency.encode_frames` | UNMEASURED | 22.5 |
 
 
 ### 9.2 Кнопка (button_nominal)
@@ -632,7 +649,7 @@ button_false_event,1.000
 | 10 | `gpio.release_bounce_scale` | SYNTH | 24.6 |
 
 
-Як читати для понеділка: **першим міряти** `power.devices.rtl8812_tx_a` і `power.tx_peak_factor` (USB-вимірник + осцилограф: вони визначають відвал/ліміт і провал), `rf.misc_loss_db` і коефіцієнти антен (калібрований стенд з атенюаторами: зсув дальності в кілька разів), `hw.ant_null_*`/`ant_body_*` (розподіл RSSI), `rf.path_loss_exponent` та `rf.rician_k_db` (політ над відомим відрізком), потім `usb.drop_v_scale` (24-годинний soak на двох БЖ) і затримки кадрів `latency.encode_frames`/`capture_frames`/`display_queue_frames` (фотодіод). Для кнопки: розподіл тривалості натискань (`gpio.single_hold_s`, `long_hold_mu_s`), частота EMI-голчиків, фільтр RP1 і затримки gpiomon/gpioget на Pi 5. Це рангування **самої моделі**: воно каже, що модель найбільше залежить від чого, а не що найгірше в реальності.
+Як читати для понеділка (таблиці вище це r=3 регресійний знімок, а не рейтинг; для рейтингу r≥60 і ≥3 seed, `docs/SIM-VALIDATION.md` §0): **першим міряти** `rf.misc_loss_db` і коефіцієнти антен (калібрований стенд з атенюаторами), `power.devices.rtl8812_tx_a` і `power.tx_peak_factor` (USB-вимірник + осцилограф: вони визначають відвал/ліміт і провал; їхня роль у `margin_db` після D4 менша, у відвалі USB лишається), крок `hw-pa-efficiency` (потужність BEC проти ВЧ-виходу: від нього залежить тепло AIR), потужність TX і `hw.pa_p1db_out_dbm` (зсув дальності в кілька разів), далі `hw.ant_null_*`/`ant_body_*` (розподіл RSSI), `rf.path_loss_exponent` та `rf.rician_k_db` (політ над відомим відрізком), потім `usb.drop_v_scale` (24-годинний soak на двох БЖ) і затримки кадрів `latency.encode_frames`/`capture_frames`/`display_queue_frames` (фотодіод). Для кнопки: розподіл тривалості натискань (`gpio.single_hold_s`, `long_hold_mu_s`), частота EMI-голчиків, фільтр RP1 і затримки gpiomon/gpioget на Pi 5. Це рангування **самої моделі**: воно каже, що модель найбільше залежить від чого, а не що найгірше в реальності.
 
 ## 10. Чесність: що означають синтезовані числа, що рушій може й чого не може
 
@@ -645,7 +662,7 @@ button_false_event,1.000
 **Що рушій здатен виявити.**
 1. **Домінантні ризики за припущеннями**: які режими відмови найімовірніші за пріорами і яка комбінація (БЖ 3 А, спека, дребезг) переводить систему в зону відмови.
 2. **Пріоритет тестів і вимірів**: рейтинг §9 каже, що міряти першим; каталог §8 пов'язує кожен позанормальний сценарій із шаром, що його може відтворити, і з тестом виявлення.
-3. **Регресії логіки**: детерміновані golden (4 сценарії + 2 таблиці чутливості), 60 тестів властивостей і 14 мутацій (§11) ловлять випадкову зміну логіки моделей (наприклад вимкнення стиснення, дебаунсу, ліміту USB).
+3. **Регресії логіки**: детерміновані golden (4 сценарії + 2 таблиці чутливості), 75 тестів властивостей і 22 мутації (§11) ловлять випадкову зміну логіки моделей (наприклад вимкнення стиснення, дебаунсу, ліміту USB).
 4. **Дизайн-дефекти алгоритмів, що перевіряються детерміновано**: поріг ≈ 2,07 с замість 2,00 с, сліпа зона 60 мс і чутливість до вібрації в `gs/button.sh` випливають із коду, не з пріорів (тест на чистій трасі), їх можна виправити без заліза.
 
 **Чого рушій не може.**
@@ -660,9 +677,9 @@ button_false_event,1.000
 
 ## 11. Мутаційні перевірки та тести
 
-`tests/sim/models/mutate.sh` застосовує 14 мутацій до **копії** каталогу й вимагає, щоб `test_degrade.py` або `test_models.py` впали: вимкнення стиснення PA (M1), нульова інтенсивність Пуассона (M2), прибрання 50 мс очікування в `button.sh` (M3), прибрана стеля EVM (M4), тепловий зупин не спрацьовує (M5), черга ін'єкції не блокує (M6), перевищення храповика UNMEASURED (M7), ймовірність каталогу без SYNTH (M8), автомат Pi 5 не трипає (M9), небезпека відвалу росте із запасом (M10), seed ігнорується (M11), поріг довгого натискання 100 (M12), вимкнений фільтр дебаунсу (M13), bring-up не збоїть (M14). Результат: усі 14 убиті (див. звіт виконання).
+`tests/sim/models/mutate.sh` застосовує 22 мутації до **копії** каталогу й вимагає, щоб `test_degrade.py` або `test_models.py` впали: вимкнення стиснення PA (M1), нульова інтенсивність Пуассона (M2), прибрання 50 мс очікування в `button.sh` (M3), прибрана стеля EVM (M4), тепловий зупин не спрацьовує (M5), черга ін'єкції не блокує (M6), перевищення храповика UNMEASURED (M7), ймовірність каталогу без SYNTH (M8), автомат Pi 5 не трипає (M9), небезпека відвалу росте із запасом (M10), seed ігнорується (M11), поріг довгого натискання 100 (M12), вимкнений фільтр дебаунсу (M13), bring-up не збоїть (M14), тепло AIR не залежить від ВЧ-потужності (M15, D1), простій AIR < 0 / енергія не зберігається (M16, D1b), виміряний струм не домінує над ККД (M17), мертвий лінк знову дає margin -60 (M18, D4), Morris змішує перехід живий/мертвий з margin (M19), усереднення завмирання без хвоста глибоких завмирань (M20) або знову 32 квантилі (M21, D9), прапорець `dead` втрачено (M22). Результат: усі 22 убиті (див. звіт виконання).
 
-Тести (`test_degrade.py`, 60): схема й храповики, розподіли (монотонність квантилів, середні, бета-функція), перекриття вимірюванням, антитетичні пари, відтворюваність за seed і розбіжність за іншим seed, впорядковані перцентилі й ймовірності в [0,1], монотонність за відстанню/температурою/БЖ, нелінійність PA/EVM/тепла/AGC, узгодженість з `rf_model` при нейтральних деградаціях, автомат ліміту USB, bring-up (MC проти замкненої формули), M/M/1/K, час, дребезг і алгоритм кнопки, каталог (≥ 30, SYNTH, режими, шари, посилання F1-F19), ця документація, golden.
+Тести (`test_degrade.py`, 75): схема й храповики, розподіли (монотонність квантилів, середні, бета-функція), перекриття вимірюванням, антитетичні пари, відтворюваність за seed і розбіжність за іншим seed, впорядковані перцентилі й ймовірності в [0,1], монотонність за відстанню/температурою/БЖ, нелінійність PA/EVM/тепла/AGC, узгодженість з `rf_model` при нейтральних деградаціях, автомат ліміту USB, bring-up (MC проти замкненої формули), M/M/1/K, час, дребезг і алгоритм кнопки, каталог (≥ 30, SYNTH, режими, шари, посилання F1-F19), енергетичний баланс AIR (D1/D1b), мертвий лінк без margin і Morris без стрибка заглушки (D4), інтегрування завмирання проти незалежного еталона в хвості (D9), ця документація, golden.
 
 ## 11. Міст до заліза: аркуш вимірювань, оверлей, what-if (`calib.py`, `bench/doctor.sh`)
 
@@ -674,4 +691,6 @@ button_false_event,1.000
 
 ## 12. Застереження після валідації (`docs/SIM-VALIDATION.md`)
 
-Рейтинг §9 надійний лише для **першого місця** (`power.devices.rtl8812_tx_a`, 5 з 5 seed при r≥20). Місця 2–10 між seed не відтворюються (Спірмен 0,79 при r=6, 0,95 при r=60); для рейтингу брати r≥60 і середнє по ≥3 seed. p95 при n=200 нестабільний (потрібно n≈800..1600). Відомі помилки моделі D1..D12 (напр. температура AIR не залежить від ВЧ-потужності, хвіст PER при завмиранні недооцінено на порядки) закріплені DEFECT-тестами, моделі не змінено.
+**Виправлено після валідації** (докладно: `docs/SIM-VALIDATION.md` §3): D1/D1b (тепло AIR = `P_dc − P_rf`, росте з ВЧ-потужністю, енергія зберігається на всіх пріорах), D4 (мертвий лінк не має `margin_db`, є прапорець `dead`), D9 (усереднення PER по завмиранню інтегрує щільність, хвіст збігається з еталоном у межах 1..3 %). Наслідок для цього документа: числа §7 і таблиці §9 перераховано; **рейтинг «що міряти першим» змінився**: його перше місце (`power.devices.rtl8812_tx_a`) частково було артефактом заглушки `margin = -60` (стрибок живий/мертвий у `margin_db`): після виправлення воно №1 лише у 2 з 5 seed (r=6 і r=20), у середньому по seed лишається №1, у топ-6 у всіх прогонах r=60; у верхньому ешелоні тепер також `hw.pa_p1db_out_dbm` (деталі в `docs/SIM-VALIDATION.md` §0/§2.3). Тепловий дерейтинг і вимкнення на `hot_day_closed_case`/`nominal` стали рідшими (в моделі тепла менше, бо P_dc при польотній потужності нижча за P_dc при номінальній), але все ще залежать від SYNTH/UNMEASURED чисел, зокрема від припущення «виміряний струм взято при номінальному виході P1dB» (UNMEASURED, крок калібрування `hw-pa-efficiency`).
+
+**Лишається** (місця 2..10 між seed не відтворюються, Спірмен 0,79 при r=6, 0,95 при r=60): для рейтингу брати r≥60 і середнє по ≥3 seed. p95 при n=200 нестабільний (потрібно n≈800..1600). Відомі помилки моделі D2, D3, D5..D8, D10..D12 закріплені DEFECT-тестами й не виправлені. Автономний `rf_model.frame_per` усереднює Райса по 400 випадкових draw (шум хвоста x2, `rf.fading_draws`): це не рушій, але його хвіст PER неточний. Для мертвого лінку `g2g_ms` усе ще дорівнює типовому бюджету (теж заглушка, не фізика).

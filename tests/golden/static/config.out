@@ -194,7 +194,7 @@ bench/video-src.sh 0
 bench/fake_fc.py 28
 bench/gs_mav.py 3
 bench/tx12_bridge.py 16
-gs/mavlink/gs-mavlink.sh 8
+gs/mavlink/gs-mavlink.sh 7
 tests/sim/air_relay.py 9
 tests/sim/apm_fc.py 11
 tests/sim/apm_model.py 18
@@ -207,5 +207,5 @@ tests/sim/qemu_hwsim.sh 5
 tests/sim/smoke.sh 52
 tests/sim/wfb_veth.sh 21
 build/release.sh 9
-total 374
+total 373
 bad=0

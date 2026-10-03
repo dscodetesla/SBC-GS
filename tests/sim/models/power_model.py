@@ -24,6 +24,7 @@ Event schema (consumed by later virtual-USB tests), one JSON object:
 import argparse
 import csv
 import json
+import math
 import random
 import re
 import statistics
@@ -79,6 +80,11 @@ def device_a(P, kind, state="tx", peak=False):
 def budget(P, board, psu_a=None, adapters=1, state="tx", with_=(), load="active", peak=False, usb_max_current=False):
     if board not in BOARDS:
         raise common.ParamError("board must be one of %s" % ",".join(BOARDS))
+    # D21: NaN/inf/non-positive supply or a negative/non-integer adapter count made every comparison False (verdict OK on garbage)
+    if psu_a is not None and (isinstance(psu_a, bool) or not isinstance(psu_a, (int, float)) or not math.isfinite(psu_a) or psu_a <= 0):
+        raise common.ParamError("psu_a must be a finite number > 0 (A), got %r" % (psu_a,))
+    if isinstance(adapters, bool) or not isinstance(adapters, int) or adapters < 0:
+        raise common.ParamError("adapters must be an integer >= 0, got %r" % (adapters,))
     rec = P.get("power.boards.%s.psu_recommended_a" % board)
     psu = rec if psu_a is None else psu_a
     items = [("board_" + load, P.get("power.boards.%s.board_%s_a" % (board, load)), "psu")]

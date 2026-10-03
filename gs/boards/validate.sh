@@ -16,10 +16,13 @@ for d in "${dirs[@]}"; do
 	if [ ! -f "$conf" ]; then echo "FAIL $name: no board.conf"; bad=1; continue; fi
 	# Only plain KEY='value' / KEY="value" / KEY=value lines (and comments/blank) are allowed.
 	nl=0; syn=0
+	# A comment needs blanks before the "#" (a glued "#" is part of the word for the shell, D7); no backslash inside "..." (it can escape
+	# the closing quote, D8); gs/lib/board_conf.py uses the same rules, so shell and python read an accepted file identically.
+	line_re='^[A-Z][A-Z0-9_]*=('"'"'[^'"'"']*'"'"'|"[^"$`\\]*"|[A-Za-z0-9_./:@%+-]*)([[:space:]]+#.*)?[[:space:]]*$'
 	while IFS= read -r line; do
 		nl=$((nl+1))
 		[[ "$line" =~ ^[[:space:]]*(#.*)?$ ]] && continue
-		[[ "$line" =~ ^[A-Z][A-Z0-9_]*=(\'[^\']*\'|\"[^\"\$\`]*\"|[A-Za-z0-9_./:@%+-]*)[[:space:]]*(#.*)?$ ]] && continue
+		[[ "$line" =~ $line_re ]] && continue
 		echo "FAIL $name: $conf:$nl: bad syntax: $line"; syn=1
 	done < "$conf"
 	if [ "$syn" = 1 ]; then bad=1; continue; fi
