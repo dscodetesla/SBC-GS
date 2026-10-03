@@ -143,6 +143,7 @@ cp build.sh $ROOTFS/root/build.sh
 set +x
 (
 	for v in GS_LEGACY_ROOT_LOGIN GS_ROOT_PASSWORD; do
+		# shellcheck disable=SC2163  # intentional indirect export: $v holds the NAME of the variable to export
 		if [ -n "${!v:-}" ]; then export "$v"; else unset "$v"; fi
 	done
 	chroot $ROOTFS /root/build.sh
