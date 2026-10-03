@@ -66,6 +66,9 @@ WFB_NICS	~	str	-	-	-	n	bench	WFB_NICS	space-separated wfb-ng adapters; empty = a
 TX_PWR_IDX	1	int	0	63	-	n	bench	TX_PWR_IDX	8812au rtw_tx_pwr_idx_override; keep minimal on the bench
 RTL8812AU_REF	6e75916416de1dce5ecd37f824896bebf96aaf8f	str	-	-	-	n	bench	RTL8812AU_REF	svpcom/rtl8812au commit
 DRIVER	8812au	enum:8812au|8812eu|8814au|8814au-morrownr	-	-	-	n	bench	DRIVER	Realtek driver variant
+DRIVER_PATCH_SERIES	tests/sim/dkms/patches/series	str	-	-	-	n	bench	DRIVER_PATCH_SERIES	patch series applied to the driver source before dkms-install for matching kernels (6.12: set_monitor_channel signature); relative to the repo root
+HOST_VAAPI	auto	enum:auto|yes|no	-	-	-	n	bench	HOST_VAAPI	host video decode: auto uses VA-API (vah264dec/vah265dec) when the element and a DRM render node exist, yes requires it, no never
+DRI_DIR	/dev/dri	str	-	-	-	n	bench	DRI_DIR	directory searched for DRM render nodes (renderD*) by bench/video-rx.sh
 VIDEO_CODEC	h264	enum:h264|h265	-	-	-	n	bench	VIDEO_CODEC	bench video codec
 VIDEO_W	1280	int	16	7680	px	n	bench	VIDEO_W	video width
 VIDEO_H	720	int	16	4320	px	n	bench	VIDEO_H	video height

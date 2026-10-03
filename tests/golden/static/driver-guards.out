@@ -1,0 +1,24 @@
+== apply-patches on a mock driver tree
+ok kernel 6.8 does not match k612*: rc = 0
+ok kernel 6.8: file untouched = int f(int a)
+ok series row of another driver: rc = 0
+ok series row of another driver: file untouched = int f(int a)
+ok kernel 6.12 applies: rc = 0
+ok kernel 6.12: file patched = int f(int a, int b)
+ok second run is idempotent: already applied = 0
+ok patch that does not apply: rc = 1
+ok not a git tree: rc = 2
+== board predicates
+radxa-zero3 fan_kernel_managed=no otg_supported=yes
+rpi4 fan_kernel_managed=no otg_supported=no
+rpi5 fan_kernel_managed=yes otg_supported=no
+ok rpi5 fan is kernel managed = yes
+ok radxa fan is not kernel managed = no
+ok unknown board falls back to Radxa behaviour (fan runs) = no
+ok rpi5 has no OTG role switch = no
+== install-driver.sh wiring
+ok blacklist rtw88_8812au = 0
+ok blacklist rtw88_8821au = 0
+ok patch series applied before dkms-install = 0
+ok patches are applied BEFORE dkms-install = 0
+bad=0

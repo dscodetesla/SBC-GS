@@ -28,12 +28,20 @@ fi
 [ "$use_gps" == "yes" ] && systemctl start chrony gpsd &
 
 # If set otg mode to device, use gadget acm, ncm, mass on boot
+# (boards without a runtime OTG role switch, e.g. Pi 5/Pi 4, skip it: otg-gadget.sh exits there too)
 if [ "$otg_mode" == "device" ]; then
 	/gs/otg-gadget.sh &
 fi
 
 # pwm fan service
-[ "$fan_service_enable" == "yes" ] && ( echo "start fan service"; systemd-run --unit=fan /gs/fan.sh )
+# (not on boards whose fan is driven by the kernel, e.g. Pi 5: hw_fan_kernel_managed)
+if [ "$fan_service_enable" == "yes" ]; then
+	if hw_fan_kernel_managed; then
+		echo "fan is managed by the kernel on this board, not starting fan service"
+	else
+		( echo "start fan service"; systemd-run --unit=fan /gs/fan.sh )
+	fi
+fi
 
 # ttyd
 if [ "$ttyd_enable" == "yes" ]; then

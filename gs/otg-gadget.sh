@@ -4,6 +4,12 @@
 . /gs/lib/otg.sh
 OTG_MODE_FILE="$(otg_mode_file)"
 
+# boards without a runtime OTG role switch (OTG_CONTROLLER='none', e.g. Pi 5: both RP1 USB controllers are host only)
+if ! otg_supported; then
+	echo "otg gadget is not supported on this board, nothing to do"
+	exit 0
+fi
+
 # 切换OTG端口为device模式
 if [ "$(cat "$OTG_MODE_FILE")" == "host" ]; then
 	echo device > "$OTG_MODE_FILE" || exit 1

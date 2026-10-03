@@ -12,9 +12,9 @@ ok GPIO_PIN_MAP dotdot rejected: FAIL rpi5: bad GPIO_PIN_MAP '../rpi4/pinmap.con
 ok GPIO_PIN_NUMBERING=sideways rejected: FAIL rpi5: bad value GPIO_PIN_NUMBERING='sideways' (allowed: physical,bcm)
 ok DTBO_MODE=symlink rejected: FAIL rpi5: bad value DTBO_MODE='symlink' (allowed: rename,config-txt)
 ok PART_TABLE=lvm rejected: FAIL rpi5: bad value PART_TABLE='lvm' (allowed: gpt,mbr)
-ok command line in the profile rejected: FAIL rpi5: <T>/v/rpi5/board.conf:125: bad syntax: X=$(rm -rf /)
+ok command line in the profile rejected: FAIL rpi5: <T>/v/rpi5/board.conf:128: bad syntax: X=$(rm -rf /)
 == every key has a src comment directly above
-ok 29 keys checked
+ok 30 keys checked
 ok duplicate keys = 
 == required keys all defined
 ok 18 required keys present

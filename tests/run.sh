@@ -120,6 +120,26 @@ if [ -z "$want" ] || [ "$want" = "static/rpi5-draft" ]; then
 	else echo "DIFF     static/rpi5-draft"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the Pi 5 / Ubuntu-host fixes: driver patch series, fan/OTG guards per board, blacklist (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/driver-guards" ]; then
+	out="$(mktemp)"; "$HERE/static/driver-guards.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/driver-guards.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/driver-guards"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/driver-guards"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/driver-guards"
+	else echo "DIFF     static/driver-guards"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
+# static check of the host decoder/sink choice of bench/video-rx.sh (V4L2 -> VA-API -> software) with shimmed gst tools
+if [ -z "$want" ] || [ "$want" = "static/host-decode" ]; then
+	out="$(mktemp)"; "$HERE/static/host-decode.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/host-decode.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/host-decode"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/host-decode"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/host-decode"
+	else echo "DIFF     static/host-decode"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 # static check of the udev template renderer (no sandbox needed)
 if [ -z "$want" ] || [ "$want" = "static/udev-render" ]; then
 	out="$(mktemp)"; "$HERE/static/udev-render.sh" > "$out" 2>&1 || fail=1

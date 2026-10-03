@@ -52,6 +52,14 @@ if [ "$DRIVER" = 8812au ]; then
 	run git -C "$dir" fetch --all --tags
 	run git -C "$dir" checkout "$RTL8812AU_REF" || die "commit $RTL8812AU_REF not found; set RTL8812AU_REF in env"
 fi
+
+# patches for the running kernel (docs/SIM-DKMS.md: 6.12 changed the set_monitor_channel signature; the pristine pins do not build there)
+if [ -n "$DRIVER_PATCH_SERIES" ] && [ -d "$dir/.git" ]; then
+	"$BENCH_DIR/apply-patches.sh" "$dir" "rtl$DRIVER" "$KREL" "$BENCH_DIR/../$DRIVER_PATCH_SERIES" || die "driver patch failed"
+elif [ "$DRY_RUN" = 1 ]; then
+	echo "[dry-run] would apply $DRIVER_PATCH_SERIES to $dir for kernel $KREL"
+fi
+[ "$(getconf PAGESIZE)" = 16384 ] && log "16K pages (Pi 5 kernel): only the BUILD is proven by the virtual layer (docs/SIM-DKMS.md); test load/monitor/injection yourself" # cfg-ok: Pi 5 page size
 ( cd "$dir" && run ./dkms-install.sh )
 
 # blacklist stock drivers (see wfb-ng Setup-HOWTO) and set bench-safe TX power
@@ -65,6 +73,8 @@ blacklist 88XXau
 blacklist 8812au
 blacklist rtl8812au
 blacklist rtl88x2bs
+blacklist rtw88_8812au
+blacklist rtw88_8821au
 $([ "$DRIVER" = 8814au-morrownr ] && echo blacklist rtw88_8814au)
 $opts
 EOT

@@ -1,0 +1,12 @@
+== invocation: standalone
+== exit
+exit=0
+== stdout
+otg gadget is not supported on this board, nothing to do
+== shim calls
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host
+== tree /sys/kernel/config
+D .
+D ./usb_gadget

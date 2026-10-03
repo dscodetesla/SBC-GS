@@ -1,5 +1,5 @@
 == registry
-keys=145 bad_field_count=0 empty_fields=0 duplicates=0 safety_keys=14 safety_without_bounds=0
+keys=148 bad_field_count=0 empty_fields=0 duplicates=0 safety_keys=14 safety_without_bounds=0
 == defaults (sbc-gs-config show --defaults)
 TX12_CONN=udpout:127.0.0.1:14550	# default
 TX12_SYSID=255	# default
@@ -64,6 +64,9 @@ WFB_NICS=	# default
 TX_PWR_IDX=1	# default
 RTL8812AU_REF=6e75916416de1dce5ecd37f824896bebf96aaf8f	# default
 DRIVER=8812au	# default
+DRIVER_PATCH_SERIES=tests/sim/dkms/patches/series	# default
+HOST_VAAPI=auto	# default
+DRI_DIR=/dev/dri	# default
 VIDEO_CODEC=h264	# default
 VIDEO_W=1280	# default
 VIDEO_H=720	# default
@@ -146,7 +149,7 @@ SMOKE_VIDEO_MIN_PROGRESS=3	# default
 WFB_NG_REF=2fe252b2f451c1ccfb16968e064fe1cdb18baaa0	# default
 WFB_VETH_RX_PORT=15700	# default
 WFB_VETH_TX_PORT=15702	# default
-legacy constants: identical (145 keys)
+legacy constants: identical (148 keys)
 python loader: identical output
 == unit tests
 ok lines: 83, unit failures: 0
@@ -154,7 +157,7 @@ ok lines: 83, unit failures: 0
 ok   config/profiles/bench-tight.env: ok: config/profiles/bench-tight.env (3 keys)
 ok   config/profiles/contour-pi5.env: ok: config/profiles/contour-pi5.env (8 keys)
 ok   config/profiles/gs-hardened.env: ok: config/profiles/gs-hardened.env (2 keys)
-ok   bench/env.example: ok: bench/env.example (26 keys)
+ok   bench/env.example: ok: bench/env.example (28 keys)
 == gs-mavlink S1: the config file is data, never code
 command substitution: rc=2 marker=absent
 backticks: rc=2 marker=absent
@@ -178,6 +181,7 @@ exit=2
 mavp2p udps:127.0.0.1:14550 udps:127.0.0.1:14560 --hb-systemid=125
 mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125
 == hardcode counts
+bench/apply-patches.sh 0
 bench/bench.sh 0
 bench/check.sh 1
 bench/configure-wfb.sh 2

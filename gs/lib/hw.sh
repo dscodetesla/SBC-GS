@@ -24,6 +24,9 @@ hw_home_dir() { _hw_get HOME_DIR '/home/radxa'; }
 hw_wifi_iface() { _hw_get WIFI_ONBOARD_IFACE 'wifi0'; }
 # I2C bus number of the external RTC (Radxa: 4, i.e. /dev/i2c-4)
 hw_rtc_i2c_bus() { _hw_get RTC_I2C_BUS '4'; }
+# fan_kernel_managed: status 0 when the board's fan is driven by the kernel/firmware (Pi 5 pwm-fan on RP1), so gs/fan.sh must NOT run.
+# A predicate (status, no output): call inside `if`/`&&`; false (the Radxa behaviour) when the board lib/profile/key is unavailable.
+hw_fan_kernel_managed() { [ "$(_hw_get FAN_KERNEL_MANAGED 'no')" = 'yes' ]; }
 # overlay enabling mechanism: rename (Radxa: *.dtbo.disabled <-> *.dtbo) or config-txt (Pi: dtoverlay= line in CONFIG_TXT)
 hw_dtbo_mode() { _hw_get DTBO_MODE 'rename'; }
 # partition table type: gpt (Radxa) or mbr (Pi OS images)
