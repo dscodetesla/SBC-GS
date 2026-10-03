@@ -1,0 +1,84 @@
+# sensitivity (Morris elementary effects in prior-quantile space): scenario=nominal_pi5_5a_150m kind=link dims=145 r=3 seed=1
+# mu* = mean |effect| of moving one prior across ~2/3 of its quantile range, in OUTPUT units; share = mu*/sum(mu*); sigma = nonlinearity/interactions
+# noise = std of the output over 24 process seeds at the median parameters (what chance alone does)
+
+## output residual (noise std 0.04227)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,power.devices.rtl8812_tx_a,UNMEASURED,0.3642,0.6308,13.7
+2,usb.drop_v_scale,SYNTH,0.3121,0.5406,11.8
+3,rf.noise_figure_db,UNMEASURED,0.256,0.3644,9.6
+4,hw.ant_null_mean_db,SYNTH,0.2463,0.2209,9.3
+5,power.tx_peak_factor,UNMEASURED,0.2081,0.3604,7.8
+6,rf.rx_antenna_gain_dbi,UNMEASURED,0.2052,0.07886,7.7
+7,rf.path_loss_exponent,INF,0.175,0.3008,6.6
+8,rf.tx_antenna_gain_dbi,UNMEASURED,0.1416,0.2453,5.3
+
+## output margin_db (noise std 1.608)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,power.tx_peak_factor,UNMEASURED,34.83,60.32,26.2
+2,power.devices.rtl8812_tx_a,UNMEASURED,31.98,55.22,24.1
+3,rf.path_loss_exponent,INF,8.185,7.207,6.2
+4,hw.ant_null_mean_db,SYNTH,5.663,5.555,4.3
+5,rf.rx_antenna_gain_dbi,UNMEASURED,5.416,1.107,4.1
+6,rf.tx_antenna_gain_dbi,UNMEASURED,4.552,3.085,3.4
+7,rf.misc_loss_db,UNMEASURED,3.832,2.581,2.9
+8,rf.diversity_gain_db,UNMEASURED,3.643,0.9531,2.7
+
+## output range_m (noise std 48.63)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,rf.path_loss_exponent,INF,435.8,655.2,12.5
+2,rf.tx_antenna_gain_dbi,UNMEASURED,388.4,475.3,11.2
+3,rf.misc_loss_db,UNMEASURED,261.2,144.4,7.5
+4,rf.rician_k_db,UNMEASURED,248.9,247.5,7.1
+5,hw.elrs900_coupling_db,UNMEASURED,231.4,399.2,6.6
+6,rf.rx_antenna_gain_dbi,UNMEASURED,212.3,131.2,6.1
+7,power.tx_peak_factor,UNMEASURED,193,334.2,5.5
+8,rf.diversity_gain_db,UNMEASURED,183,158.5,5.3
+
+## output g2g_ms (noise std 4.242)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,latency.encode_frames,UNMEASURED,44.18,2.829,15.3
+2,power.devices.rtl8812_tx_a,UNMEASURED,36.64,63.46,12.7
+3,timing.catchup_ms_per_s,UNMEASURED,29.01,50.24,10.0
+4,latency.capture_frames,UNMEASURED,25.4,0,8.8
+5,latency.display_queue_frames,UNMEASURED,25.4,0,8.8
+6,timing.queue_max_ms,UNMEASURED,23.25,40.27,8.0
+7,latency.panel_ms,UNMEASURED,15.93,3.071,5.5
+8,timing.stall_rate_per_h,SYNTH,11.58,20.06,4.0
+
+## output availability (noise std 0.08065)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,usb.drop_v_scale,SYNTH,0.3125,0.5413,11.8
+2,rf.path_loss_exponent,INF,0.2604,0.3253,9.8
+3,power.tx_peak_factor,UNMEASURED,0.2083,0.3608,7.8
+4,rf.implementation_loss_db,UNMEASURED,0.2083,0.2387,7.8
+5,rf.misc_loss_db,UNMEASURED,0.2083,0.1804,7.8
+6,rf.rx_antenna_gain_dbi,UNMEASURED,0.2083,0.3608,7.8
+7,power.devices.rtl8812_tx_a,UNMEASURED,0.1562,0.2706,5.9
+8,rf.noise_figure_db,UNMEASURED,0.1562,0.2706,5.9
+
+## output ttff_s (noise std 112.8)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,rf.misc_loss_db,UNMEASURED,203.1,189.4,21.0
+2,usb.drop_v_scale,SYNTH,140.6,243.6,14.5
+3,hw.ant_body_prob,SYNTH,125,216.5,12.9
+4,hw.ant_null_mean_db,SYNTH,125,216.5,12.9
+5,hw.multi24_tx_dbm,UNMEASURED,78.12,135.3,8.1
+6,rf.ge_mean_burst_frames,UNMEASURED,78.12,135.3,8.1
+7,rf.implementation_loss_db,UNMEASURED,46.88,46.88,4.8
+8,latency.encode_frames,UNMEASURED,31.25,54.13,3.2
+
+## measure first (UNMEASURED/SYNTH parameters ranked by summed share over 6 outputs)
+rank,parameter,provenance,summed_share_pct
+1,power.devices.rtl8812_tx_a,UNMEASURED,60.5
+2,power.tx_peak_factor,UNMEASURED,50.1
+3,rf.misc_loss_db,UNMEASURED,43.2
+4,usb.drop_v_scale,SYNTH,41.6
+5,hw.ant_null_mean_db,SYNTH,33.0
+6,rf.rx_antenna_gain_dbi,UNMEASURED,29.6
+7,latency.encode_frames,UNMEASURED,22.4
+8,rf.noise_figure_db,UNMEASURED,22.3
+9,rf.tx_antenna_gain_dbi,UNMEASURED,20.0
+10,rf.implementation_loss_db,UNMEASURED,18.2
+11,hw.ant_body_prob,SYNTH,18.2
+12,hw.multi24_tx_dbm,UNMEASURED,13.1

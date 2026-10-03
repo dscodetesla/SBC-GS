@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+55
+== shim calls
+sshpass -p 12345 scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ControlMaster=auto -o ControlPath=<ROOT>/run/ssh_control:%h:%p:%r -o ControlPersist=15s -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.5.0.10:<ROOT>/etc/majestic.yaml root@10.5.0.10:<ROOT>/etc/wfb.yaml root@10.5.0.10:<ROOT>/etc/alink.conf root@10.5.0.10:<ROOT>/etc/txprofiles.conf <ROOT>/tmp/gsmenu_cache
+yaml-cli -i <ROOT>/tmp/gsmenu_cache/majestic.yaml -g .image.contrast
+== gs.conf changes

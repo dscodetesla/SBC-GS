@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+1 (2412 MHz)
+36 (5180 MHz)
+40 (5200 MHz)
+149 (5745 MHz)== shim calls
+iw list
+== gs.conf changes

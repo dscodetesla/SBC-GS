@@ -1,0 +1,55 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+i2c-4 is not enabled
+start fan service
+start wfb in standalone mode
+start stream service
+start button service
+gs service start completed
+== shim calls (sorted: background jobs make the order non-deterministic)
+findmnt -n -o SOURCE /
+fsck.exfat -a /dev/mmcblk0p4
+gpiofind PIN_22
+gpioset -D push-pull gpiochip0 22=0
+ip ro add 224.0.0.0/4 dev br0
+iptables -t mangle -A OUTPUT -d 192.168.9.5 -p udp --dport 5600 -j TEE --gateway 192.168.1.20
+lsblk -no PKNAME /dev/mmcblk0p3
+mount --bind <ROOT>/tmp/wifibroadcast.cfg <ROOT>/etc/wifibroadcast.cfg
+mount --bind <ROOT>/tmp/wifibroadcast.default <ROOT>/etc/default/wifibroadcast
+mount /dev/mmcblk0p4 <ROOT>/Videos
+stub gs-applyconf.sh 
+stub otg-gadget.sh 
+stub wfb.sh 
+systemctl enable --now ttyd
+systemctl is-enabled ttyd
+systemctl start chrony gpsd
+systemctl start rtsp@h265
+systemctl start webui
+systemd-run --unit=alink /usr/local/bin/alink --config <ROOT>/etc/alink.conf
+systemd-run --unit=button <ROOT>/gs/button.sh
+systemd-run --unit=fan <ROOT>/gs/fan.sh
+systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=stream <ROOT>/gs/stream.sh
+== gs.conf changes
+92c92
+< wfb_rtsp_server_enable='no'
+---
+> wfb_rtsp_server_enable='yes'
+112c112
+< wfb_outgoing_ip='224.0.0.1'
+---
+> wfb_outgoing_ip='192.168.9.5'
+213c213
+< use_external_rtc='no'
+---
+> use_external_rtc='yes'
+222c222
+< use_gps='no'
+---
+> use_gps='yes'
+229c229
+< alink_enable='no'
+---
+> alink_enable='yes'

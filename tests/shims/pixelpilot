@@ -1,0 +1,5 @@
+#!/bin/bash
+# logs argv; "--screen-mode-list" prints canned modes (as the real player lists them: WxH@fps)
+echo "pixelpilot $*" >> "$SHIM_LOG"
+[ "$1" = "--screen-mode-list" ] && printf '1920x1080@60\n3840x2160@30\n1280x720@120\n'
+exit 0

@@ -1,0 +1,23 @@
+== invocation: standalone
+== exit
+exit=143
+== stdout
+Using pwmchip14 channel 0 for fan
+CPU temperature: 50°
+Max temperature: 50°
+50 is between 47 and 53, Keep speed
+------------------------------------------
+CPU temperature: 50°
+Max temperature: 50°
+50 is between 47 and 53, Keep speed
+------------------------------------------
+== shim calls
+== gs.conf changes
+== file /sys/class/pwm/pwmchip14/pwm0/period
+40000
+== file /sys/class/pwm/pwmchip14/pwm0/duty_cycle
+8000
+== file /sys/class/pwm/pwmchip14/pwm0/enable
+1
+== file /sys/class/pwm/pwmchip14/pwm0/polarity
+normal

@@ -1,0 +1,211 @@
+== registry
+keys=145 bad_field_count=0 empty_fields=0 duplicates=0 safety_keys=14 safety_without_bounds=0
+== defaults (sbc-gs-config show --defaults)
+TX12_CONN=udpout:127.0.0.1:14550	# default
+TX12_SYSID=255	# default
+TX12_COMPONENT_ID=190	# default
+TX12_RATE_HZ=20.0	# default
+TX12_MAX_RATE_HZ=50.0	# default SAFETY
+TX12_DEADMAN_MS=300	# default SAFETY
+TX12_THROTTLE_CH=3	# default
+TX12_FAILSAFE_THROTTLE_US=1000	# default SAFETY
+TX12_CLAMP_LO_US=1000	# default SAFETY
+TX12_CLAMP_HI_US=2000	# default SAFETY
+TX12_SANE_MIN_US=0	# default SAFETY
+TX12_SANE_MAX_US=4000	# default SAFETY
+TX12_RELEASE_HOLD_S=1.0	# default SAFETY
+TX12_THROTTLE_FS_FRAMES=3	# default SAFETY
+TX12_EXIT_RELEASE_FRAMES=5	# default SAFETY
+TX12_HB_PERIOD_S=1.0	# default
+TX12_STAT_PERIOD_S=2.0	# default
+TX12_LOOP_SLEEP_S=0.005	# default
+TX12_EVDEV_POLL_S=0.05	# default
+TX12_LOCK_PATH=	# default
+TX12_MAP=	# default
+GSMAV_CONN=udpin:127.0.0.1:14550	# default
+GSMAV_SYSID=255	# default
+GSMAV_COMPONENT_ID=190	# default
+GSMAV_RATE_HZ=20.0	# default SAFETY
+GSMAV_NEUTRAL_US=1500	# default SAFETY
+GSMAV_SWEEP_AMP_US=400	# default SAFETY
+GSMAV_HB_PERIOD_S=1.0	# default
+GSMAV_STAT_PERIOD_S=2.0	# default
+GSMAV_RELEASE_REPEATS=5	# default SAFETY
+GSMAV_RELEASE_INTERVAL_S=0.05	# default
+GSMAV_LOOP_SLEEP_S=0.005	# default
+GSMAV_RTT_WINDOW=40	# default
+FAKEFC_CONN=udpout:127.0.0.1:14550	# default
+FAKEFC_COMPONENT_ID=1	# default
+FAKEFC_GCS_SYSID=255	# default
+FAKEFC_RC_OVERRIDE_TIME_S=3.0	# default
+FAKEFC_GCS_TIMEOUT_S=5.0	# default
+FAKEFC_SLOW_PERIOD_S=1.0	# default
+FAKEFC_FAST_PERIOD_S=0.1	# default
+FAKEFC_REPORT_PERIOD_S=5.0	# default
+FAKEFC_LOOP_SLEEP_S=0.005	# default
+ROUTER=mavp2p	# default
+UPSTREAM_BIND=0.0.0.0	# default
+UPSTREAM_PORT=14550	# default
+LISTEN_ADDR=0.0.0.0	# default
+GCS_UDP_PORTS=14560	# default
+GCS_UDP_CLIENTS=	# default
+TCP_ENABLE=0	# default
+TCP_PORT=5760	# default
+SERIAL_DEV=	# default
+SERIAL_BAUD=115200	# default
+HB_SYSID=125	# default
+HB_DISABLE=0	# default
+STREAMREQ_DISABLE=0	# default
+DUMP_ENABLE=0	# default
+DUMP_PATH=/var/log/gs-mavlink/2006-01-02_15-04-05.tlog	# default
+WFB_REGION=	# default
+WFB_CHANNEL=165	# default
+WFB_NICS=	# default
+TX_PWR_IDX=1	# default
+RTL8812AU_REF=6e75916416de1dce5ecd37f824896bebf96aaf8f	# default
+DRIVER=8812au	# default
+VIDEO_CODEC=h264	# default
+VIDEO_W=1280	# default
+VIDEO_H=720	# default
+VIDEO_FPS=30	# default
+VIDEO_BITRATE_KBPS=4000	# default
+VIDEO_PATTERN=ball	# default
+VIDEO_RTP_MTU=1400	# default
+VIDEO_RTP_PT=96	# default
+VIDEO_X264_PRESET=ultrafast	# default
+AIR_VIDEO_PORT=5602	# default
+GS_VIDEO_PORT=5600	# default
+MAV_PORT=14550	# default
+FC_SYSID=1	# default
+DECODER=	# default
+SINK=	# default
+VENV=/opt/gs-bench/venv	# default
+SOURCE=test	# default
+WEBCAM_DEV=/dev/video0	# default
+WEBCAM_FORMAT=jpeg	# default
+ENCODER=x264	# default
+FC_SERIAL=	# default
+FC_BAUD=115200	# default
+GS_FORWARD_IP=	# default
+SINK_HOST=127.0.0.1	# default
+SINK_PORT=	# default
+NUM_BUFFERS=0	# default
+LISTEN_PORT=	# default
+PROGRESS=0	# default
+DRY_RUN=0	# default
+CFG_ROOT=	# default
+LB_FC_RC_OVERRIDE_TIME_S=1	# default
+LB_FC_GCS_TIMEOUT_S=2	# default
+LB_FC_DURATION_S=14	# default
+LB_GS_DURATION_S=6	# default
+LB_VIDEO_W=640	# default
+LB_VIDEO_H=360	# default
+LB_VIDEO_MIN_PROGRESS=3	# default
+TXT_GAP_TOLERANCE=0.98	# default
+TXT_DEADMAN_LAT_MIN_S=0.20	# default
+TXT_DEADMAN_LAT_MAX_S=0.60	# default
+SIM_LAT_PORT=15600	# default
+SIM_LAT_FRAMES=90	# default
+SIM_LAT_FPS=30	# default
+SIM_LAT_SIZE=640x360	# default
+SIM_LAT_BITRATE_KBPS=2000	# default
+SIM_LAT_MAX_P95_MS=500.0	# default
+SIM_LAT_MAX_LOST=3	# default
+SIM_UDP_COUNT=200	# default
+SIM_UDP_RATE_PPS=100.0	# default
+SIM_UDP_SIZE=1000	# default
+SIM_UDP_SETTLE_S=1.0	# default
+SIM_UDP_MIN_DELIVERY=0.99	# default
+RELAY_LOSS=0.0	# default
+RELAY_DELAY_MS=0.0	# default
+RELAY_JITTER_MS=0.0	# default
+RELAY_SEED=1	# default
+RELAY_RX_SIGNAL_DBM=-50	# default
+APM_CONN=udpout:127.0.0.1:14550	# default
+APM_SYSID=1	# default
+APM_RC_OVERRIDE_TIME_S=3.0	# default
+APM_FS_GCS_ENABLE=0	# default
+APM_FS_GCS_TIMEOUT_S=5.0	# default
+APM_RC_FS_TIMEOUT_S=1.0	# default
+APM_MAV_GCS_SYSID=255	# default
+APM_MAV_GCS_SYSID_HI=0	# default
+SMOKE_STRICT=0	# default
+SMOKE_ONLY=static model mavlink video router wfb qemu	# default
+SMOKE_QEMU=0	# default
+SMOKE_WFB=0	# default
+SMOKE_PORT_FC=15553	# default
+SMOKE_PORT_APM_A=15550	# default
+SMOKE_PORT_APM_B=15551	# default
+SMOKE_PORT_APM_C=15552	# default
+SMOKE_PORT_ROUTER_UP=15560	# default
+SMOKE_PORT_ROUTER_GCS=15561	# default
+SMOKE_PORT_VIDEO=15600	# default
+SMOKE_DEADMAN_MS=300	# default
+SMOKE_DEADMAN_RELEASE_MAX_S=3.0	# default
+SMOKE_VIDEO_MIN_PROGRESS=3	# default
+WFB_NG_REF=2fe252b2f451c1ccfb16968e064fe1cdb18baaa0	# default
+WFB_VETH_RX_PORT=15700	# default
+WFB_VETH_TX_PORT=15702	# default
+legacy constants: identical (145 keys)
+python loader: identical output
+== unit tests
+ok lines: 83, unit failures: 0
+== profiles and bench/env.example
+ok   config/profiles/bench-tight.env: ok: config/profiles/bench-tight.env (3 keys)
+ok   config/profiles/contour-pi5.env: ok: config/profiles/contour-pi5.env (8 keys)
+ok   config/profiles/gs-hardened.env: ok: config/profiles/gs-hardened.env (2 keys)
+ok   bench/env.example: ok: bench/env.example (26 keys)
+== gs-mavlink S1: the config file is data, never code
+command substitution: rc=2 marker=absent
+backticks: rc=2 marker=absent
+semicolon after value: rc=2 marker=absent
+semicolon with space: rc=2 marker=absent
+quoted command substitution: rc=2 marker=absent
+double-quoted substitution: rc=2 marker=absent
+plain command line: rc=2 marker=absent
+source line: rc=2 marker=absent
+export prefix: rc=2 marker=absent
+ampersand inside quotes (data, fails validation): rc=2 marker=absent
+redirect: rc=2 marker=absent
+unknown key: rc=2 marker=absent
+key of another owner: rc=2 marker=absent
+valid data config still works
+gs-mavlink.sh has no 'source $CONF'
+== LISTEN_ADDR
+mavp2p udps:0.0.0.0:14550 udps:127.0.0.1:14560 udps:127.0.0.1:14561 tcps:127.0.0.1:5760 --hb-systemid=125
+gs-mavlink: error: LISTEN_ADDR is not an IPv4 address
+exit=2
+mavp2p udps:127.0.0.1:14550 udps:127.0.0.1:14560 --hb-systemid=125
+mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125
+== hardcode counts
+bench/bench.sh 0
+bench/check.sh 1
+bench/configure-wfb.sh 2
+bench/doctor.sh 0
+bench/install-driver.sh 1
+bench/install-services.sh 1
+bench/install-wfb.sh 0
+bench/lib.sh 0
+bench/loopback-test.sh 2
+bench/setup-common.sh 0
+bench/tx12-bridge-test.sh 113
+bench/video-rx.sh 1
+bench/video-src.sh 0
+bench/fake_fc.py 28
+bench/gs_mav.py 3
+bench/tx12_bridge.py 16
+gs/mavlink/gs-mavlink.sh 8
+tests/sim/air_relay.py 9
+tests/sim/apm_fc.py 11
+tests/sim/apm_model.py 18
+tests/sim/simcfg.py 0
+tests/sim/sitl_probe.py 58
+tests/sim/udp_probe.py 6
+tests/sim/video_latency.py 9
+tests/sim/layers.sh 0
+tests/sim/qemu_hwsim.sh 5
+tests/sim/smoke.sh 52
+tests/sim/wfb_veth.sh 21
+build/release.sh 9
+total 374
+bad=0

@@ -1,0 +1,28 @@
+# scenario_engine: pi5_3a_weak_psu kind=link n=60 seed=1 antithetic=0
+# session: distance=150m duration=600s dt=20s board=pi5 psu=3.0A usb_max_current=0 codec=h265 spec: residual<=0.01 g2g<=250ms freeze<=1
+# priors: 145 sampled dims (INF=4 SYNTH=67 UNMEASURED=74); pinned: rf.fading_model,rf.loss_model
+output,unit,p5,p50,p95,p99,mean
+residual,frac,1,1,1,1,1
+margin_db,dB,-60,-60,-60,-60,-60
+range_m,m,0,0,0,0,0
+g2g_ms,ms,145.9,169.7,190.4,208.8,169.2
+availability,frac,0,0,0,0,0
+ttff_s,s,0,0,0,0,0
+P(no failure in session)=0.000  bring-up p50=3.6s
+failure_mode,probability
+bringup_fail,0.033
+thermal_derate,0.150
+thermal_shutdown,0.050
+usb_dropout,0.200
+usb_trip,1.000
+usb_latched,1.000
+undervoltage,0.167
+soc_throttle,0.033
+agc_saturation,0.000
+desense,0.183
+burst_outage,0.317
+injection_overload,0.083
+idr_freeze,0.000
+latency_creep,0.000
+fec_exhaust,0.000
+# SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99

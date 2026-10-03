@@ -1,0 +1,33 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+start fan service
+start wfb in cluster mode
+start stream service
+start button service
+gs service start completed
+== shim calls (sorted: background jobs make the order non-deterministic)
+findmnt -n -o SOURCE /
+fsck.exfat -a /dev/mmcblk0p4
+gpiofind PIN_22
+gpioset -D push-pull gpiochip0 22=0
+ip ro add 224.0.0.0/4 dev br0
+lsblk -no PKNAME /dev/mmcblk0p3
+mount /dev/mmcblk0p4 <ROOT>/Videos
+stub gs-applyconf.sh 
+stub otg-gadget.sh 
+stub wfb.sh 
+systemctl enable --now ttyd
+systemctl is-enabled ttyd
+systemctl start webui
+systemctl start wfb-cluster-manager@gs.service
+systemd-run --unit=button <ROOT>/gs/button.sh
+systemd-run --unit=fan <ROOT>/gs/fan.sh
+systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=stream <ROOT>/gs/stream.sh
+== gs.conf changes
+89c89
+< wfb_mode='standalone'
+---
+> wfb_mode='cluster'

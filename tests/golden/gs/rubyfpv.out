@@ -1,0 +1,36 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+start fan service
+gs service start completed
+== shim calls (sorted: background jobs make the order non-deterministic)
+findmnt -n -o SOURCE /
+fsck.exfat -a /dev/mmcblk0p4
+gpiofind PIN_22
+gpioset -D push-pull gpiochip0 22=0
+lsblk -no PKNAME /dev/mmcblk0p3
+modprobe 8812eu rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0
+modprobe 88XXau_wfb rtw_tx_pwr_idx_override=1
+mount --bind <ROOT>/Videos <ROOT>/home/radxa/ruby/media
+mount /dev/mmcblk0p4 <ROOT>/Videos
+stub gs-applyconf.sh 
+stub otg-gadget.sh 
+systemctl enable --now ttyd
+systemctl is-enabled ttyd
+systemctl start webui
+systemd-run --unit=fan <ROOT>/gs/fan.sh
+systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=rubyfpv --property=TTYPath=/dev/tty1 --property=StandardInput=file:/dev/tty1 --property=StandardOutput=file:/dev/tty1 --property=StandardError=file:/dev/tty1 --property=Type=forking --property=WorkingDirectory=<ROOT>/home/radxa/ruby <ROOT>/home/radxa/ruby/ruby_start
+== gs.conf changes
+182c182
+< fpv_firmware_type='wfb'
+---
+> fpv_firmware_type='rubyfpv'
+== file /config/gpio.txt
+11 13 16 18 32 38 40
+== tree /home
+D .
+D ./radxa
+D ./radxa/ruby
+D ./radxa/ruby/media

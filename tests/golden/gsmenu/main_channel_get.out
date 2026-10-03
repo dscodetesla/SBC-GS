@@ -1,0 +1,7 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+gsmenu.sh get gs wfbng gs_channel
+== gs.conf changes

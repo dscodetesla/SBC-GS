@@ -1,0 +1,8 @@
+#!/bin/bash
+# logs args; "-m ... print" answers like machine-readable parted (partition 4 ends at 1400MiB); other calls log their stdin too
+echo "parted $*" >> "$SHIM_LOG"
+case " $* " in
+	*" print "*) printf 'BYT;\n/dev/mmcblk0:30000MiB:sd/mmc:512:512:gpt:SD:;\n4:1000MiB:1400MiB:400MiB:ext4:overlay:;\n' ;;
+	*) if [ ! -t 0 ]; then while IFS= read -r l; do echo "parted-stdin: $l" >> "$SHIM_LOG"; done; fi ;;
+esac
+exit 0

@@ -1,0 +1,1039 @@
+{
+ "schema": 1,
+ "note": "Single source of every model parameter. Provenance: SRC (URL read in this session), REPO (path in this repo), INF (own inference/textbook), UNMEASURED (placeholder, must be measured on the bench), MEASURED_SIM (from a tests/sim run), MEASURED_HW (a bench overlay). Override without code changes: MODEL_PARAMS=<file>, MODEL_MEASURED=<overlay.json>, MODEL_SET='key=val;key=val', or --set key=val.",
+ "sections": {
+  "video": {
+   "description": "Video stream shared by the RF and latency models",
+   "assumptions": [
+    "constant average bitrate with an I-frame ratio",
+    "one RTP packet per wfb-ng data fragment"
+   ],
+   "params": {
+    "bitrate_kbps": {
+     "value": 4000,
+     "unit": "kbit/s",
+     "provenance": "REPO",
+     "source": "bench/lib.sh",
+     "note": "VIDEO_BITRATE_KBPS default 4000"
+    },
+    "fps": {
+     "value": 30,
+     "unit": "fps",
+     "provenance": "REPO",
+     "source": "bench/lib.sh",
+     "note": "VIDEO_FPS default 30"
+    },
+    "width": {
+     "value": 1280,
+     "unit": "px",
+     "provenance": "REPO",
+     "source": "bench/lib.sh",
+     "note": "VIDEO_W default 1280"
+    },
+    "height": {
+     "value": 720,
+     "unit": "px",
+     "provenance": "REPO",
+     "source": "bench/lib.sh",
+     "note": "VIDEO_H default 720"
+    },
+    "iframe_ratio": {
+     "value": 6.0,
+     "unit": "x",
+     "provenance": "UNMEASURED",
+     "min": 3.0,
+     "max": 10.0,
+     "note": "placeholder, range is INF. I-frame size / average frame size; majestic GOP not read"
+    }
+   },
+   "calibration": []
+  },
+  "rf": {
+   "description": "RF link: path loss, SNR, PER per MCS, wfb-ng FEC residual loss",
+   "assumptions": [
+    "single link, line-of-sight with a log-distance exponent; no terrain, no Fresnel, no antenna pattern",
+    "thermal noise -174 dBm/Hz + 10log10(BW) + NF; interference is an additive power term",
+    "PER from the ns-3 NIST union-bound BER with the 802.11 K=7 convolutional code (BCC); real chips are worse by implementation_loss_db",
+    "frame losses independent (iid) or a 2-state Gilbert burst model; blocks independent of each other",
+    "FEC: block of n fragments, k data; a lost data packet is recovered iff at most n-k fragments of the block are lost (MDS code)",
+    "SNR is the per-subcarrier SNR = total SNR over the channel (flat channel, no frequency selectivity)",
+    "no rate adaptation, no retries (wfb-ng broadcasts without ACK)"
+   ],
+   "params": {
+    "freq_mhz": {
+     "value": 5745,
+     "unit": "MHz",
+     "provenance": "INF",
+     "note": "any 5 GHz channel centre; only enters the path-loss formula (+20log10 f)"
+    },
+    "bandwidth_mhz": {
+     "value": 20,
+     "unit": "MHz",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [base] bandwidth=20 (20 or 40)"
+    },
+    "vht": {
+     "value": false,
+     "unit": "bool",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg force_vht=False; vht=false => HT MCS 0..7, true => VHT MCS 0..9 (9 invalid at 20 MHz 1SS)"
+    },
+    "mcs_index": {
+     "value": 1,
+     "unit": "",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [base] mcs_index=1"
+    },
+    "stbc": {
+     "value": 1,
+     "unit": "streams",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [base] stbc=1 (0 = off); only changes HT-LTF count in the airtime formula"
+    },
+    "ldpc": {
+     "value": 1,
+     "unit": "bool",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [base] ldpc=1 (8812au only, both ends). The BCC union bound is used for PER; LDPC advantage is the separate ldpc_gain_db"
+    },
+    "short_gi": {
+     "value": false,
+     "unit": "bool",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [base] short_gi=False"
+    },
+    "fec_k": {
+     "value": 8,
+     "unit": "packets",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [video] fec_k=8"
+    },
+    "fec_n": {
+     "value": 12,
+     "unit": "packets",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/master/wfb_ng/conf/master.cfg",
+     "note": "master.cfg [video] fec_n=12 (README FAQ: recovers 4 lost packets of 12)"
+    },
+    "tx_power_dbm": {
+     "value": 20.0,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "min": 10.0,
+     "max": 27.0,
+     "note": "placeholder, range is INF. conducted power at the antenna port; wfb-ng author could not measure it (HOWTO Note1)"
+    },
+    "tx_antenna_gain_dbi": {
+     "value": 2.0,
+     "unit": "dBi",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 8.0,
+     "note": "placeholder, range is INF. datasheet of the actual antenna, not of the adapter"
+    },
+    "rx_antenna_gain_dbi": {
+     "value": 2.0,
+     "unit": "dBi",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 8.0,
+     "note": "placeholder, range is INF. datasheet of the actual antenna"
+    },
+    "misc_loss_db": {
+     "value": 1.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 6.0,
+     "note": "placeholder, range is INF. cables, connectors, polarisation mismatch, body shadow"
+    },
+    "noise_figure_db": {
+     "value": 6.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "min": 4.0,
+     "max": 10.0,
+     "note": "placeholder, range is INF. RX noise figure of RTL8812AU/EU front end; no datasheet number was read"
+    },
+    "implementation_loss_db": {
+     "value": 3.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "min": 1.0,
+     "max": 6.0,
+     "note": "placeholder, range is INF. gap between the ideal union-bound receiver (ns-3 NIST model) and the real chip"
+    },
+    "mcs_snr_offset_db": {
+     "value": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "note": "placeholder, range is INF. per-MCS correction (index = MCS) added on top of implementation_loss_db; fit from the measured SNR at 10 % PER"
+    },
+    "ldpc_gain_db": {
+     "value": 0.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 2.0,
+     "note": "placeholder, range is INF. extra SNR credit when ldpc=1; 0 = neutral"
+    },
+    "diversity_gain_db": {
+     "value": 0.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 4.0,
+     "note": "placeholder, range is INF. STBC / 2-antenna RX diversity credit; 0 = neutral"
+    },
+    "path_loss_exponent": {
+     "value": 2.0,
+     "unit": "",
+     "provenance": "INF",
+     "min": 2.0,
+     "max": 3.5,
+     "note": "2.0 = free space (textbook). Obstructed/ground-level links need 2.7..3.5; fit on the bench"
+    },
+    "ref_distance_m": {
+     "value": 1.0,
+     "unit": "m",
+     "provenance": "INF",
+     "note": "log-distance reference d0; PL(d0) is the free-space value"
+    },
+    "fading_model": {
+     "value": "none",
+     "unit": "",
+     "provenance": "INF",
+     "note": "none | rayleigh | rician (per-frame independent, unit-mean power gain)"
+    },
+    "rician_k_db": {
+     "value": 6.0,
+     "unit": "dB",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 15.0,
+     "note": "placeholder, range is INF. Rician K factor when fading_model=rician"
+    },
+    "fading_draws": {
+     "value": 400,
+     "unit": "",
+     "provenance": "INF",
+     "note": "number of fixed (seeded) fading draws, common random numbers across distances"
+    },
+    "fading_seed": {
+     "value": 1,
+     "unit": "",
+     "provenance": "INF",
+     "note": "seed of the fading draws"
+    },
+    "interference_dbm": {
+     "value": null,
+     "unit": "dBm",
+     "provenance": "UNMEASURED",
+     "min": -95.0,
+     "max": -60.0,
+     "note": "placeholder, range is INF. co-channel/in-band interference power at the RX antenna, added to thermal noise; null = none. Measure the noise floor with the TX off"
+    },
+    "floor_per": {
+     "value": 0.0,
+     "unit": "",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 0.02,
+     "note": "placeholder, range is INF. non-RF frame loss floor (USB drops, driver ENOBUFS, CPU) added as independent loss"
+    },
+    "loss_model": {
+     "value": "iid",
+     "unit": "",
+     "provenance": "INF",
+     "note": "iid | ge (Gilbert: good=no loss, bad=all lost)"
+    },
+    "ge_mean_burst_frames": {
+     "value": 4.0,
+     "unit": "frames",
+     "provenance": "UNMEASURED",
+     "min": 1.0,
+     "max": 30.0,
+     "note": "placeholder, range is INF. mean bad-run length for loss_model=ge; fit from the loss-run histogram"
+    },
+    "payload_bytes": {
+     "value": 1400,
+     "unit": "bytes",
+     "provenance": "REPO",
+     "source": "bench/video-src.sh",
+     "note": "rtph264pay/rtph265pay mtu=1400; one RTP packet = one wfb-ng data fragment"
+    },
+    "wfb_overhead_bytes": {
+     "value": 56,
+     "unit": "bytes",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/svpcom/wfb-ng/2fe252b2f451c1ccfb16968e064fe1cdb18baaa0/src/wifibroadcast.hpp",
+     "note": "802.11 header 24 + wblock_hdr 9 (packed) + wpacket_hdr 3 + FCS 4 (INF) + chacha20poly1305 tag 16 (libsodium ABYTES, INF, not re-read)"
+    },
+    "mac_access_us": {
+     "value": 100.0,
+     "unit": "us",
+     "provenance": "UNMEASURED",
+     "min": 20.0,
+     "max": 250.0,
+     "note": "placeholder, range is INF. per-frame DIFS + mean backoff before injection (34 + 7.5*9 = ~100 us if the normal EDCA path applies; whether injection bypasses it is not verified)"
+    },
+    "target_residual": {
+     "value": 0.01,
+     "unit": "",
+     "provenance": "INF",
+     "note": "residual video-packet loss threshold for max range (task requirement: <1 %)"
+    },
+    "max_search_m": {
+     "value": 30000.0,
+     "unit": "m",
+     "provenance": "INF",
+     "note": "upper bound of the range search"
+    },
+    "relay_jitter_ms": {
+     "value": 0.3,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 3.0,
+     "note": "placeholder, range is INF. std-dev of per-frame delay fed to air_relay --jitter-ms (USB + scheduling)"
+    },
+    "relay_extra_delay_ms": {
+     "value": 0.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 5.0,
+     "note": "placeholder, range is INF. fixed extra delay on top of airtime (USB, driver queue)"
+    }
+   },
+   "calibration": [
+    {
+     "id": "rf-power",
+     "measure": "conducted TX power at the antenna connector, at the txpower used in the test",
+     "params": [
+      "rf.tx_power_dbm"
+     ],
+     "command": "iw dev wlan0 info | grep txpower   (requested power only; the actual value needs a meter)",
+     "tool": "RF power meter + attenuator, or SDR with a calibrated tap",
+     "how": "Measure in monitor mode with wfb_tx running a steady stream. If no meter: fit tx_power_dbm from RSSI at 3 distances with the other gains fixed (see rf-pathloss)."
+    },
+    {
+     "id": "rf-antenna",
+     "measure": "antenna gain and cable/connector loss",
+     "params": [
+      "rf.tx_antenna_gain_dbi",
+      "rf.rx_antenna_gain_dbi",
+      "rf.misc_loss_db"
+     ],
+     "command": "datasheet; or cabled RSSI vs radiated RSSI at 1 m",
+     "tool": "antenna datasheet / VNA",
+     "how": "Cabled test with a fixed attenuator removes the antenna from the chain."
+    },
+    {
+     "id": "rf-noise",
+     "measure": "noise floor with the TX off, and interference",
+     "params": [
+      "rf.noise_figure_db",
+      "rf.interference_dbm"
+     ],
+     "command": "iw dev wlan0 survey dump  (noise field; support by the 8812au driver is UNVERIFIED);  tshark -i wlan0 -T fields -e radiotap.dbm_antnoise",
+     "tool": "iw / tshark / wfb-cli gs",
+     "how": "noise_figure_db = noise_dbm - (-174 + 10*log10(BW_Hz)); a floor above the thermal value is interference_dbm."
+    },
+    {
+     "id": "rf-pathloss",
+     "measure": "RSSI vs distance at fixed MCS in an open field (>=5 distances)",
+     "params": [
+      "rf.path_loss_exponent",
+      "rf.ref_distance_m"
+     ],
+     "command": "wfb-cli gs   (RSSI per antenna);  tshark -i wlan0 -T fields -e radiotap.dbm_antsignal -e radiotap.mcs.index -e frame.time_relative",
+     "tool": "wfb-cli, tshark, laser rangefinder",
+     "how": "Least-squares fit of rx_dbm = A - 10*n*log10(d); n goes to rf.path_loss_exponent."
+    },
+    {
+     "id": "rf-per-curve",
+     "measure": "SNR needed for 10 % PER per MCS (attenuator sweep or distance sweep)",
+     "params": [
+      "rf.implementation_loss_db",
+      "rf.mcs_snr_offset_db",
+      "rf.ldpc_gain_db",
+      "rf.diversity_gain_db"
+     ],
+     "command": "wfb_tx -p 0 ... with fixed MCS, then 'iperf3 -u -b <rate> -c <peer>' through the wfb-ng tunnel (stream 0x20/0xa0) and wfb-cli gs for lost/recovered counters",
+     "tool": "step attenuator, iperf3, wfb-cli",
+     "how": "Raw frame loss before FEC = lost + recovered counters in wfb-cli. Offset per MCS = measured SNR@10%PER - model SNR@10%PER."
+    },
+    {
+     "id": "rf-loss-runs",
+     "measure": "run-length histogram of lost frames at a stable SNR",
+     "params": [
+      "rf.ge_mean_burst_frames",
+      "rf.floor_per",
+      "rf.fading_model",
+      "rf.rician_k_db"
+     ],
+     "command": "wfb-cli gs (counters) or tcpdump -i wlan0 -w cap.pcap and a sequence-number gap script",
+     "tool": "wfb-cli / pcap",
+     "how": "Mean bad-run length -> ge_mean_burst_frames; loss at very high SNR -> floor_per."
+    },
+    {
+     "id": "rf-mac",
+     "measure": "inter-frame spacing of injected frames on air",
+     "params": [
+      "rf.mac_access_us",
+      "rf.relay_extra_delay_ms",
+      "rf.relay_jitter_ms"
+     ],
+     "command": "tshark -i wlan0 -T fields -e frame.time_delta_displayed -e frame.len on a second adapter in monitor mode",
+     "tool": "second adapter + tshark",
+     "how": "Gap minus the frame airtime = access time; its std-dev -> relay_jitter_ms."
+    },
+    {
+     "id": "rf-video",
+     "measure": "real video bitrate, I-frame ratio",
+     "params": [
+      "video.iframe_ratio"
+     ],
+     "command": "ffprobe -show_frames -select_streams v capture.h265 | grep pkt_size   or  wfb-cli gs (bytes/s)",
+     "tool": "ffprobe / wfb-cli",
+     "how": "I-frame bytes / mean frame bytes."
+    }
+   ]
+  },
+  "power": {
+   "description": "5 V budget, USB budget and brown-out risk per Raspberry Pi board",
+   "assumptions": [
+    "static currents per state; the transient (inrush, TX pulse) is a single peak factor",
+    "supply sag = nominal - I_total * R_cable (one lumped resistance)",
+    "the documented 'maximum total USB peripheral current' is treated as a hard budget; the real limiter behaviour (per-port fuse? shared?) is not documented",
+    "fan, CSI camera and GPIO loads count against the PSU but not against the USB budget"
+   ],
+   "params": {
+    "psu_nominal_v": {
+     "value": 5.1,
+     "unit": "V",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+     "note": "'All models require a 5.1V supply'"
+    },
+    "undervolt_threshold_v": {
+     "value": 4.63,
+     "unit": "V",
+     "provenance": "SRC",
+     "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+     "note": "low-voltage detection circuitry trips below 4.63 V (+-5 %) on all models except the Zero range"
+    },
+    "cable_resistance_ohm": {
+     "value": 0.15,
+     "unit": "ohm",
+     "provenance": "UNMEASURED",
+     "min": 0.05,
+     "max": 0.35,
+     "note": "placeholder, range is INF. PSU cable + connector + board input path (round trip); thin cables give 0.2+ ohm"
+    },
+    "margin_warn_frac": {
+     "value": 0.2,
+     "unit": "",
+     "provenance": "INF",
+     "note": "warn when PSU headroom < 20 % of the rating"
+    },
+    "usb_dropout_v": {
+     "value": 4.4,
+     "unit": "V",
+     "provenance": "UNMEASURED",
+     "min": 4.2,
+     "max": 4.6,
+     "note": "placeholder, range is INF. board-rail voltage at which a USB device is assumed to reset (no number found); drives brownout fault injection only"
+    },
+    "usb_reenum_s": {
+     "value": 3.0,
+     "unit": "s",
+     "provenance": "UNMEASURED",
+     "min": 1.0,
+     "max": 10.0,
+     "note": "placeholder, range is INF. time from a USB drop to the device being usable again (enumeration + driver + wfb-ng restart)"
+    },
+    "tx_peak_factor": {
+     "value": 1.5,
+     "unit": "x",
+     "provenance": "UNMEASURED",
+     "min": 1.0,
+     "max": 2.0,
+     "note": "placeholder, range is INF. pulse/average current ratio of the adapter in TX (HOWTO: 1.6 A in pulse for ~1.1 A average is NOT stated; ratio is a guess)"
+    },
+    "boards": {
+     "pi3bp": {
+      "psu_recommended_a": {
+       "value": 2.5,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "table 'Typical power requirements', Pi 3 Model B+"
+      },
+      "usb_budget_a": {
+       "value": 1.2,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "table: maximum total USB peripheral current draw 1.2A (Pi 3 B+)"
+      },
+      "usb_budget_weak_psu_a": {
+       "value": 1.2,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "no PSU-dependent split documented for the 3B+"
+      },
+      "board_idle_a": {
+       "value": 0.3,
+       "unit": "A",
+       "provenance": "SRC",
+       "min": 0.3,
+       "max": 0.5,
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Idle avg 0.30 A is for Pi 3B (the table has no 3B+ column); 3B+ bare-board active is 0.5 A"
+      },
+      "board_active_a": {
+       "value": 0.5,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "'Typical bare-board active current consumption' 500mA (Pi 3B+)"
+      },
+      "board_load_a": {
+       "value": 0.85,
+       "unit": "A",
+       "provenance": "SRC",
+       "min": 0.85,
+       "max": 1.34,
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Stress avg 0.85 A / max 1.34 A is for Pi 3B (no 3B+ column; INF for the 3B+)"
+      }
+     },
+     "pi4": {
+      "psu_recommended_a": {
+       "value": 3.0,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Pi 4 Model B recommended 3.0A"
+      },
+      "usb_budget_a": {
+       "value": 1.2,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Pi 4 Model B maximum total USB peripheral draw 1.2A"
+      },
+      "usb_budget_weak_psu_a": {
+       "value": 1.2,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "no PSU-dependent split documented for the Pi 4"
+      },
+      "board_idle_a": {
+       "value": 0.6,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Idle avg 0.6 A (Pi 4B, measured with HDMI+keyboard+mouse+Ethernet, Pi OS of June 2019)"
+      },
+      "board_active_a": {
+       "value": 0.6,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "'Typical bare-board active current consumption' 600mA"
+      },
+      "board_load_a": {
+       "value": 1.2,
+       "unit": "A",
+       "provenance": "SRC",
+       "min": 1.2,
+       "max": 1.25,
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Stress avg 1.2 A, max 1.25 A (Pi 4B)"
+      }
+     },
+     "pi5": {
+      "psu_recommended_a": {
+       "value": 5.0,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "Pi 5 recommended 5.0A (27 W supply)"
+      },
+      "usb_budget_a": {
+       "value": 1.6,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "1.6A when the supply is capable of 5A at 5V (25 W)"
+      },
+      "usb_budget_weak_psu_a": {
+       "value": 0.6,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "'When connected to any other compatible power supply, the Raspberry Pi 5 restricts downstream USB devices to 600mA'; usb_max_current_enable=1 lifts it (BENCH-HARDWARE cites the same file)"
+      },
+      "board_idle_a": {
+       "value": 0.8,
+       "unit": "A",
+       "provenance": "UNMEASURED",
+       "min": 0.5,
+       "max": 0.8,
+       "note": "placeholder, range is INF. doc gives only 'typical bare-board active' 800 mA for Pi 5; idle is probably lower"
+      },
+      "board_active_a": {
+       "value": 0.8,
+       "unit": "A",
+       "provenance": "SRC",
+       "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+       "note": "'Typical bare-board active current consumption' 800mA (Pi 5)"
+      },
+      "board_load_a": {
+       "value": 1.6,
+       "unit": "A",
+       "provenance": "UNMEASURED",
+       "min": 1.2,
+       "max": 2.2,
+       "note": "placeholder, range is INF. no stress figure for Pi 5 in the doc"
+      }
+     }
+    },
+    "devices": {
+     "rtl8812_idle_a": {
+      "value": 0.3,
+      "unit": "A",
+      "provenance": "UNMEASURED",
+      "min": 0.15,
+      "max": 0.5,
+      "note": "placeholder, range is INF. adapter associated/monitor, no traffic"
+     },
+     "rtl8812_rx_a": {
+      "value": 0.45,
+      "unit": "A",
+      "provenance": "UNMEASURED",
+      "min": 0.25,
+      "max": 0.7,
+      "note": "placeholder, range is INF. adapter receiving"
+     },
+     "rtl8812_tx_a": {
+      "value": 0.9,
+      "unit": "A",
+      "provenance": "UNMEASURED",
+      "min": 0.5,
+      "max": 1.6,
+      "note": "placeholder, range is INF. adapter transmitting video at the configured txpower. HOWTO Note1: ~1.6 A pulse at rtw_tx_pwr_idx_override=63 for an AWUS036ACH (author's estimate)"
+     },
+     "fc_usb_a": {
+      "value": 0.1,
+      "unit": "A",
+      "provenance": "UNMEASURED",
+      "min": 0.05,
+      "max": 0.3,
+      "note": "placeholder, range is INF. ArduPilot FC over USB (bench: FC powered from USB)"
+     },
+     "webcam_a": {
+      "value": 0.25,
+      "unit": "A",
+      "provenance": "UNMEASURED",
+      "min": 0.1,
+      "max": 0.5,
+      "note": "placeholder, range is INF. UVC webcam (bench AIR video source)"
+     },
+     "fan_a": {
+      "value": 0.2,
+      "unit": "A",
+      "provenance": "UNMEASURED",
+      "min": 0.05,
+      "max": 0.4,
+      "note": "placeholder, range is INF. 5 V fan on the 5 V pin (not counted against the USB budget)"
+     },
+     "csi_camera_a": {
+      "value": 0.25,
+      "unit": "A",
+      "provenance": "SRC",
+      "source": "https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc",
+      "note": "'The Camera Module requires 250mA'"
+     }
+    }
+   },
+   "calibration": [
+    {
+     "id": "pw-usb-meter",
+     "measure": "current of each device per state (idle / RX / TX at the real txpower)",
+     "params": [
+      "power.devices.rtl8812_idle_a",
+      "power.devices.rtl8812_rx_a",
+      "power.devices.rtl8812_tx_a",
+      "power.devices.fc_usb_a",
+      "power.devices.webcam_a",
+      "power.devices.fan_a",
+      "power.tx_peak_factor"
+     ],
+     "command": "USB inline power meter (log V/A to CSV), then: python3 tests/sim/models/power_model.py ingest --csv meter.csv > measured.json",
+     "tool": "USB-C/USB-A inline meter with logging; a scope for the pulse factor",
+     "how": "Peak factor = scope peak / meter mean in TX."
+    },
+    {
+     "id": "pw-board",
+     "measure": "board current at idle and under load, from the supply side",
+     "params": [
+      "power.boards.pi5.board_idle_a",
+      "power.boards.pi5.board_load_a"
+     ],
+     "command": "inline meter between PSU and Pi; load: stress-ng --cpu 4 --timeout 60 (UNVERIFIED that stress-ng is installed)",
+     "tool": "inline meter",
+     "how": "Subtract device currents to get the board-only value."
+    },
+    {
+     "id": "pw-sag",
+     "measure": "board-rail voltage under load and cable resistance",
+     "params": [
+      "power.cable_resistance_ohm",
+      "power.usb_dropout_v"
+     ],
+     "command": "vcgencmd pmic_read_adc  (EXT5V_V; Pi 5, output format UNVERIFIED); multimeter on the 5 V test points; vcgencmd get_throttled; dmesg | grep -i voltage",
+     "tool": "multimeter / pmic ADC",
+     "how": "R = (V_nominal_at_PSU - V_board) / I_total. usb_dropout_v: slowly lower the supply voltage on a bench PSU until the adapter drops (NOT with the aircraft connected)."
+    },
+    {
+     "id": "pw-reenum",
+     "measure": "time for the adapter to come back after a drop",
+     "params": [
+      "power.usb_reenum_s"
+     ],
+     "command": "udevadm monitor --subsystem-match=usb --property   and   dmesg -w   during a forced drop (unplug test)",
+     "tool": "udevadm / dmesg",
+     "how": "Time between 'remove' and 'add' plus wfb-ng restart."
+    }
+   ]
+  },
+  "latency": {
+   "description": "Glass-to-glass latency budget (min/typ/max per term)",
+   "assumptions": [
+    "terms add linearly; max is the sum of per-term maxima (a bound, not a percentile)",
+    "wfb-ng sends data fragments immediately (tx.cpp) so FEC block wait only exists when a fragment is lost",
+    "hardware decoder latency = per-frame processing + (reorder + queue) frames; the numbers are placeholders",
+    "software decode is scaled from the x86 simulation (MEASURED_SIM) by pixels and a CPU ratio",
+    "display = vblank wait + scan-out + panel + queued frames; sync=false page flips"
+   ],
+   "params": {
+    "capture_frames": {
+     "value": 1.0,
+     "unit": "frames",
+     "provenance": "UNMEASURED",
+     "min": 0.5,
+     "max": 1.5,
+     "note": "placeholder, range is INF. exposure + sensor readout + ISP of the OpenIPC camera (air side), in frame periods"
+    },
+    "encode_frames": {
+     "value": 1.0,
+     "unit": "frames",
+     "provenance": "UNMEASURED",
+     "min": 0.3,
+     "max": 2.0,
+     "note": "placeholder, range is INF. SoC encoder latency in frame periods (slice-based low-delay can be < 1)"
+    },
+    "usb_rx_ms": {
+     "value": 1.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "min": 0.1,
+     "max": 8.0,
+     "note": "placeholder, range is INF. wfb_rx pcap + USB bulk RX + wfb_rx FEC/decrypt on the GS"
+    },
+    "network_ms": {
+     "value": 0.3,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "min": 0.05,
+     "max": 2.0,
+     "note": "placeholder, range is INF. wfb_rx -> UDP -> host (loopback or LAN)"
+    },
+    "jitterbuffer_ms": {
+     "value": 0.0,
+     "unit": "ms",
+     "provenance": "REPO",
+     "min": 0.0,
+     "max": 20.0,
+     "source": "bench/video-rx.sh",
+     "note": "the bench pipeline has no rtpjitterbuffer (value 0); docs/CHAINS.md proposes latency=10, 20 is a common choice (not confirmed)"
+    },
+    "display_hz": {
+     "value": 60.0,
+     "unit": "Hz",
+     "provenance": "INF",
+     "note": "panel refresh; set 50/59.94/75/120 as appropriate"
+    },
+    "vsync_wait_frac": {
+     "value": 0.5,
+     "unit": "refresh",
+     "provenance": "INF",
+     "min": 0.0,
+     "max": 1.0,
+     "note": "mean wait for the next vblank = half a refresh with sync=false page flips (INF)"
+    },
+    "scanout_frac": {
+     "value": 0.5,
+     "unit": "refresh",
+     "provenance": "INF",
+     "min": 0.0,
+     "max": 1.0,
+     "note": "time from vblank to the measured spot = half a refresh for mid-screen"
+    },
+    "panel_ms": {
+     "value": 5.0,
+     "unit": "ms",
+     "provenance": "UNMEASURED",
+     "min": 1.0,
+     "max": 20.0,
+     "note": "placeholder, range is INF. pixel response + monitor/TV processing"
+    },
+    "display_queue_frames": {
+     "value": 1.0,
+     "unit": "frames",
+     "provenance": "UNMEASURED",
+     "min": 0.0,
+     "max": 2.0,
+     "note": "placeholder, range is INF. extra frames queued in sink/compositor (kmssink vs waylandsink)"
+    },
+    "pixel_ref": {
+     "value": 2073600,
+     "unit": "px",
+     "provenance": "INF",
+     "note": "1920x1080, reference for per-pixel scaling"
+    },
+    "sw_ref_h264_ms": {
+     "value": 5.0,
+     "unit": "ms",
+     "provenance": "MEASURED_SIM",
+     "min": 3.0,
+     "max": 10.0,
+     "source": "docs/TESTABILITY.md:148",
+     "note": "tests/sim/video_latency.py x86 loopback 640x360@30: min 3 / p50 5 / p95 10 / max 30 ms; INCLUDES the x264 encode (software enc+dec), not a Pi figure"
+    },
+    "sw_ref_h265_ms": {
+     "value": 8.0,
+     "unit": "ms",
+     "provenance": "MEASURED_SIM",
+     "min": 6.0,
+     "max": 15.0,
+     "source": "docs/TESTABILITY.md:148",
+     "note": "same run: h265 min 6 / p50 8 / p95 15 / max 41 ms (x265 encode + decode)"
+    },
+    "sw_ref_pixels": {
+     "value": 230400,
+     "unit": "px",
+     "provenance": "MEASURED_SIM",
+     "source": "tests/sim/video_latency.py",
+     "note": "640x360"
+    },
+    "sw_decode_fraction": {
+     "value": 0.4,
+     "unit": "",
+     "provenance": "UNMEASURED",
+     "min": 0.2,
+     "max": 0.6,
+     "note": "placeholder, range is INF. decode share of the encode+decode sim time"
+    },
+    "cpu_scale_vs_x86": {
+     "value": 2.0,
+     "unit": "x",
+     "provenance": "UNMEASURED",
+     "min": 1.0,
+     "max": 4.0,
+     "note": "placeholder, range is INF. Pi 5 (A76) vs the x86 CI runner, single stream"
+    },
+    "decoders": {
+     "pi4_h264_stateful": {
+      "proc_ms_1080p": {
+       "value": 8,
+       "unit": "ms",
+       "provenance": "UNMEASURED",
+       "min": 3,
+       "max": 20,
+       "note": "placeholder, range is INF. per-frame hardware/CPU decode time at 1920x1080; V4L2 stateful VideoCore decoder (driver bcm2835-codec, DECODE role, H264 format: https://raw.githubusercontent.com/raspberrypi/linux/rpi-6.12.y/drivers/staging/vc04_services/bcm2835-codec/bcm2835-v4l2-codec.c); whether it is exposed as v4l2h264dec on the current Pi OS is UNVERIFIED (docs/CHAINS.md open item 1)"
+      },
+      "reorder_frames": {
+       "value": 0,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0,
+       "max": 2,
+       "note": "placeholder, range is INF. output reordering depth; 0 for P-only low-delay streams (GStreamer min latency = sps_max_num_reorder_pics, see mechanism URL); depends on the OpenIPC encoder GOP/B-frame setting"
+      },
+      "queue_frames": {
+       "value": 1,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0,
+       "max": 3,
+       "note": "placeholder, range is INF. frames held in decoder/driver/sink queues beyond reordering"
+      }
+     },
+     "pi4_h265_stateless": {
+      "proc_ms_1080p": {
+       "value": 8,
+       "unit": "ms",
+       "provenance": "UNMEASURED",
+       "min": 3,
+       "max": 20,
+       "note": "placeholder, range is INF. per-frame hardware/CPU decode time at 1920x1080; stateless HEVC block (driver rpi-hevc-dec, HEVC_D_DEC_ENV_COUNT=6 decode environments in flight, https://raw.githubusercontent.com/raspberrypi/linux/rpi-6.12.y/drivers/media/platform/raspberrypi/hevc_dec/hevc_d.h)"
+      },
+      "reorder_frames": {
+       "value": 0,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0,
+       "max": 2,
+       "note": "placeholder, range is INF. output reordering depth; 0 for P-only low-delay streams (GStreamer min latency = sps_max_num_reorder_pics, see mechanism URL); depends on the OpenIPC encoder GOP/B-frame setting"
+      },
+      "queue_frames": {
+       "value": 1,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0,
+       "max": 3,
+       "note": "placeholder, range is INF. frames held in decoder/driver/sink queues beyond reordering"
+      }
+     },
+     "pi5_h265_stateless": {
+      "proc_ms_1080p": {
+       "value": 6,
+       "unit": "ms",
+       "provenance": "UNMEASURED",
+       "min": 2,
+       "max": 15,
+       "note": "placeholder, range is INF. per-frame hardware/CPU decode time at 1920x1080; same stateless HEVC driver on Pi 5; no timing in the driver source"
+      },
+      "reorder_frames": {
+       "value": 0,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0,
+       "max": 2,
+       "note": "placeholder, range is INF. output reordering depth; 0 for P-only low-delay streams (GStreamer min latency = sps_max_num_reorder_pics, see mechanism URL); depends on the OpenIPC encoder GOP/B-frame setting"
+      },
+      "queue_frames": {
+       "value": 1,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0,
+       "max": 3,
+       "note": "placeholder, range is INF. frames held in decoder/driver/sink queues beyond reordering"
+      }
+     },
+     "pi5_h264_sw": {
+      "reorder_frames": {
+       "value": 0.0,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0.0,
+       "max": 2.0,
+       "note": "placeholder, range is INF. see above"
+      },
+      "queue_frames": {
+       "value": 0.0,
+       "unit": "frames",
+       "provenance": "UNMEASURED",
+       "min": 0.0,
+       "max": 3.0,
+       "note": "placeholder, range is INF. avdec frame threading adds up to threads-1 frames; setting max-threads=1 removes it"
+      }
+     }
+    }
+   },
+   "calibration": [
+    {
+     "id": "lat-g2g",
+     "measure": "glass-to-glass total (the number the model must reproduce)",
+     "params": [
+      "latency.capture_frames",
+      "latency.encode_frames",
+      "latency.panel_ms",
+      "latency.display_queue_frames"
+     ],
+     "command": "see the protocol in docs/SIM-MODELS.md: LED/photodiode or phone slow-mo with an on-screen counter; python3 tests/sim/models/latency_budget.py budget --measured-g2g-ms <value>",
+     "tool": "photodiode + scope, or 240 fps phone",
+     "how": "capture+encode are fitted together by measuring with a known display and decode (software path) and subtracting the model terms."
+    },
+    {
+     "id": "lat-decode",
+     "measure": "decode time per decoder: gst-launch ... v4l2slh265dec with GST_DEBUG=GST_TRACER:7 GST_TRACERS=latency",
+     "params": [
+      "latency.decoders.pi4_h264_stateful.proc_ms_1080p",
+      "latency.decoders.pi4_h265_stateless.proc_ms_1080p",
+      "latency.decoders.pi5_h265_stateless.proc_ms_1080p",
+      "latency.decoders.pi4_h264_stateful.reorder_frames",
+      "latency.decoders.pi4_h265_stateless.reorder_frames",
+      "latency.decoders.pi5_h265_stateless.reorder_frames",
+      "latency.decoders.pi5_h264_sw.reorder_frames",
+      "latency.decoders.pi4_h264_stateful.queue_frames",
+      "latency.decoders.pi4_h265_stateless.queue_frames",
+      "latency.decoders.pi5_h265_stateless.queue_frames",
+      "latency.decoders.pi5_h264_sw.queue_frames"
+     ],
+     "command": "GST_DEBUG=GST_TRACER:7 GST_TRACERS='latency(flags=element)' gst-launch-1.0 -e udpsrc port=5600 caps=... ! rtph265depay ! h265parse ! v4l2slh265dec ! kmssink sync=false 2>trace.log",
+     "tool": "GStreamer latency tracer (UNVERIFIED that the tracer reports per-element latency for v4l2 decoders)",
+     "how": "Per-element latency from the tracer; reorder from the SPS (ffprobe -show_streams: has_b_frames)."
+    },
+    {
+     "id": "lat-sw",
+     "measure": "software decode on Pi 5 for H.264",
+     "params": [
+      "latency.sw_decode_fraction",
+      "latency.cpu_scale_vs_x86"
+     ],
+     "command": "tests/sim/video_latency.py --codec h264 on the Pi 5 (needs python3-gi), same --size/--fps as the model",
+     "tool": "video_latency.py",
+     "how": "cpu_scale_vs_x86 = Pi p50 / x86 p50 from the same script."
+    },
+    {
+     "id": "lat-radio",
+     "measure": "airtime and FEC wait per frame",
+     "params": [
+      "latency.usb_rx_ms",
+      "latency.network_ms"
+     ],
+     "command": "wfb-cli gs (latency/loss), ping or udp_probe.py through the link: python3 tests/sim/udp_probe.py (REPO)",
+     "tool": "wfb-cli, udp_probe.py",
+     "how": "One-way delay with a fixed small packet at MCS 1."
+    },
+    {
+     "id": "lat-display",
+     "measure": "display chain",
+     "params": [
+      "latency.vsync_wait_frac",
+      "latency.scanout_frac"
+     ],
+     "command": "modetest -M vc4 -c  (refresh rate); photodiode at the top and the bottom of the screen",
+     "tool": "photodiode",
+     "how": "Top/bottom delay difference = scan-out time."
+    }
+   ]
+  }
+ }
+}

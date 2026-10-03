@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+stub channel-scan.sh 
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

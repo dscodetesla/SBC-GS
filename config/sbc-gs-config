@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# sbc-gs-config: inspect the layered SBC-GS configuration (design: docs/CONFIG.md).
+#   sbc-gs-config show [--defaults] [--owner O]... [--i-know]   effective config, one KEY=VALUE per line + the layer it came from
+#   sbc-gs-config get KEY                                       effective value of one key (exit 2 when unknown/invalid)
+#   sbc-gs-config check [--syntax] FILE [OWNER]                 validate a config file (syntax, keys, values; --syntax = no value check)
+#   sbc-gs-config keys                                          all registry keys
+# Environment: SBC_GS_PROFILE, SBC_GS_PROFILE_DIR, SBC_GS_CONFIG (per-host file), SBC_GS_I_KNOW=1, plus the per-key variables.
+set -u
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=load.sh
+. "$HERE/load.sh"
+
+usage() { sed -n '2,7p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+cmd="${1:-}"; [ "$#" -gt 0 ] && shift
+case "$cmd" in
+	show)
+		args=(); owners=()
+		while [ "$#" -gt 0 ]; do
+			case "$1" in
+				--defaults) args+=(--defaults-only) ;;
+				--i-know) args+=(--i-know) ;;
+				--owner) [ "$#" -ge 2 ] || usage; owners+=("$2"); shift ;;
+				*) usage ;;
+			esac
+			shift
+		done
+		sbc_cfg_resolve "${args[@]}" "${owners[@]}"
+		sbc_cfg_show ;;
+	get)
+		[ "$#" -eq 1 ] || usage
+		sbc_cfg_resolve
+		[ -n "${SBC_V[$1]+x}" ] || sbc_die "unknown key '$1'"
+		printf '%s\n' "${SBC_V[$1]}" ;;
+	check)
+		syntax=0; [ "${1:-}" = --syntax ] && { syntax=1; shift; }
+		[ "$#" -ge 1 ] || usage
+		sbc_cfg_registry
+		out="$(sbc_cfg_parse "$1" "${2:-}")" || exit 2
+		n=0
+		while IFS=$'\t' read -r k v; do
+			[ -n "$k" ] || continue
+			rc=0; [ "$syntax" = 1 ] || sbc_cfg_check "$k" "$v" || rc=$?
+			[ "$rc" = 0 ] || sbc_die "$1: $SBC_ERR"
+			n=$((n + 1))
+		done <<<"$out"
+		echo "ok: $1 ($n keys)" ;;
+	keys)
+		sbc_cfg_registry
+		printf '%s\n' "${SBC_R_KEYS[@]}" ;;
+	*) usage ;;
+esac

@@ -1,0 +1,995 @@
+{
+ "schema": 1,
+ "note": "Off-nominal scenarios. prior_prob is SYNTH: a synthesized planning prior per 1 h session, NEVER a measured rate. engine_mode links to scenario_engine failure modes. false_confidence refers to docs/SIM-BLOCKERS.md section 5 (F1..F19).",
+ "scenarios": [
+  {
+   "id": "S01",
+   "title": "AIR adapter thermal derate then shutdown",
+   "category": "hardware",
+   "contour": "AIR",
+   "prior_prob": {
+    "value": 0.08,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "closed enclosure + sun + 28 dBm PA; hot-day flights are a minority of sessions"
+   },
+   "trigger": "ambient > 35 C, enclosure in the sun, TX at flight power for > 10 min",
+   "symptom": "video loss rises gradually, then link drops for a cooldown; wfb-cli shows RSSI falling at the AIR side",
+   "detection": "VTX temperature telemetry (majestic), RSSI trend vs time; thermal alarm in OSD",
+   "mitigation": "fan, heatsink, lower txpower, shade; ground-test 30 min at flight power",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine scenario hot_day_closed_case: P(thermal_derate) and P(thermal_shutdown) must exceed the nominal scenario; on HW log Tj vs time",
+   "severity": 4,
+   "engine_mode": "thermal_derate",
+   "false_confidence": [
+    "F9",
+    "F4"
+   ]
+  },
+  {
+   "id": "S02",
+   "title": "USB3 / ELRS-900 harmonic / Multi 2.4 GHz desense of the GS receiver",
+   "category": "rf",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "Pi 5 USB3 ports, TX12 modules a few cm from the dongle; effect on 5.8 GHz unverified"
+   },
+   "trigger": "USB3 device active, or ELRS 900 / Multi 2.4 module transmitting next to the dongle",
+   "symptom": "noise floor rises 2..10 dB, range shrinks, FEC exhausted at edge of range",
+   "detection": "compare noise floor/PER with modules and USB3 devices off vs on at fixed attenuation",
+   "mitigation": "dongle on a USB2 port or extension cable, ferrites, antenna spacing, module power down",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine scenario elrs_usb3_desense_edge at 900 m: P(desense) > nominal; HW: switch modules on/off while logging wfb-cli loss",
+   "severity": 3,
+   "engine_mode": "desense",
+   "false_confidence": [
+    "F9",
+    "F18"
+   ]
+  },
+  {
+   "id": "S03",
+   "title": "Brown-out of the AIR supply on a TX burst",
+   "category": "hardware",
+   "contour": "AIR",
+   "prior_prob": {
+    "value": 0.05,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "BEC marginal at 28 dBm with a loaded ESC rail"
+   },
+   "trigger": "txpower raised to 25+ dBm with a weak BEC, battery sag at full throttle",
+   "symptom": "periodic dips in RSSI, EVM rise, VTX reboot at worst",
+   "detection": "scope on the 5 V pad; majestic log reboots",
+   "mitigation": "stronger BEC, LC filter, lower txpower",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine: P(thermal/sag) via hw.air_* priors; unit test compression + sag lowers Pout",
+   "severity": 4,
+   "engine_mode": null,
+   "false_confidence": [
+    "F9"
+   ]
+  },
+  {
+   "id": "S04",
+   "title": "GS USB re-enumeration mid-flight",
+   "category": "usb",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.06,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "Pi 5 USB under TX bursts on a 3 A PSU or thin cable"
+   },
+   "trigger": "undervoltage on the 5 V rail, over-current trip, spontaneous disconnect",
+   "symptom": "video freezes 3-10 s then returns only if bring-up reruns; wfb_rx loses the interface",
+   "detection": "dmesg 'USB disconnect', udev remove/add, wfb-ng restart count",
+   "mitigation": "5 A PSU + usb_max_current_enable, short thick cable, systemd restart policy for wfb-ng",
+   "layers": [
+    "models",
+    "virt.usb",
+    "HW"
+   ],
+   "detection_test": "virt usb: hot-unplug the dwc2/vudc device and check gs-mavlink + wfb restart; engine pi5_3a_weak_psu: P(usb_dropout|usb_trip)",
+   "severity": 5,
+   "engine_mode": "usb_dropout",
+   "false_confidence": [
+    "F3",
+    "F4"
+   ]
+  },
+  {
+   "id": "S05",
+   "title": "Pi 5 USB current-limit trip (600 mA vs 1.6 A)",
+   "category": "usb",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.12,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "3 A PSUs are common and the doc'd limit is 0.6 A without usb_max_current_enable"
+   },
+   "trigger": "3 A PSU, adapter + FC + fan on USB, TX burst",
+   "symptom": "adapter vanishes at every TX burst; repeated trips, latched port",
+   "detection": "dmesg over-current, get_throttled, lsusb after burst",
+   "mitigation": "5 A PSU or usb_max_current_enable=1, bus-powered devices on a powered hub",
+   "layers": [
+    "models",
+    "virt.usb",
+    "HW"
+   ],
+   "detection_test": "engine pi5_3a_weak_psu: P(usb_trip)=1 for 3 A without the flag (power_model budget); virt usb gadget removal replays the events",
+   "severity": 5,
+   "engine_mode": "usb_trip",
+   "false_confidence": [
+    "F9"
+   ]
+  },
+  {
+   "id": "S06",
+   "title": "Wrong channel / channel clash with a neighbour",
+   "category": "rf",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.15,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "5.8 GHz is shared with other FPV/Wi-Fi; regdomain-agnostic channel choice"
+   },
+   "trigger": "two systems on the same channel, DFS/regdomain differences",
+   "symptom": "bursty loss episodes, RSSI normal but SNR low",
+   "detection": "channel-scan.sh survey at the site; loss bursts in wfb-cli",
+   "mitigation": "channel scan before flight, move channel, regdomain check",
+   "layers": [
+    "models",
+    "qemu_hwsim",
+    "HW"
+   ],
+   "detection_test": "qemu_hwsim negative control (other channel hears nothing) proves isolation; engine ext.clash_* gives burst_outage probability",
+   "severity": 3,
+   "engine_mode": "burst_outage",
+   "false_confidence": [
+    "F4",
+    "F5"
+   ]
+  },
+  {
+   "id": "S07",
+   "title": "GCS heartbeat loss (MAVLink GCS timeout)",
+   "category": "mavlink",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.05,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "wifi/hotspot dropouts and a bridge that stays alive"
+   },
+   "trigger": "GCS heartbeat stops (host sleep, router crash) with FS_GCS_ENABLE set",
+   "symptom": "ArduPilot GCS failsafe (RTL/LAND) or, if FS_GCS_ENABLE=0, none",
+   "detection": "apm_fc/SITL timeline 'GCS Failsafe'; HEARTBEAT age in gs_mav",
+   "mitigation": "set FS_GCS_ENABLE deliberately, heartbeat source documented, never rely on the bridge heartbeat",
+   "layers": [
+    "smoke.mavlink",
+    "smoke.model"
+   ],
+   "detection_test": "smoke mavlink path: fake_fc/apm_fc timeouts; sitl_probe failsafe observations",
+   "severity": 5,
+   "engine_mode": null,
+   "false_confidence": [
+    "F7",
+    "F8"
+   ]
+  },
+  {
+   "id": "S08",
+   "title": "ELRS failsafe plus stale wfb RC override (ArduPilot #32862)",
+   "category": "mavlink",
+   "contour": "RC",
+   "prior_prob": {
+    "value": 0.03,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "override and receiver interplay is an open upstream issue (status unverifiable here)"
+   },
+   "trigger": "ELRS link lost while a wfb RC_CHANNELS_OVERRIDE is still active or reverts to stale RC values",
+   "symptom": "FC follows an old override or stale RC instead of failsafe",
+   "detection": "apm_fc rc_input model (#32862 behaviour); RCIN log on HIL",
+   "mitigation": "wfb RC strictly as a reserve with expiry; failsafe on no pulses; never the sole channel",
+   "layers": [
+    "smoke.model",
+    "smoke.mavlink",
+    "HW"
+   ],
+   "detection_test": "apm_model test of override expiry and revert-to-stale; HIL: pull the ELRS antenna with the bridge running",
+   "severity": 5,
+   "engine_mode": null,
+   "false_confidence": [
+    "F7",
+    "F8",
+    "F19"
+   ]
+  },
+  {
+   "id": "S09",
+   "title": "FC UART overrun / baud mismatch on the WiFiLink2 single UART",
+   "category": "mavlink",
+   "contour": "AIR",
+   "prior_prob": {
+    "value": 0.07,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "one UART shared by MAVLink and possibly msposd/mavfwd; wrong baud after a firmware change"
+   },
+   "trigger": "baud differs between SERIALx_BAUD and the VTX, or two services read the port",
+   "symptom": "MAVLink CRC errors, missing telemetry, heartbeats flicker",
+   "detection": "mavlink-router stats, link CRC counter, SERIAL port stats",
+   "mitigation": "pin baud in config, single reader, CRC check in smoke",
+   "layers": [
+    "smoke.mavlink",
+    "smoke.router",
+    "HW"
+   ],
+   "detection_test": "gs_mav.py --selftest with corrupted frames; HW: change baud and watch CRC counters",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F8"
+   ]
+  },
+  {
+   "id": "S10",
+   "title": "majestic bitrate overshoot beyond the airtime",
+   "category": "video",
+   "contour": "AIR",
+   "prior_prob": {
+    "value": 0.12,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "rate control overshoots and the configured bitrate is close to the link capacity"
+   },
+   "trigger": "bitrate x overshoot x n/k exceeds the air utilisation",
+   "symptom": "queue drops, growing latency, I-frame loss, freezes",
+   "detection": "airtime utilisation in rf_model, injection drops, freeze fraction",
+   "mitigation": "bitrate with 30 % headroom, lower MCS cost awareness, alink",
+   "layers": [
+    "models",
+    "wfb_veth"
+   ],
+   "detection_test": "engine: rho > 1 sets injection_overload; wfb_veth with relay at the model's loss; rf_model utilisation > 1 flag",
+   "severity": 4,
+   "engine_mode": "injection_overload",
+   "false_confidence": [
+    "F5",
+    "F10"
+   ]
+  },
+  {
+   "id": "S11",
+   "title": "IDR loss causes a long freeze",
+   "category": "video",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "one lost I-frame breaks the whole GOP; GOP of 1-2 s"
+   },
+   "trigger": "I-frame packets unrecoverable after FEC",
+   "symptom": "video frozen/garbled until the next IDR (up to GOP seconds)",
+   "detection": "freeze fraction, decoder errors, missing IDR counter",
+   "mitigation": "shorter GOP, intra refresh, IDR request, FEC 8/12 tuned",
+   "layers": [
+    "models",
+    "smoke.video",
+    "wfb_veth"
+   ],
+   "detection_test": "engine freeze_fraction monotone in loss; smoke video with induced loss via air_relay and a keyframe-gap check",
+   "severity": 3,
+   "engine_mode": "idr_freeze",
+   "false_confidence": [
+    "F4",
+    "F5"
+   ]
+  },
+  {
+   "id": "S12",
+   "title": "Driver built for 4K pages breaks on Pi 5 16K pages",
+   "category": "kernel",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "Pi 5 default kernel uses 16K pages; out-of-tree drivers were written for 4K"
+   },
+   "trigger": "rtl8812au loaded on rpi-2712 16K",
+   "symptom": "probe fails or memory corruption, no wlan interface",
+   "detection": "dkms status, dmesg, iw dev empty",
+   "mitigation": "use kernel8 (4K) on Pi 5 or a fixed driver; pin the kernel",
+   "layers": [
+    "dkms",
+    "HW"
+   ],
+   "detection_test": "tests/sim/dkms builds against the rpi-2712 headers; runtime proof only on HW",
+   "severity": 5,
+   "engine_mode": null,
+   "false_confidence": [
+    "F11",
+    "F16"
+   ]
+  },
+  {
+   "id": "S13",
+   "title": "DKMS module breaks after a kernel upgrade",
+   "category": "kernel",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.15,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "apt upgrade changes the kernel and API"
+   },
+   "trigger": "apt upgrade installs a newer kernel",
+   "symptom": "no wlan interface after reboot",
+   "detection": "dkms status in check.sh, modinfo vermagic vs uname -r",
+   "mitigation": "apt-mark hold kernel, dkms autoinstall check, rollback image",
+   "layers": [
+    "dkms",
+    "smoke.static"
+   ],
+   "detection_test": "dkms run.sh --build against two header sets; static check that the hold/dkms status step exists",
+   "severity": 4,
+   "engine_mode": null,
+   "false_confidence": [
+    "F11"
+   ]
+  },
+  {
+   "id": "S14",
+   "title": "SD-card corruption / overlayroot absent",
+   "category": "storage",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.04,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "power loss during recording and no read-only root on Pi (docs/PI-PORT.md)"
+   },
+   "trigger": "power cut while writing recordings or logs",
+   "symptom": "fsck on boot, services fail, read-only remount",
+   "detection": "journalctl, dmesg ext4 errors",
+   "mitigation": "overlayroot, separate recording partition, 20 power-cut test",
+   "layers": [
+    "HW"
+   ],
+   "detection_test": "HW: 20 power-cuts during recording; sandbox golden tests cannot show it",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F2",
+    "F16"
+   ]
+  },
+  {
+   "id": "S15",
+   "title": "Pi 5 SoC throttling",
+   "category": "hardware",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.07,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "no cooler, hot enclosure, software decode load"
+   },
+   "trigger": "SoC temp above the soft limit",
+   "symptom": "decode slows, latency rises, frames dropped",
+   "detection": "vcgencmd get_throttled bit 3/19, latency tracer",
+   "mitigation": "cooler/fan, HEVC hardware decode, lower resolution",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine hw.soc_* priors: P(soc_throttle) and latency impact; HW vcgencmd log",
+   "severity": 3,
+   "engine_mode": "soc_throttle",
+   "false_confidence": [
+    "F9",
+    "F12"
+   ]
+  },
+  {
+   "id": "S16",
+   "title": "Host Wayland / GStreamer sink failure",
+   "category": "host",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.08,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "Ubuntu 26.04 has newer GStreamer 1.28 and Wayland default; our CI runs 24.04"
+   },
+   "trigger": "sink element missing or compositor refuses",
+   "symptom": "black window, pipeline error, no video on the host",
+   "detection": "gst-launch exit code, pipeline bus errors",
+   "mitigation": "fallback sink chain (waylandsink -> glimagesink -> fakesink) selected by probe",
+   "layers": [
+    "smoke.video",
+    "HW"
+   ],
+   "detection_test": "smoke video with SINK=fakesink vs a forced bad sink: pipeline must fail loudly; HW on the 26.04 host",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F17"
+   ]
+  },
+  {
+   "id": "S17",
+   "title": "Clock step by NTP",
+   "category": "time",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "no RTC on Pi, first NTP sync steps the clock"
+   },
+   "trigger": "chrony/NTP steps the wall clock while logging or recording",
+   "symptom": "log timestamps jump, recording file names collide, wall-clock latency probes break; /proc/uptime unaffected",
+   "detection": "journal 'time stepped', monotonic vs wall-clock diff",
+   "mitigation": "use CLOCK_MONOTONIC for intervals; button.sh uses /proc/uptime (immune)",
+   "layers": [
+    "models",
+    "smoke.static"
+   ],
+   "detection_test": "clock_events() produces ntp_step events; unit test that button timing does not depend on wall time",
+   "severity": 2,
+   "engine_mode": null,
+   "false_confidence": [
+    "F13"
+   ]
+  },
+  {
+   "id": "S18",
+   "title": "TX12 enumerates as a different USB device node / event number",
+   "category": "input",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.12,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "evdev numbers change with plug order and with other HID devices"
+   },
+   "trigger": "replug, second HID, EdgeTX mode change",
+   "symptom": "tx12_bridge opens the wrong device, no RC or wrong axes",
+   "detection": "by-id path check, device name check at start",
+   "mitigation": "open by /dev/input/by-id and name match, refuse if ambiguous",
+   "layers": [
+    "virt.usb",
+    "smoke.mavlink"
+   ],
+   "detection_test": "virt: create two uinput devices in swapped order and require the bridge to pick the TX12 by name",
+   "severity": 4,
+   "engine_mode": null,
+   "false_confidence": [
+    "F8",
+    "F3"
+   ]
+  },
+  {
+   "id": "S19",
+   "title": "evdev axis reorder (EdgeTX mixes)",
+   "category": "input",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.08,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "EdgeTX model change reorders channels"
+   },
+   "trigger": "different model loaded on the TX12",
+   "symptom": "channels 1-4 land on the wrong RC channels",
+   "detection": "assert channel map against a known pattern at start",
+   "mitigation": "channel map in config with a start-up wiggle check",
+   "layers": [
+    "smoke.mavlink",
+    "HW"
+   ],
+   "detection_test": "tx12_bridge --input sweep with permuted axes must be rejected by a map check",
+   "severity": 4,
+   "engine_mode": null,
+   "false_confidence": [
+    "F19"
+   ]
+  },
+  {
+   "id": "S20",
+   "title": "Button bounce causes a false long/short press",
+   "category": "input",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.2,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "mechanical switch, long wires, vibration; gs/button.sh has only a 50 ms settle"
+   },
+   "trigger": "press on a bouncy switch, chatter during a long hold",
+   "symptom": "single press fires twice or long press fires as single(s)",
+   "detection": "bounce trace JSON + algorithm replay (gpio_bounce.py)",
+   "mitigation": "debounce in libgpiod (debounce period), hardware RC filter, state machine",
+   "layers": [
+    "models",
+    "virt.gpio",
+    "HW"
+   ],
+   "detection_test": "gpio_bounce.py trace JSON is fed to gpio-sim; test: false-event probability falls with debounce",
+   "severity": 3,
+   "engine_mode": "button_false_event",
+   "false_confidence": [
+    "F3",
+    "F1"
+   ]
+  },
+  {
+   "id": "S21",
+   "title": "udev rename race for wifi0 / rpi0",
+   "category": "kernel",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.06,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "rename rules race with NetworkManager and driver load"
+   },
+   "trigger": "adapter probe order changes",
+   "symptom": "interface named wlan1 not wifiX; scripts act on the wrong iface",
+   "detection": "udevadm test, ip link after boot",
+   "mitigation": "match by MAC/driver, wait for rename before starting services",
+   "layers": [
+    "virt.usb",
+    "virt.radio",
+    "smoke.static"
+   ],
+   "detection_test": "virt radio: create hwsim radios in swapped order and check rename; udevadm verify",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F2",
+    "F3"
+   ]
+  },
+  {
+   "id": "S22",
+   "title": "wfb key mismatch after reflash",
+   "category": "config",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.08,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "gs.key is created on the VTX SD card at first boot; reflash regenerates it"
+   },
+   "trigger": "VTX reflashed or SD replaced",
+   "symptom": "wfb_rx accepts nothing, no video, 'no session key' errors",
+   "detection": "wfb-cli shows no sessions; key fingerprint compare",
+   "mitigation": "print/compare key fingerprints in bring-up, backup keys",
+   "layers": [
+    "qemu_hwsim",
+    "wfb_veth"
+   ],
+   "detection_test": "qemu_hwsim negative control (unrelated keypair accepts nothing) is the detection",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F6"
+   ]
+  },
+  {
+   "id": "S23",
+   "title": "alink oscillation (adaptive bitrate flapping)",
+   "category": "video",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "the controller reacts to loss bursts with delay"
+   },
+   "trigger": "loss bursts near the link margin",
+   "symptom": "bitrate and quality oscillate, latency saw-tooth",
+   "detection": "bitrate time series",
+   "mitigation": "hysteresis, longer averaging, floor on bitrate",
+   "layers": [
+    "models",
+    "wfb_veth"
+   ],
+   "detection_test": "engine: g2g tail and freeze under burst chain; veth ramp via relay_from_model with a loop that toggles bitrate",
+   "severity": 2,
+   "engine_mode": "fec_exhaust",
+   "false_confidence": [
+    "F5",
+    "F10"
+   ]
+  },
+  {
+   "id": "S24",
+   "title": "Latency creep from GStreamer queue growth",
+   "category": "video",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.15,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "producer/consumer clock mismatch, no leaky queue"
+   },
+   "trigger": "hours-long run with ppm drift",
+   "symptom": "glass-to-glass grows by tens of ms until frames drop",
+   "detection": "latency tracer over 30 min",
+   "mitigation": "leaky queues, sync=false/low-latency sink, periodic reset",
+   "layers": [
+    "models",
+    "smoke.video"
+   ],
+   "detection_test": "engine timing.clock_ppm: P(latency_creep); smoke video_latency.py p95 trend over a long run",
+   "severity": 2,
+   "engine_mode": "latency_creep",
+   "false_confidence": [
+    "F12"
+   ]
+  },
+  {
+   "id": "S25",
+   "title": "Decoder stall / buffer backlog",
+   "category": "video",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.12,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "decode load spikes, GC, USB"
+   },
+   "trigger": "hiccup in the decoder or sink",
+   "symptom": "single frozen second, then latency raised until catch-up",
+   "detection": "stall counters, latency steps",
+   "mitigation": "queue limits, catch-up policy",
+   "layers": [
+    "models",
+    "smoke.video"
+   ],
+   "detection_test": "engine stall process adds backlog; check that latency recovers",
+   "severity": 2,
+   "engine_mode": "latency_creep",
+   "false_confidence": [
+    "F12"
+   ]
+  },
+  {
+   "id": "S26",
+   "title": "AGC saturation at very close range",
+   "category": "rf",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.05,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "bench testing at 1-3 m with 28 dBm"
+   },
+   "trigger": "RX level above the AGC knee",
+   "symptom": "high loss at short range, better at 20 m",
+   "detection": "PER vs attenuation sweep",
+   "mitigation": "attenuate on the bench, lower txpower at short range",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine scenario close_range_agc: P(agc_saturation) near 1; hw.rx_agc_* calibration sweep",
+   "severity": 3,
+   "engine_mode": "agc_saturation",
+   "false_confidence": [
+    "F4",
+    "F9"
+   ]
+  },
+  {
+   "id": "S27",
+   "title": "USB probe failure / timeout at boot",
+   "category": "usb",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.05,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "marginal supply, hub, long cable"
+   },
+   "trigger": "cold boot or hot-plug",
+   "symptom": "no wlan interface until retry",
+   "detection": "dmesg 'device descriptor read error -71'",
+   "mitigation": "retry with backoff, uhubctl power cycle",
+   "layers": [
+    "models",
+    "virt.usb"
+   ],
+   "detection_test": "engine bringup(): analytic vs Monte-Carlo success; virt usb: delayed gadget attach",
+   "severity": 3,
+   "engine_mode": "bringup_fail",
+   "false_confidence": [
+    "F2"
+   ]
+  },
+  {
+   "id": "S28",
+   "title": "Monitor-mode set fails (device busy)",
+   "category": "rf",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.06,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "NetworkManager/rfkill/other process holds the iface"
+   },
+   "trigger": "iw set type monitor with NM managing the device",
+   "symptom": "wfb_rx cannot open the iface",
+   "detection": "exit code of iw, nmcli device status",
+   "mitigation": "unmanaged-devices in NM, retry",
+   "layers": [
+    "virt.radio",
+    "smoke.static"
+   ],
+   "detection_test": "virt radio hwsim: set monitor while an NM-like process holds it; assert the script retries",
+   "severity": 3,
+   "engine_mode": "bringup_fail",
+   "false_confidence": [
+    "F4"
+   ]
+  },
+  {
+   "id": "S29",
+   "title": "Injection EBUSY / queue full",
+   "category": "rf",
+   "contour": "AIR",
+   "prior_prob": {
+    "value": 0.05,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "driver TX queue overflows under bursts"
+   },
+   "trigger": "I-frame burst larger than queue",
+   "symptom": "dropped data and parity, FEC cannot cover",
+   "detection": "send errors counter in wfb_tx",
+   "mitigation": "bitrate cap, bigger queue, pacing",
+   "layers": [
+    "models",
+    "wfb_veth"
+   ],
+   "detection_test": "engine M/M/1/K block probability monotone in utilisation; wfb_veth with relay loss as the proxy",
+   "severity": 3,
+   "engine_mode": "injection_overload",
+   "false_confidence": [
+    "F5"
+   ]
+  },
+  {
+   "id": "S30",
+   "title": "FEC exhausted at the edge of range",
+   "category": "rf",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.2,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "link margin shrinks in nulls/shadow; FEC 8/12 tolerates 4 of 12"
+   },
+   "trigger": "SNR margin < 0 for several seconds",
+   "symptom": "bursty video loss",
+   "detection": "residual loss and margin in the engine; wfb-cli",
+   "mitigation": "lower MCS, FEC k/n, antenna diversity",
+   "layers": [
+    "models",
+    "wfb_veth",
+    "qemu_hwsim"
+   ],
+   "detection_test": "engine fec_exhaust probability; veth relay at the model's loss for the same distance",
+   "severity": 3,
+   "engine_mode": "fec_exhaust",
+   "false_confidence": [
+    "F4",
+    "F5",
+    "F10"
+   ]
+  },
+  {
+   "id": "S31",
+   "title": "Noise-floor shock (nearby transmitter, ESC)",
+   "category": "rf",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.12,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "Poisson shocks from ESC/other transmitters"
+   },
+   "trigger": "motor spin-up, neighbour transmitter starts",
+   "symptom": "short outage, retrain",
+   "detection": "noise floor log",
+   "mitigation": "shielding, routing, channel change",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine proc.shock_* : availability falls monotonically with the shock rate",
+   "severity": 2,
+   "engine_mode": "burst_outage",
+   "false_confidence": [
+    "F9"
+   ]
+  },
+  {
+   "id": "S32",
+   "title": "FC / VTX ground reference (UART) noise from ESC",
+   "category": "mavlink",
+   "contour": "AIR",
+   "prior_prob": {
+    "value": 0.05,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "ESC noise couples into UART"
+   },
+   "trigger": "motors at high throttle",
+   "symptom": "CRC errors, dropped telemetry",
+   "detection": "UART error counters",
+   "mitigation": "twisted pair, ferrites, short wires",
+   "layers": [
+    "HW"
+   ],
+   "detection_test": "HW only: LQ and UART errors with motors spinning, props off",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F18"
+   ]
+  },
+  {
+   "id": "S33",
+   "title": "Wi-Fi hotspot / LAN loss between Pi and host",
+   "category": "host",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "single point: wired/wireless link of the host display"
+   },
+   "trigger": "hotspot reconnects, cable unplugged",
+   "symptom": "video freeze, GCS lost",
+   "detection": "ping loss, link state",
+   "mitigation": "wired link, restart policy",
+   "layers": [
+    "smoke.router",
+    "smoke.video"
+   ],
+   "detection_test": "smoke router/video with the link down mid-run (veth down) must recover",
+   "severity": 3,
+   "engine_mode": null,
+   "false_confidence": [
+    "F2"
+   ]
+  },
+  {
+   "id": "S34",
+   "title": "Wrong regdomain limits TX power / channels",
+   "category": "config",
+   "contour": "AIR+GS",
+   "prior_prob": {
+    "value": 0.06,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "regdomain default differs from the planned channel"
+   },
+   "trigger": "wrong country code on the GS or VTX",
+   "symptom": "txpower capped, channel unavailable",
+   "detection": "iw reg get, iw list",
+   "mitigation": "set regdomain in bring-up, verify channel/power",
+   "layers": [
+    "virt.radio",
+    "smoke.static"
+   ],
+   "detection_test": "virt radio: iw reg set and assert the chosen channel is allowed; static check of the config",
+   "severity": 2,
+   "engine_mode": null,
+   "false_confidence": [
+    "F4"
+   ]
+  },
+  {
+   "id": "S35",
+   "title": "Pi 5 PSU undervoltage (throttled word)",
+   "category": "usb",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "cheap 5 V supplies and thin cables"
+   },
+   "trigger": "TX burst plus load on 5.1 V with a 0.15 ohm path",
+   "symptom": "undervoltage flag, USB drops, throttling",
+   "detection": "get_throttled 0x50005, dmesg",
+   "mitigation": "5 A PSU, thick cable",
+   "layers": [
+    "models",
+    "HW"
+   ],
+   "detection_test": "engine undervoltage flag from power_model budget; power_model throttled decode tests",
+   "severity": 4,
+   "engine_mode": "undervoltage",
+   "false_confidence": [
+    "F9"
+   ]
+  },
+  {
+   "id": "S36",
+   "title": "Latency spec exceeded by scheduling spikes",
+   "category": "timing",
+   "contour": "HOST",
+   "prior_prob": {
+    "value": 0.1,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "load on the host (GPU, other apps)"
+   },
+   "trigger": "CPU contention",
+   "symptom": "occasional 100+ ms latency spikes",
+   "detection": "latency p95/p99 tracer",
+   "mitigation": "pin cores, priority, lighter host load",
+   "layers": [
+    "models",
+    "smoke.video"
+   ],
+   "detection_test": "engine sched_spike_*: g2g tail percentile; smoke video latency p95 as a regression guard",
+   "severity": 2,
+   "engine_mode": "latency_creep",
+   "false_confidence": [
+    "F12",
+    "F13"
+   ]
+  },
+  {
+   "id": "S37",
+   "title": "Bring-up never finishes (stage fails after retries)",
+   "category": "config",
+   "contour": "GS",
+   "prior_prob": {
+    "value": 0.04,
+    "provenance": "SYNTH",
+    "unit": "per 1 h session",
+    "rationale": "stacked failures of probe/monitor/injection"
+   },
+   "trigger": "several stages fail in sequence",
+   "symptom": "service gives up, GS idle",
+   "detection": "bring-up log, systemd status",
+   "mitigation": "watchdog + escalating power-cycle of the adapter",
+   "layers": [
+    "models",
+    "virt.usb"
+   ],
+   "detection_test": "engine bringup_fail probability vs max_attempts",
+   "severity": 4,
+   "engine_mode": "bringup_fail",
+   "false_confidence": [
+    "F2"
+   ]
+  }
+ ]
+}

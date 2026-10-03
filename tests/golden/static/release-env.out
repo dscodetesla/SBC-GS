@@ -1,0 +1,10 @@
+ok chroot-env block present
+ok nothing set -> nothing exported
+ok GS_LEGACY_ROOT_LOGIN reaches the chroot
+ok GS_ROOT_PASSWORD reaches the chroot unchanged
+ok password absent from xtrace
+ok password absent from stdout
+ok argv is only: rootfs and /root/build.sh (no secrets)
+ok script continues after the block (set -e/xtrace state restored)
+ok xtrace is back on after the block
+bad=0

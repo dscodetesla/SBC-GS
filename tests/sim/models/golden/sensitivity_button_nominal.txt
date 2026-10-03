@@ -1,0 +1,84 @@
+# sensitivity (Morris elementary effects in prior-quantile space): scenario=button_nominal kind=button dims=18 r=6 seed=1
+# mu* = mean |effect| of moving one prior across ~2/3 of its quantile range, in OUTPUT units; share = mu*/sum(mu*); sigma = nonlinearity/interactions
+# noise = std of the output over 24 process seeds at the median parameters (what chance alone does)
+
+## output false_event (noise std 0.0397)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,gpio.single_hold_s,SYNTH,0.1606,0.1531,15.1
+2,gpio.long_hold_mu_s,SYNTH,0.1519,0.09939,14.3
+3,gpio.rp1_filter_us,UNMEASURED,0.08681,0.1251,8.2
+4,gpio.bounce_count_mean,SYNTH,0.08247,0.1395,7.8
+5,gpio.bounce_total_ms,SYNTH,0.08247,0.115,7.8
+6,gpio.glitch_rate_per_s,SYNTH,0.07812,0.09973,7.3
+7,gpio.mon_start_ms,UNMEASURED,0.07812,0.1093,7.3
+8,gpio.get_ms,UNMEASURED,0.07378,0.07257,6.9
+
+## output false_event_single (noise std 0.04394)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,gpio.single_hold_s,SYNTH,0.3385,0.281,27.1
+2,gpio.get_ms,UNMEASURED,0.1649,0.156,13.2
+3,gpio.mon_start_ms,UNMEASURED,0.1302,0.197,10.4
+4,gpio.uptime_ms,UNMEASURED,0.1215,0.1262,9.7
+5,gpio.bounce_total_ms,SYNTH,0.1128,0.1787,9.0
+6,gpio.rp1_filter_us,UNMEASURED,0.1128,0.1725,9.0
+7,gpio.bounce_count_mean,SYNTH,0.08681,0.151,6.9
+8,gpio.exit_ms,UNMEASURED,0.06944,0.1076,5.6
+
+## output false_event_long (noise std 0.04913)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,gpio.long_hold_mu_s,SYNTH,0.3038,0.1988,23.2
+2,gpio.bounce_count_mean,SYNTH,0.1476,0.2051,11.3
+3,gpio.glitch_rate_per_s,SYNTH,0.1476,0.2145,11.3
+4,gpio.bounce_total_ms,SYNTH,0.1215,0.1533,9.3
+5,gpio.release_bounce_scale,SYNTH,0.1128,0.1594,8.6
+6,gpio.rp1_filter_us,UNMEASURED,0.09549,0.156,7.3
+7,gpio.exit_ms,UNMEASURED,0.08681,0.1125,6.6
+8,gpio.long_hold_sigma_s,SYNTH,0.07812,0.04358,6.0
+
+## output single_extra (noise std 0)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,gpio.glitch_rate_per_s,SYNTH,0.008681,0.02126,50.0
+2,gpio.single_hold_s,SYNTH,0.008681,0.02126,50.0
+3,gpio.action_ms,UNMEASURED,0,0,0.0
+4,gpio.bounce_count_mean,SYNTH,0,0,0.0
+5,gpio.bounce_total_ms,SYNTH,0,0,0.0
+6,gpio.chatter_ms,SYNTH,0,0,0.0
+7,gpio.chatter_prob,SYNTH,0,0,0.0
+8,gpio.exit_ms,UNMEASURED,0,0,0.0
+
+## output long_as_single (noise std 0.04556)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,gpio.long_hold_mu_s,SYNTH,0.2865,0.1388,23.9
+2,gpio.bounce_count_mean,SYNTH,0.1476,0.2051,12.3
+3,gpio.release_bounce_scale,SYNTH,0.1042,0.1423,8.7
+4,gpio.bounce_total_ms,SYNTH,0.09549,0.1307,8.0
+5,gpio.glitch_rate_per_s,SYNTH,0.09549,0.1594,8.0
+6,gpio.exit_ms,UNMEASURED,0.07812,0.1029,6.5
+7,gpio.long_hold_sigma_s,SYNTH,0.07812,0.04358,6.5
+8,gpio.rp1_filter_us,UNMEASURED,0.06944,0.1262,5.8
+
+## output long_missed (noise std 0.006804)
+rank,parameter,provenance,mu_star,sigma,share_pct
+1,gpio.rp1_filter_us,UNMEASURED,0.01736,0.0269,40.0
+2,gpio.bounce_total_ms,SYNTH,0.008681,0.02126,20.0
+3,gpio.exit_ms,UNMEASURED,0.008681,0.02126,20.0
+4,gpio.mon_start_ms,UNMEASURED,0.008681,0.02126,20.0
+5,gpio.action_ms,UNMEASURED,0,0,0.0
+6,gpio.bounce_count_mean,SYNTH,0,0,0.0
+7,gpio.chatter_ms,SYNTH,0,0,0.0
+8,gpio.chatter_prob,SYNTH,0,0,0.0
+
+## measure first (UNMEASURED/SYNTH parameters ranked by summed share over 6 outputs)
+rank,parameter,provenance,summed_share_pct
+1,gpio.single_hold_s,SYNTH,99.2
+2,gpio.glitch_rate_per_s,SYNTH,80.0
+3,gpio.rp1_filter_us,UNMEASURED,70.3
+4,gpio.long_hold_mu_s,SYNTH,61.4
+5,gpio.bounce_total_ms,SYNTH,54.0
+6,gpio.exit_ms,UNMEASURED,44.4
+7,gpio.mon_start_ms,UNMEASURED,41.9
+8,gpio.bounce_count_mean,SYNTH,38.3
+9,gpio.get_ms,UNMEASURED,25.7
+10,gpio.release_bounce_scale,SYNTH,24.6
+11,gpio.uptime_ms,UNMEASURED,21.8
+12,gpio.long_hold_sigma_s,SYNTH,16.2

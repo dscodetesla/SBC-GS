@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+umount -lf <ROOT>/Videos
+== gs.conf changes
+== file /run/pixelpilot.msg
+umount <ROOT>/Videos success
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

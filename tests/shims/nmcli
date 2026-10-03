@@ -1,0 +1,6 @@
+#!/bin/bash
+# logs the call; "device status" prints $SHIM_ROOT/nmcli.status; "connection up X" fails if X is listed in $SHIM_ROOT/nmcli.fail
+echo "nmcli $*" >> "$SHIM_LOG"
+if [ "$1" = device ] && [ "${2:-}" = status ]; then cat "$SHIM_ROOT/nmcli.status" 2>/dev/null; exit 0; fi
+if [ "$1" = connection ] && [ "${2:-}" = up ] && grep -qx -- "$3" "$SHIM_ROOT/nmcli.fail" 2>/dev/null; then exit 1; fi
+exit 0

@@ -1,0 +1,30 @@
+== invocation: sourced
+== exit
+exit=1
+== stdout
+br0 configure done
+start configure wifi0 station mode
+wifi0 station mode configure done
+start configure wifi0 hotspot mode
+no wifi0 or hotspot setting is blank
+radxa0 usb gadget network configure done
+== shim calls
+nmcli device
+nmcli con add type wifi ifname wifi0 con-name wifi0 ssid OpenIPC autoconnect no
+== gs.conf changes
+== file /etc/kernel/cmdline
+root=LABEL=rootfs console=ttyS2,1500000n8
+== file /etc/kernel/cmdline.bak
+root=LABEL=rootfs console=ttyS2,1500000n8
+== file /etc/default/gpsd
+stty -F /dev/ttyS3 38400
+START_DAEMON="true"
+DEVICES="/dev/ttyS3"
+GPSD_OPTIONS="-n -b -G -r"
+USBAUTO="true"
+== file /media/root-ro/etc/fstab
+/dev/mmcblk0p5 <ROOT>/Videos exfat defaults,nofail 0 0
+== file /etc/samba/smb.conf
+[Videos]
+   <ROOT>/Videos
+== dtbo listing

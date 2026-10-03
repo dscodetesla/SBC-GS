@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+25
+== shim calls
+jq -r "\(to_entries[0].key) \(to_entries[0].value)"
+udevadm info <ROOT>/sys/class/net/wlan1/
+== gs.conf changes

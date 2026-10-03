@@ -1,0 +1,10 @@
+{
+ "name": "button_nominal",
+ "description": "gs/button.sh algorithm on a typical tact switch (SYNTH bounce priors), 30 short and 30 long presses per draw.",
+ "kind": "button",
+ "cfg": {
+  "presses_each": 30
+ },
+ "set": {},
+ "dist": {}
+}

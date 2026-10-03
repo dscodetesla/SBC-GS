@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+stub gs-applyconf.sh 
+== gs.conf changes
+== file /run/pixelpilot.msg
+apply gs.conf!
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

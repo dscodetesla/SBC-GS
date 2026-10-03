@@ -4,6 +4,7 @@ set -e
 set -x
 
 source /etc/gs.conf
+source /gs/lib/gpio.sh
 export DISPLAY=:0
 cd $rec_dir
 
@@ -73,7 +74,7 @@ if [ -z "$osd_config_file" ]; then
 	fi
 fi
 
-GPIO_RED_LED=$(gpiofind PIN_${red_led_pin})
+GPIO_RED_LED=$(gpio_find "${red_led_pin}")
 
 gencmd(){
 	if [ "$video_player" == "pixelpilot" ]; then

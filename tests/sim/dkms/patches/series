@@ -1,0 +1,3 @@
+# patch	driver	kernel-id glob
+0001-rtl8812au-6.12-set_monitor_channel-signature.patch	rtl8812au	k612*
+0002-rtl8812eu-6.12-set_monitor_channel-signature.patch	rtl8812eu	k612*

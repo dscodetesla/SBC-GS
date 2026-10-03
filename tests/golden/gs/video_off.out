@@ -1,0 +1,25 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+start fan service
+gs service start completed
+== shim calls (sorted: background jobs make the order non-deterministic)
+findmnt -n -o SOURCE /
+fsck.exfat -a /dev/mmcblk0p4
+gpiofind PIN_22
+gpioset -D push-pull gpiochip0 22=0
+lsblk -no PKNAME /dev/mmcblk0p3
+mount /dev/mmcblk0p4 <ROOT>/Videos
+stub gs-applyconf.sh 
+stub otg-gadget.sh 
+systemctl enable --now ttyd
+systemctl is-enabled ttyd
+systemctl start webui
+systemd-run --unit=fan <ROOT>/gs/fan.sh
+systemd-run --unit=oled --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+== gs.conf changes
+22c22
+< video_on_boot='yes'
+---
+> video_on_boot='no'

@@ -137,7 +137,19 @@ cp -r ../gs ../pics $ROOTFS/root/SourceCode/SBC-GS
 # run build script
 # chroot $ROOTFS /bin/bash
 cp build.sh $ROOTFS/root/build.sh
-chroot $ROOTFS /root/build.sh
+# >>> chroot-env (audit S2, docs/SECURITY-DEFAULTS.md): hand the root-login switches to the chroot explicitly, only if set.
+# xtrace is off here and the values go through the environment (not argv), so a password never reaches the build log or `ps`.
+# Under `sudo ./release.sh` the variables must first survive sudo: sudo --preserve-env=GS_LEGACY_ROOT_LOGIN,GS_ROOT_PASSWORD
+set +x
+(
+	for v in GS_LEGACY_ROOT_LOGIN GS_ROOT_PASSWORD; do
+		# shellcheck disable=SC2163  # intentional indirect export: $v holds the NAME of the variable to export
+		if [ -n "${!v:-}" ]; then export "$v"; else unset "$v"; fi
+	done
+	chroot $ROOTFS /root/build.sh
+)
+set -x
+# <<< chroot-env
 rm $ROOTFS/root/build.sh
 
 # add release info

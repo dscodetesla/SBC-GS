@@ -1,0 +1,15 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+function  not found
+== shim calls
+== gs.conf changes
+127,128c127,128
+< btn_q2_pin='38'
+< btn_q3_pin='40'
+---
+> btn_q2_pin=''
+> btn_q3_pin=''
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

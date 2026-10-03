@@ -1,0 +1,19 @@
+## wifi hotplug
+# Exclude @WIFI_ONBOARD_IFACE@ by name
+SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="@WIFI_ONBOARD_IFACE@", RUN+="/gs/wfb.sh $name"
+# Exclude wlan by MAC
+# SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ATTR{address}!="98:03:cf:*:*:*", RUN+="/gs/wfb.sh $name"
+# Trigger only for USB WiFi
+# SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", SUBSYSTEMS=="usb", RUN+="/gs/wfb.sh $name"
+SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="remove", RUN+="/gs/wfb.sh"
+#
+# KERNEL== must be wl*, not wlx*, otherwise the network card cannot be matched. Although udevadm test shows that the script will be executed, it will not actually be executed.
+
+## keyboard
+ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEYBOARD}=="1", RUN+="/usr/bin/systemd-run /gs/button-kbd.py $devnode"
+
+## External disk
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sda1", RUN+="/gs/button.sh mount_extdisk $devnode"
+
+## MicroSD on emmc board
+# ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk1p1", RUN+="/gs/button.sh mount_extdisk /dev/%k"

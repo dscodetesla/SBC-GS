@@ -1,0 +1,13 @@
+# double knock-out sweep over distinct nodes
+fault universe: 27 (node,mode) faults, pairs on distinct nodes: 349
+pairs losing video          296
+pairs losing telemetry      315
+pairs losing rc_primary     140
+pairs losing rc_backup      304
+pairs losing control        116
+pairs losing safe_failsafe   83
+minimal 2-cut sets of control (neither single kills it): 42
+minimal 2-cut sets of safe_failsafe: 0
+single points of failure of control (common cause of both RC paths): fc/dead, pwr_air/dead, tx12/dead
+nodes only on primary RC path: elrs_rx, elrs_tx, rf900
+nodes only on backup RC path: air_ant, drv, gs_ant, gs_dongle, mav_uart, rc_bridge, rf58, router, soc, wfb_gs, wl_radio

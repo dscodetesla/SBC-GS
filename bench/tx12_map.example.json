@@ -1,0 +1,9 @@
+{
+  "_comment": "Example for an EdgeTX radio in USB joystick mode (classic mode: Ch1-8 -> axes). Find the real axis names and ranges with: evtest /dev/input/eventN. Axis names are python-evdev ecodes (ABS_X, ABS_Y, ABS_Z, ABS_RX, ...). Axes with 'center' are bipolar (deadband = fraction of half-travel); without 'center' they map linearly min..max -> 1000..2000. UNVERIFIED on a real TX12: the numbers are placeholders.",
+  "axes": {
+    "ABS_X":  {"channel": 1, "min": -1024, "max": 1024, "center": 0, "deadband": 0.02, "reverse": false},
+    "ABS_Y":  {"channel": 2, "min": -1024, "max": 1024, "center": 0, "deadband": 0.02, "reverse": true},
+    "ABS_Z":  {"channel": 3, "min": -1024, "max": 1024, "reverse": false},
+    "ABS_RX": {"channel": 4, "min": -1024, "max": 1024, "center": 0, "deadband": 0.02, "reverse": false}
+  }
+}

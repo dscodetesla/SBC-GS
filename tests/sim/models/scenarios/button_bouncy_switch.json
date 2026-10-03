@@ -1,0 +1,26 @@
+{
+ "name": "button_bouncy_switch",
+ "description": "Worn switch: bounce tens of ms, frequent EMI glitches, vibration chatter.",
+ "kind": "button",
+ "cfg": {
+  "presses_each": 30
+ },
+ "set": {},
+ "dist": {
+  "gpio.bounce_total_ms": {
+   "kind": "lognormal",
+   "median": 18,
+   "sigma": 0.5
+  },
+  "gpio.glitch_rate_per_s": {
+   "kind": "lognormal",
+   "median": 0.5,
+   "sigma": 0.6
+  },
+  "gpio.chatter_prob": {
+   "kind": "beta",
+   "a": 4,
+   "b": 16
+  }
+ }
+}

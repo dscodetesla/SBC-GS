@@ -1,0 +1,16 @@
+== positive
+ok radxa-zero3
+ok radxa-zero3 passes
+== negative
+FAIL bad-syntax: <REPO>/tests/fixtures/boards/bad-syntax/board.conf:54: bad syntax: this is not a key=value line
+FAIL bad-syntax: <REPO>/tests/fixtures/boards/bad-syntax/board.conf:55: bad syntax: X=$(rm -rf /)
+ok bad-syntax rejected
+FAIL empty-key: empty key OTG_CONTROLLER
+ok empty-key rejected
+FAIL missing-key: missing key OTG_CONTROLLER
+ok missing-key rejected
+== loader
+BOARD_ID=radxa-zero3
+OTG_CONTROLLER=fcc00000.dwc3
+ok unknown board rejected
+bad=0

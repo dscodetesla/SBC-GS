@@ -1,0 +1,23 @@
+== invocation: standalone_wait
+== exit
+exit=1
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+df <ROOT>/Videos
+fbi -d /dev/fb0 -a -fitwidth -T 1 --noverbose <ROOT>/gs/wallpaper.png
+gpiofind PIN_22
+gst-launch-1.0 -e udpsrc port=5600 caps=application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H265 ! rtph265depay ! h265parse ! tee name=t ! mppvideodec ! kmssink t. ! queue ! matroskamux ! filesink location=1005
+jq .widgets += (input.widgets) <ROOT>/etc/pixelpilot/pixelpilot_osd_simple.json <ROOT>/etc/pixelpilot/pixelpilot_osd_osmon.json
+== gs.conf changes
+28c28
+< video_player='pixelpilot'
+---
+> video_player='gstreamer'
+37c37
+< osd_enable='yes'
+---
+> osd_enable='no'
+71c71
+< record_on=''
+---
+> record_on='boot'

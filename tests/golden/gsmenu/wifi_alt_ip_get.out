@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+10.9.8.7
+== shim calls
+nmcli -t connection show --active
+ip -4 addr show wlan9
+== gs.conf changes

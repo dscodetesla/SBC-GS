@@ -5,6 +5,8 @@ set -x
 
 # load config
 source /etc/gs.conf
+source /gs/lib/gpio.sh
+source /gs/lib/hw.sh
 [ "$gs_enable" == 'no' ] && exit 0
 
 # check and apply configuration in gs.conf
@@ -12,12 +14,13 @@ source /gs/gs-applyconf.sh
 
 # RTC
 if [ "$use_external_rtc" == "yes" ]; then
-	if [ -c /dev/i2c-4 ]; then
+	rtc_i2c_bus="$(hw_rtc_i2c_bus)"
+	if [ -c "/dev/i2c-${rtc_i2c_bus}" ]; then
 		modprobe i2c-dev
-		echo ds3231 0x68 >  /sys/class/i2c-adapter/i2c-4/new_device
+		echo ds3231 0x68 >  "/sys/class/i2c-adapter/i2c-${rtc_i2c_bus}/new_device"
 		( sleep 1 && [ -c /dev/rtc1 ] && hwclock -s -f /dev/rtc1 || echo "no ds3231 found" ) &
 	else
-		echo "i2c-4 is not enabled"
+		echo "i2c-${rtc_i2c_bus} is not enabled"
 	fi
 fi
 
@@ -48,14 +51,16 @@ fi
 
 # If video_on_boot=yes, video playback will be automatically started
 if [ "$video_on_boot" == "yes" ]; then
+	ruby_home="$(hw_home_dir)"
+	wifi_iface="$(hw_wifi_iface)"
 	# Start RubyFpv
 	if [ "$fpv_firmware_type" == "rubyfpv" ]; then
 		# Load wifi drivers
 		[ -d "/sys/module/8812eu" ] || modprobe 8812eu rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0
 		[ -d "/sys/module/88XXau_wfb" ] || modprobe 88XXau_wfb rtw_tx_pwr_idx_override=1
 		# bind mount Vides dir to ruby
-		[ -d "/home/radxa/ruby/media" ] || mkdir -p /home/radxa/ruby/media
-		mount --bind $rec_dir /home/radxa/ruby/media
+		[ -d "${ruby_home}/ruby/media" ] || mkdir -p ${ruby_home}/ruby/media
+		mount --bind $rec_dir ${ruby_home}/ruby/media
 		# Use button gpio settings in gs.conf
 		button_gpio="$btn_cr_pin $btn_cl_pin $btn_cu_pin $btn_cd_pin $btn_q1_pin $btn_q2_pin $btn_q3_pin"
 		[ ! -e /config/gpio.txt ] && touch /config/gpio.txt
@@ -67,8 +72,8 @@ if [ "$video_on_boot" == "yes" ]; then
 			--property=StandardOutput=file:/dev/tty1 \
 			--property=StandardError=file:/dev/tty1 \
 			--property=Type=forking \
-			--property=WorkingDirectory=/home/radxa/ruby \
-			/home/radxa/ruby/ruby_start
+			--property=WorkingDirectory=${ruby_home}/ruby \
+			${ruby_home}/ruby/ruby_start
 	else
 		# add route to 224.0.0.1
 		ip ro add 224.0.0.0/4 dev br0
@@ -89,8 +94,8 @@ if [ "$video_on_boot" == "yes" ]; then
 			echo "start wfb in aggregator mode"
 			wfb_rx -a 10000 -K $wfb_key -i $wfb_link_id -c $wfb_outgoing_ip -u $wfb_outgoing_port_video 2>&1 > /dev/null &
 			wfb_rx -a 10001 -K $wfb_key -i $wfb_link_id -c $wfb_outgoing_ip -u $wfb_outgoing_port_mavlink 2>&1 > /dev/null &
-			if [[ "$wfb_integrated_wnic" == "wifi0" && -d /sys/class/net/wifi0 ]]; then
-				/gs/wfb.sh wifi0 &
+			if [[ "$wfb_integrated_wnic" == "$wifi_iface" && -d "/sys/class/net/${wifi_iface}" ]]; then
+				/gs/wfb.sh "$wifi_iface" &
 			fi
 		fi
 
@@ -124,7 +129,7 @@ fi
 [ "$webui_enable" == "yes" ] && systemctl start webui
 
 # system boot complete, turn red record LED off
-gpioset -D $red_led_drive $(gpiofind PIN_${red_led_pin})=0
+gpioset -D $red_led_drive $(gpio_find "${red_led_pin}")=0
 echo "gs service start completed"
 
 exit 0

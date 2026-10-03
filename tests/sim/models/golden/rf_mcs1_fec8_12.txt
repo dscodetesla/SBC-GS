@@ -1,0 +1,36 @@
+# rf_model: mcs=1 (QPSK 1/2) bw=20 vht=0 stbc=1 ldpc=1 sgi=0 fec=8/12 fading=none loss_model=iid
+# link: f=5745MHz n=2.00 tx=20.0dBm gains=2.0+2.0dBi misc=1.0dB NF=6.0dB noise=-95.0dBm impl_loss=3.0dB
+# phy=13.00Mbps frame=1456B airtime=940.0us video=4000kbps pkts/frame=12 airtime_util=0.56
+dist_m,rx_dbm,snr_db,per,residual,frame_loss
+300,-74.2,20.8,0.000e+00,0.000e+00,0.000e+00
+700,-81.5,13.5,3.053e-09,8.758e-41,0.000e+00
+900,-83.7,11.3,5.681e-04,1.946e-14,2.331e-13
+1000,-84.6,10.4,2.375e-02,2.179e-06,2.615e-05
+1050,-85.0,9.9,1.079e-01,2.591e-03,3.065e-02
+1100,-85.5,9.5,3.757e-01,2.418e-01,9.639e-01
+1300,-86.9,8.1,1.000e+00,1.000e+00,1.000e+00
+2000,-90.6,4.3,1.000e+00,1.000e+00,1.000e+00
+max_range_m(residual<=0.01)=1062
+# depends on 13 UNMEASURED parameter(s): rf.diversity_gain_db,rf.floor_per,rf.implementation_loss_db,rf.interference_dbm,rf.ldpc_gain_db,rf.mac_access_us,rf.mcs_snr_offset_db,rf.misc_loss_db,rf.noise_figure_db,rf.rician_k_db,rf.rx_antenna_gain_dbi,rf.tx_antenna_gain_dbi,rf.tx_power_dbm
+# overridden: rf.mcs_index
+# rf_model sweep: bw=20 vht=0 fading=none loss_model=iid video=4000kbps target=0.01
+mcs,mod,rate,phy_mbps,snr10_db,fec,util,max_range_m
+0,BPSK,1/2,6.5,7.0,1/1,0.69,1378
+0,BPSK,1/2,6.5,7.0,8/12,1.04!,1501
+1,QPSK,1/2,13.0,10.0,1/1,0.37,974
+1,QPSK,1/2,13.0,10.0,8/12,0.56,1062
+2,QPSK,3/4,19.5,12.9,1/1,0.26,695
+2,QPSK,3/4,19.5,12.9,8/12,0.40,762
+3,16QAM,1/2,26.0,16.5,1/1,0.21,456
+3,16QAM,1/2,26.0,16.5,8/12,0.32,501
+4,16QAM,3/4,39.0,19.6,1/1,0.16,319
+4,16QAM,3/4,39.0,19.6,8/12,0.24,351
+5,64QAM,2/3,52.0,24.3,1/1,0.13,184
+5,64QAM,2/3,52.0,24.3,8/12,0.20,203
+6,64QAM,3/4,58.5,25.6,1/1,0.12,159
+6,64QAM,3/4,58.5,25.6,8/12,0.18,176
+7,64QAM,5/6,65.0,26.8,1/1,0.11,139
+7,64QAM,5/6,65.0,26.8,8/12,0.17,154
+# '!' = airtime utilisation > 1: the stream does not fit the air at this MCS/FEC, the range is moot
+# depends on 13 UNMEASURED parameter(s): rf.diversity_gain_db,rf.floor_per,rf.implementation_loss_db,rf.interference_dbm,rf.ldpc_gain_db,rf.mac_access_us,rf.mcs_snr_offset_db,rf.misc_loss_db,rf.noise_figure_db,rf.rician_k_db,rf.rx_antenna_gain_dbi,rf.tx_antenna_gain_dbi,rf.tx_power_dbm
+relay_args: --loss 0.107942 --delay-ms 1.0400 --jitter-ms 0.3000 --seed 7

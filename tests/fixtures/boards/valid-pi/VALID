@@ -1,0 +1,1 @@
+positive fixture: boards.sh skips it (must validate OK; used by static/udev-render)

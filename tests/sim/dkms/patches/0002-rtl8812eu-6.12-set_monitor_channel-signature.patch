@@ -1,0 +1,18 @@
+# Target: rtl8812eu @ 48e6e449e089fa954e4e15079bd864039e2960da (svpcom/rtl8812eu, branch v5.15.0.1, HEAD at the time of --fetch)
+# Kernels: Pi OS 6.12.x with the backported cfg80211 ABI (verified on 6.12.109+rpt, k612*); a no-op on 6.18
+# Why: identical to 0001-rtl8812au-...: the signature of cfg80211_rtw_set_monitor_channel() is switched at 6.13 while the Pi 6.12.109
+#   headers already have the (wiphy, net_device *, chandef) form. libc0607/rtl88x2eu-20230815 uses 6.12.101 (docs/PI-PORT.md section 4).
+# Runtime effect: UNVERIFIED (no device in QEMU).
+diff --git a/os_dep/linux/ioctl_cfg80211.c b/os_dep/linux/ioctl_cfg80211.c
+index 025ca8b..405b1d6 100644
+--- a/os_dep/linux/ioctl_cfg80211.c
++++ b/os_dep/linux/ioctl_cfg80211.c
+@@ -7320,7 +7320,7 @@ static void rtw_get_chbwoff_from_cfg80211_chan_def(
+ #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)) */
+ 
+ static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 101))
+   , struct net_device *dev, struct cfg80211_chan_def *chandef
+ #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+ 	, struct cfg80211_chan_def *chandef

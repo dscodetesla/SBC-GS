@@ -1,0 +1,7 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+nmcli con down hotspot
+== gs.conf changes

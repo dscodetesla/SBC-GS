@@ -1,0 +1,12 @@
+# scenario_engine: button_bouncy_switch kind=button n=60 seed=1 antithetic=0
+# priors: 18 sampled dims (SYNTH=10 UNMEASURED=8); pinned: rf.fading_model,rf.loss_model
+output,unit,p5,p50,p95,p99,mean
+false_event,frac,0.25,0.4167,0.5667,0.6615,0.4053
+false_event_single,frac,0,0.1,0.3683,0.6137,0.1261
+false_event_long,frac,0.2983,0.6833,0.935,1,0.6844
+single_extra,frac,0,0,0.06833,0.1547,0.01667
+long_as_single,frac,0.1,0.25,0.4333,0.5213,0.2617
+long_missed,frac,0,0,0.03333,0.08033,0.005
+failure_mode,probability
+button_false_event,1.000
+# SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99

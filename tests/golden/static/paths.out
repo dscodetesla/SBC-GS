@@ -1,0 +1,71 @@
+== radxa-zero3 profile
+ok profile hw_cpu_temp_file = /sys/class/thermal/thermal_zone0/temp
+ok profile hw_pwm_base = /sys/class/pwm/pwmchip
+ok profile hw_home_dir = /home/radxa
+ok profile hw_wifi_iface = wifi0
+ok profile hw_rtc_i2c_bus = 4
+== fallbacks (lib copied without board.sh)
+ok fallback hw_cpu_temp_file = /sys/class/thermal/thermal_zone0/temp
+ok fallback hw_pwm_base = /sys/class/pwm/pwmchip
+ok fallback hw_home_dir = /home/radxa
+ok fallback hw_wifi_iface = wifi0
+ok fallback hw_rtc_i2c_bus = 4
+== fallbacks (unknown BOARD)
+ok unknown-board hw_cpu_temp_file = /sys/class/thermal/thermal_zone0/temp
+ok unknown-board hw_pwm_base = /sys/class/pwm/pwmchip
+ok unknown-board hw_home_dir = /home/radxa
+ok unknown-board hw_wifi_iface = wifi0
+ok unknown-board hw_rtc_i2c_bus = 4
+== fallbacks (profile without the keys)
+ok no-key hw_cpu_temp_file = /sys/class/thermal/thermal_zone0/temp
+ok no-key hw_pwm_base = /sys/class/pwm/pwmchip
+ok no-key hw_home_dir = /home/radxa
+ok no-key hw_wifi_iface = wifi0
+ok no-key hw_rtc_i2c_bus = 4
+== other profile is honoured (valid-pi fixture and a synthetic one)
+ok board x hw_cpu_temp_file = /t/x
+ok board x hw_pwm_base = /p/x
+ok board x hw_home_dir = /home/x
+ok board x hw_wifi_iface = wlx
+ok board x hw_rtc_i2c_bus = 9
+ok valid-pi hw_cpu_temp_file = /sys/class/thermal/thermal_zone0/temp
+ok valid-pi hw_pwm_base = /sys/class/pwm/pwmchip
+ok valid-pi hw_home_dir = /home/radxa
+ok valid-pi hw_wifi_iface = wlan9
+ok valid-pi hw_rtc_i2c_bus = 1
+== set -e safe
+survived
+== profile values and src comments
+ok THERMAL_CPU_TEMP_FILE defined
+ok src comment THERMAL_CPU_TEMP_FILE = 1
+ok RTC_I2C_BUS defined
+ok src comment RTC_I2C_BUS = 1
+ok THERMAL_CPU_TEMP_FILE required
+ok RTC_I2C_BUS optional
+== scripts use the helpers, no migrated literal left
+ok no thermal_zone literal
+ok no thermal_zone-oled-outside-fallback literal
+ok no pwmchip-path literal
+ok no home-radxa literal
+ok no i2c-4 literal
+ok no wifi0 literal
+ok no wifi0 literal in gsmenu.sh (except commented/nmcli ifname)
+ok fan.sh sources hw.sh
+ok gs.sh sources hw.sh
+ok gsmenu.sh sources hw.sh
+ok oled.py uses board_conf
+== python: board_conf.py
+ok py_compile board_conf.py oled.py
+profile /t/py
+missing-key dflt
+unknown-board /sys/class/thermal/thermal_zone0/temp
+empty-value /sys/class/thermal/thermal_zone0/temp
+double-quoted dq val | bare /bare/path | inline-comment in | bad line skipped True
+missing-file {}
+repo-profile /sys/class/thermal/thermal_zone0/temp 4
+ok py profile = profile /t/py
+ok py missing-key = missing-key dflt
+ok py unknown-board = unknown-board /sys/class/thermal/thermal_zone0/temp
+ok py empty-value = empty-value /sys/class/thermal/thermal_zone0/temp
+ok py repo-profile = repo-profile /sys/class/thermal/thermal_zone0/temp 4
+bad=0

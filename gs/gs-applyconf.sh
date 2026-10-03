@@ -3,10 +3,35 @@
 set -e
 set -x
 
-# merge custom.conf to gs.conf
+# merge custom.conf to gs.conf. /config/custom.conf is DATA that anybody who can write the /config partition controls, and gs.conf is
+# `source`d as root: a key must be a plain identifier, a value is written raw only if it has shell-safe characters only, otherwise inside
+# single quotes (a value with a single quote is rejected), and the replacement is done by awk (ENVIRON), never by a sed s/// expression.
+gs_conf_merge_line() {
+	local key="$1" val="$2" conf tmp
+	key="${key#"${key%%[![:space:]]*}"}"
+	key="${key%"${key##*[![:space:]]}"}"
+	val="${val%$'\r'}"
+	[[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "custom.conf: rejected key '$key'" >&2; return 1; }
+	if [[ "$val" =~ ^\'(.*)\'$ ]] || [[ "$val" =~ ^\"(.*)\"$ ]]; then
+		val="${BASH_REMATCH[1]}"
+	fi
+	case "$val" in
+	*\'*) echo "custom.conf: rejected value of '$key' (contains a single quote)" >&2; return 1 ;;
+	esac
+	if [ -n "$val" ] && ! [[ "$val" =~ ^[A-Za-z0-9_.,:/@%+=-]+$ ]]; then
+		val="'${val}'"
+	fi
+	conf="$(readlink -f /etc/gs.conf)"
+	tmp="${conf}.merge.$$"
+	CK="$key" CV="$val" awk 'BEGIN { k = ENVIRON["CK"] "="; v = ENVIRON["CV"] }
+		index($0, k) == 1 { print k v; next } { print }' "$conf" >"$tmp" || { rm -f "$tmp"; return 1; }
+	chmod --reference="$conf" "$tmp" 2>/dev/null || true
+	mv "$tmp" "$conf"
+}
+
 if [ -f /config/custom.conf ]; then
 	grep -E '^\s*[^#]' /config/custom.conf | while IFS='=' read -r ckey cvalue; do
-		sed -i "s/^${ckey}=.*/${ckey}=${cvalue}/" $(readlink -f /etc/gs.conf)
+		gs_conf_merge_line "$ckey" "$cvalue" || true
 	done
 	mv /config/custom.conf /config/custom-merged.conf
 	source /etc/gs.conf

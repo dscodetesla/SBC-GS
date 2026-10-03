@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+Creating new NewNet connection...
+Starting Wlan...
+== shim calls
+nmcli connection show
+nmcli device wifi connect NewNet password pass2 ifname wifi
+nmcli con up NewNet
+== gs.conf changes

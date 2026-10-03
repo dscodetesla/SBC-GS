@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+== gs.conf changes
+66c66
+< rec_fps='60'
+---
+> rec_fps='90'

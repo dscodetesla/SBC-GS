@@ -1,0 +1,44 @@
+== invocation: sourced
+== exit
+exit=1
+== stdout
+[info]: Update rec_dir in fstab and need reboot
+br0 configure done
+start configure wifi0 station mode
+wifi0 station mode configure done
+start configure wifi0 hotspot mode
+no wifi0 or hotspot setting is blank
+radxa0 usb gadget network configure done
+[info]: Running in lower rootfs rw: mv <ROOT>/boot/dtbo/rk3566-hdmi-max-resolution-4k.dtbo.disabled <ROOT>/boot/dtbo/rk3566-hdmi-max-resolution-4k.dtbo
+== shim calls
+mount -o remount,rw <ROOT>/media/root-ro
+nmcli device
+nmcli con add type wifi ifname wifi0 con-name wifi0 ssid OpenIPC autoconnect no
+mount -o remount,rw <ROOT>/media/root-ro
+chroot <ROOT>/media/root-ro /bin/bash -c mv <ROOT>/boot/dtbo/rk3566-hdmi-max-resolution-4k.dtbo.disabled <ROOT>/boot/dtbo/rk3566-hdmi-max-resolution-4k.dtbo
+chroot <ROOT>/media/root-ro /usr/sbin/u-boot-update
+reboot 
+reboot 
+== gs.conf changes
+206c206
+< max_resolution_4k='no'
+---
+> max_resolution_4k='yes'
+== file /etc/kernel/cmdline
+root=LABEL=rootfs console=ttyS2,1500000n8
+== file /etc/kernel/cmdline.bak
+root=LABEL=rootfs console=ttyS2,1500000n8
+== file /etc/default/gpsd
+stty -F /dev/ttyS3 38400
+START_DAEMON="true"
+DEVICES="/dev/ttyS3"
+GPSD_OPTIONS="-n -b -G -r"
+USBAUTO="true"
+== file /media/root-ro/etc/fstab
+/dev/mmcblk0p5 /old exfat default<ROOT>/Videoss,nofail 0 0
+== file /etc/samba/smb.conf
+[global]
+[Videos]
+   <ROOT>/Videos
+== dtbo listing
+rk3566-hdmi-max-resolution-4k.dtbo.disabled

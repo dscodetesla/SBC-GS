@@ -1,0 +1,29 @@
+# latency_budget: board=pi4 codec=h265 decoder=pi4_h265_stateless 1920x1080@30fps 8000kbps mcs=3 fec=8/12 lossy=1 airtime_util=0.63
+term,min_ms,typ_ms,max_ms
+capture,16.7,33.3,50.0
+encode,10.0,33.3,66.7
+radio,14.2,17.8,127.0
+fec_wait,0.0,6.1,12.2
+usb_rx,0.1,1.0,8.0
+network,0.1,0.3,2.0
+jitter_buffer,0.0,0.0,20.0
+decode,3.0,41.3,186.7
+display,1.0,38.3,86.7
+TOTAL,45.0,171.5,559.2
+dominant_typ=decode dominant_max=decode (max = sum of per-term maxima, a bound, not a percentile)
+# depends on 11 UNMEASURED parameter(s): latency.capture_frames,latency.decoders.pi4_h265_stateless.proc_ms_1080p,latency.decoders.pi4_h265_stateless.queue_frames,latency.decoders.pi4_h265_stateless.reorder_frames,latency.display_queue_frames,latency.encode_frames,latency.network_ms,latency.panel_ms,latency.usb_rx_ms,rf.mac_access_us,video.iframe_ratio
+# overridden: rf.mcs_index
+
+# latency_budget matrix: 1920x1080 8000kbps mcs=3 fec=8/12 lossy=0
+board,codec,fps,util,min_ms,typ_ms,max_ms,dominant_typ,dominant_max
+pi4,h264,30,0.63,45.0,165.4,547.0,decode,decode
+pi4,h264,60,0.63,24.6,106.5,342.3,display,decode
+pi4,h265,30,0.63,45.0,165.4,547.0,decode,decode
+pi4,h265,60,0.63,24.6,106.5,342.3,display,decode
+pi5,h264,30,0.63,47.4,160.1,743.0,display,decode
+pi5,h264,60,0.63,27.0,117.8,538.3,display,decode
+pi5,h265,30,0.63,44.0,163.4,542.0,decode,decode
+pi5,h265,60,0.63,23.6,104.5,337.3,display,decode
+# '!' = airtime utilisation > 1 (stream does not fit the air at this MCS/FEC)
+# depends on 21 UNMEASURED parameter(s): latency.capture_frames,latency.cpu_scale_vs_x86,latency.decoders.pi4_h264_stateful.proc_ms_1080p,latency.decoders.pi4_h264_stateful.queue_frames,latency.decoders.pi4_h264_stateful.reorder_frames,latency.decoders.pi4_h265_stateless.proc_ms_1080p,latency.decoders.pi4_h265_stateless.queue_frames,latency.decoders.pi4_h265_stateless.reorder_frames,latency.decoders.pi5_h264_sw.queue_frames,latency.decoders.pi5_h264_sw.reorder_frames,latency.decoders.pi5_h265_stateless.proc_ms_1080p,latency.decoders.pi5_h265_stateless.queue_frames,latency.decoders.pi5_h265_stateless.reorder_frames,latency.display_queue_frames,latency.encode_frames,latency.network_ms,latency.panel_ms,latency.sw_decode_fraction,latency.usb_rx_ms,rf.mac_access_us,video.iframe_ratio
+

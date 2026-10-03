@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+== gs.conf changes
+180c180
+< gs_enable='yes'
+---
+> gs_enable='no'

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -o pipefail
 source /etc/gs.conf
+source /gs/lib/hw.sh
+WIFI_IFACE="$(hw_wifi_iface)"
 # Configuration
 REMOTE_IP="10.5.0.10"
 SSH_PASS="12345"
@@ -618,30 +620,30 @@ case "$@" in
         nmcli connection show --active | grep -q "hotspot" && echo 1 || echo 0
         ;;
     "get gs wifi wlan")
-        connection=$(nmcli -t connection show --active | grep wifi0 | cut -d : -f1)
+        connection=$(nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f1)
         [ -z "${connection}" ] && echo 0 || echo 1
         ;;
     "get gs wifi ssid")
-        if [ -d /sys/class/net/wifi0 ]; then
-            nmcli -t connection show --active | grep wifi0 | cut -d : -f1
+        if [ -d /sys/class/net/$WIFI_IFACE ]; then
+            nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f1
         else
             echo -n ""
         fi
         ;;
     "get gs wifi password")
-        if [ -d /sys/class/net/wifi0 ]; then
-            connection=$(nmcli -t connection show --active | grep wifi0 | cut -d : -f1)
+        if [ -d /sys/class/net/$WIFI_IFACE ]; then
+            connection=$(nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f1)
             nmcli -t connection show $connection --show-secrets | grep 802-11-wireless-security.psk: | cut -d : -f2
         else
                 echo -n ""
         fi
         ;;
     "get gs wifi IP")
-        WIFI_DEV=$(nmcli -t connection show --active | grep wifi0 | cut -d : -f4)
+        WIFI_DEV=$(nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f4)
         ip -4 addr show "$WIFI_DEV" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
         ;;
     "set gs wifi wlan"*)
-        [ ! -d /sys/class/net/wifi0 ] && exit 0 # we have no wifi
+        [ ! -d /sys/class/net/$WIFI_IFACE ] && exit 0 # we have no wifi
         if [ "$5" = "on" ]
         then
             # Check if connection already exists
@@ -659,7 +661,7 @@ case "$@" in
         fi
         ;;
     "set gs wifi hotspot"*)
-        [ ! -d /sys/class/net/wifi0 ] && exit 0 # we have no wifi
+        [ ! -d /sys/class/net/$WIFI_IFACE ] && exit 0 # we have no wifi
         if [ "$5" = "on" ]
         then
             # Check if connection already exists

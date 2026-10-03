@@ -1,0 +1,5 @@
+#!/bin/bash
+# no-op; if SLEEP_LIMIT>0 the Nth call terminates the calling script (ends daemon loops)
+c="$SHIM_ROOT/sleep.count"; n=$(( $(cat "$c" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$c"
+if [ "${SLEEP_LIMIT:-0}" -gt 0 ] && [ "$n" -ge "$SLEEP_LIMIT" ]; then kill -TERM "$PPID"; fi
+exit 0
