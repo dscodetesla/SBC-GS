@@ -150,5 +150,15 @@ if [ -z "$want" ] || [ "$want" = "static/fetch" ]; then
 	else echo "DIFF     static/fetch"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static+functional check of the chroot-env block in build/release.sh (audit S2)
+if [ -z "$want" ] || [ "$want" = "static/release-env" ]; then
+	out="$(mktemp)"; "$HERE/static/release-env.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/release-env.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/release-env"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/release-env"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/release-env"
+	else echo "DIFF     static/release-env"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 [ "$ran" -gt 0 ] || { echo "no cases matched"; exit 2; }
 exit $fail
