@@ -50,6 +50,11 @@ function change_wifi_mode() {
 
 # change usb otg mode between host and device
 function change_otg_mode() {
+	# Boards without a runtime OTG role switch (OTG_CONTROLLER='none', e.g. rpi4/rpi5) have no mode file to read.
+	if ! otg_supported; then
+		echo "otg mode switch is not supported on this board"
+		return 0
+	fi
 	local otg_mode_LED_PIN_info=$(gpio_find "${!otg_mode_led_pin}")
 	local otg_mode_file
 	otg_mode_file="$(otg_mode_file)"

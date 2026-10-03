@@ -78,7 +78,7 @@ p_static() {
 	if command -v udevadm >/dev/null && udevadm verify --help >/dev/null 2>&1; then
 		udevadm verify "$ROOT"/gs/98-rename.rules "$ROOT"/gs/99-GS.rules >"$d/udev.log" 2>&1; ok $? static "udevadm verify gs/*.rules"
 	else skip static "udevadm verify not available (needs systemd >= 254)"; fi
-	"$ROOT/gs/boards/validate.sh" >"$d/board.log" 2>&1; ok $? static "board profiles validate (radxa-zero3, rpi4)"
+	"$ROOT/gs/boards/validate.sh" >"$d/board.log" 2>&1; ok $? static "board profiles validate (radxa-zero3, rpi4, rpi5)"
 	bad=0
 	for f in "$ROOT"/tests/fixtures/gs-mavlink/*.conf; do
 		out="$(GS_MAVLINK_CONF="$f" "$ROOT/gs/mavlink/gs-mavlink.sh" --print 2>/dev/null)"; rc=$?

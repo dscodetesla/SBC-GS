@@ -110,6 +110,16 @@ if [ -z "$want" ] || [ "$want" = "static/rpi4-draft" ]; then
 	else echo "DIFF     static/rpi4-draft"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
 	rm -f "$out" "$out.diff"
 fi
+# static check of the DRAFT Raspberry Pi 5 profile (UNVERIFIED ratchet, Bookworm base) (no sandbox needed)
+if [ -z "$want" ] || [ "$want" = "static/rpi5-draft" ]; then
+	out="$(mktemp)"; "$HERE/static/rpi5-draft.sh" > "$out" 2>&1 || fail=1
+	golden="$HERE/golden/static/rpi5-draft.out"; ran=$((ran+1))
+	if [ "$update" = 1 ]; then mkdir -p "$(dirname "$golden")"; cp "$out" "$golden"; echo "updated  static/rpi5-draft"
+	elif [ ! -f "$golden" ]; then echo "MISSING  static/rpi5-draft"; fail=1
+	elif diff -u "$golden" "$out" > "$out.diff"; then echo "ok       static/rpi5-draft"
+	else echo "DIFF     static/rpi5-draft"; sed 's/^/    /' "$out.diff" | head -40; fail=1; fi
+	rm -f "$out" "$out.diff"
+fi
 # static check of the udev template renderer (no sandbox needed)
 if [ -z "$want" ] || [ "$want" = "static/udev-render" ]; then
 	out="$(mktemp)"; "$HERE/static/udev-render.sh" > "$out" 2>&1 || fail=1

@@ -152,7 +152,20 @@ Reference (не форкати): `OpenHD/OpenHD-ImageBuilder` (хрут-шабл
 
 ## 11. Рішення для власника проєкту
 
-1. Базова ОС: Bookworm (ядро 6.12) чи Trixie (6.18). Рекомендація: Bookworm із зафіксованим ядром — драйвери стабільніші (PROPOSAL).
+1. Базова ОС: ~~Bookworm чи Trixie~~ **вирішено для Pi 5: Bookworm (ядро 6.12.x, `rpi-2712`, сторінки 16K), USER 2026-10-03**, див. §12 і `docs/DECISIONS.md` R4. Для Pi 4/3B+ окремого рішення немає.
 2. Образ: chroot-збирач із шаром плати чи pi-gen.
 3. `/config`: окремий FAT-розділ чи `/boot/firmware`.
 4. Чи потрібен Ruby на Pi, чи лишаємо його лише для Radxa.
+
+## 12. Рішення: Pi 5 = Bookworm (2026-10-03)
+
+**Рішення (USER):** база ОС для Raspberry Pi 5 = Raspberry Pi OS **Bookworm** 64-bit, ядро 6.12.x (гілка `rpi-6.12.y`, смак `rpi-2712`, сторінки 16 КіБ). Профіль плати: `gs/boards/rpi5/` (чернетка), документ `docs/BOARD-RPI5.md`; запис із умовою перегляду: `docs/DECISIONS.md` R4.
+
+Що це означає (SRC/REPO; джерела й числа в `docs/BOARD-RPI5.md`):
+- Ядро і заголовки: `linux-image-rpi-2712`, `linux-headers-rpi-2712` `1:6.12.109-1+rpt1` (SRC `archive.raspberrypi.com`, 2026-10-03); `linux-headers-rpi-v8` це 4K-смак Pi 4, для Pi 5 не годиться.
+- Драйвер: `svpcom/rtl8812au@6e75916` збирається під `rpi-2712` 6.12.109 із 16K-заголовками (RUN, `docs/SIM-DKMS.md` §2) **з патчем** `0001` (хибна сигнатура `set_monitor_channel` без нього, §3.1); виконання на 16K UNVERIFIED (HW). На 6.12.109 вбудованих `rtw88_8812au`/`8821au` немає (§3.3), чорний список для них потрібен лише на Trixie 6.18.
+- Користувацький простір Bookworm: `gpiod 1.6.3` (libgpiod v1: `gpiofind` є, код `gs/` без обгортки), GStreamer 1.22.0, Python 3.11.2, DKMS 3.0.10.
+- Відео: апаратний HEVC `rpi-hevc-dec` є, але виводить лише COL128, а в GStreamer 1.22 мапінг `SAND128` відсутній (SRC, тег 1.22.0 і 1.22.12; з'являється в 1.26.2). Тому **основний декод на хості**, Pi 5 = радіошлюз wfb-ng + MAVLink; `v4l2slh265dec ! kmssink` на Pi 5 під Bookworm не вважати робочим до перевірки (HW).
+- Профіль: GPIO через RP1 (`pinctrl-rp1`, лінії `GPIO<n>`, номер чипа не жорсткий), `OTG_CONTROLLER='none'` (обидва dwc3 лише host), вентилятор керує ядро (`pwm-fan`), консоль `/dev/ttyAMA10`, MBR-розмітка.
+
+**Умова перегляду:** якщо HEVC/GStreamer на Pi 5 під Bookworm не працює там, де потрібно (декод саме на Pi 5), або DKMS/виконання `88XXau_wfb` на 6.12/16K не проходить, перейти на Trixie (ядро 6.18, GStreamer 1.26.2); тоді переглянути профіль (libgpiod v2 без `gpiofind`, чорний список `rtw88_8812au`/`8821au`, патч `0001` стає зайвим).

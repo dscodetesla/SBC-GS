@@ -1,0 +1,115 @@
+== validate
+ok rpi5
+ok rpi5 passes
+ok validate.sh passes for every board
+ok BOARD_ID equals directory name = rpi5
+== mutation (copy): required key removed or emptied must be rejected
+ok 18 required keys: removal and emptying both rejected
+== mutation (copy): optional contract keys with bad values, bad syntax
+ok GPIO_PIN_MAP empty rejected: FAIL rpi5: bad GPIO_PIN_MAP '' (relative file name without '..' required)
+ok GPIO_PIN_MAP missing file rejected: FAIL rpi5: GPIO_PIN_MAP file 'nope.conf' not found
+ok GPIO_PIN_MAP dotdot rejected: FAIL rpi5: bad GPIO_PIN_MAP '../rpi4/pinmap.conf' (relative file name without '..' required)
+ok GPIO_PIN_NUMBERING=sideways rejected: FAIL rpi5: bad value GPIO_PIN_NUMBERING='sideways' (allowed: physical,bcm)
+ok DTBO_MODE=symlink rejected: FAIL rpi5: bad value DTBO_MODE='symlink' (allowed: rename,config-txt)
+ok PART_TABLE=lvm rejected: FAIL rpi5: bad value PART_TABLE='lvm' (allowed: gpt,mbr)
+ok command line in the profile rejected: FAIL rpi5: <T>/v/rpi5/board.conf:125: bad syntax: X=$(rm -rf /)
+== every key has a src comment directly above
+ok 29 keys checked
+ok duplicate keys = 
+== required keys all defined
+ok 18 required keys present
+== no Radxa literal in a value
+ok Radxa literals in values = 
+== UNVERIFIED values (ratchet: must not grow)
+UNVERIFIED GPIO_PIN_PREFIX: header pin -> GPIO table is third-party gpiozero (author's own caveat for Pi 5, pinmap.conf) and the line names are read from the dts, not from gpioinfo on a real Pi 5 (HW); gs.conf pin values reach gpio_find only after the M3c wiring
+UNVERIFIED PART_OVERLAY_NUM: design for the M6 spike: no image with this layout was built, overlayroot on Pi OS is untested
+UNVERIFIED PART_VIDEOS_NUM: design for the M6 spike: gs-init.sh parted mkpart videos has no logical/extended handling, untested
+UNVERIFIED THERMAL_CPU_TEMP_FILE: HW: the zone index 0 is not read from a source; check `cat /sys/class/thermal/thermal_zone*/type` = cpu-thermal
+ok markers attached to a key = 4
+unverified=4 max=4
+ok every UNVERIFIED key is documented in docs/BOARD-RPI5.md
+ok docs name the deliberately undefined DTBO_DIR_LOWER
+== contract values that make this a Pi 5 / Bookworm profile (not Radxa)
+ok GPIO_PIN_PREFIX = GPIO
+ok GPIO_PIN_NUMBERING = physical
+ok GPIO_PIN_MAP = pinmap.conf
+ok GPIO_CHIP_LABEL = pinctrl-rp1
+ok DTBO_MODE = config-txt
+ok DTBO_SOC_PREFIX = none
+ok DTBO_DIR = /boot/firmware/overlays
+ok WIFI_ONBOARD_IFACE = wifi0
+ok WIFI_ONBOARD_DRIVER = brcmfmac
+ok CONSOLE_TTY = /dev/ttyAMA10
+ok PART_TABLE = mbr
+ok PART_SEP = p
+ok ROOTFS_LABEL = rootfs
+ok CONFIG_TXT = /boot/firmware/config.txt
+ok RTC_I2C_BUS = 1
+== OTG 'none' sentinel (gs/lib/otg.sh)
+ok rpi5 otg_controller = none
+ok rpi5 otg_mode_file = none
+ok rpi5 otg_mass_default = none
+ok rpi5 otg_mass_alt = none
+ok rpi5 otg_supported false
+ok radxa-zero3 otg_supported true
+== gs/button.sh change_otg_mode with the sentinel (function text cut out of button.sh)
+ok change_otg_mode extracted
+ok rpi5 (no mode file) message, no cat error, no gpio = rc=0 out=[otg mode switch is not supported on this board] gpio_find_called=no
+ok rpi5 even if a stray file named none exists = rc=0 out=[otg mode switch is not supported on this board] gpio_find_called=no
+ok radxa-zero3 unknown mode (legacy path) = rc=0 out=[otg mode is unkonw] gpio_find_called=yes
+ok unknown board falls back to the legacy path = rc=0 out=[otg mode is unkonw] gpio_find_called=yes
+== hw and gpio helpers read the rpi5 profile
+hw_cpu_temp_file=/sys/class/thermal/thermal_zone0/temp
+hw_pwm_base=/sys/class/pwm/pwmchip
+hw_home_dir=/home/pi
+hw_wifi_iface=wifi0
+hw_rtc_i2c_bus=1
+hw_dtbo_mode=config-txt
+hw_part_table=mbr
+gpio prefix=GPIO
+gpio chip label=pinctrl-rp1
+console=/dev/ttyAMA10
+== gpio_find on rpi5: physical pin -> GPIO<n> via pinmap.conf (gpiofind is a PATH shim that logs argv)
+ok rpi5 physical 3 = rc=0 out=[gpiochip0 2] err=[] argv=[gpiofind GPIO2;]
+ok rpi5 physical 5 = rc=0 out=[gpiochip0 3] err=[] argv=[gpiofind GPIO3;]
+ok rpi5 physical 7 = rc=0 out=[gpiochip0 4] err=[] argv=[gpiofind GPIO4;]
+ok rpi5 physical 8 = rc=0 out=[gpiochip0 14] err=[] argv=[gpiofind GPIO14;]
+ok rpi5 physical 10 = rc=0 out=[gpiochip0 15] err=[] argv=[gpiofind GPIO15;]
+ok rpi5 physical 11 = rc=0 out=[gpiochip0 17] err=[] argv=[gpiofind GPIO17;]
+ok rpi5 physical 12 = rc=0 out=[gpiochip0 18] err=[] argv=[gpiofind GPIO18;]
+ok rpi5 physical 13 = rc=0 out=[gpiochip0 27] err=[] argv=[gpiofind GPIO27;]
+ok rpi5 physical 15 = rc=0 out=[gpiochip0 22] err=[] argv=[gpiofind GPIO22;]
+ok rpi5 physical 26 = rc=0 out=[gpiochip0 7] err=[] argv=[gpiofind GPIO7;]
+ok rpi5 physical 29 = rc=0 out=[gpiochip0 5] err=[] argv=[gpiofind GPIO5;]
+ok rpi5 physical 32 = rc=0 out=[gpiochip0 12] err=[] argv=[gpiofind GPIO12;]
+ok rpi5 physical 33 = rc=0 out=[gpiochip0 13] err=[] argv=[gpiofind GPIO13;]
+ok rpi5 physical 35 = rc=0 out=[gpiochip0 19] err=[] argv=[gpiofind GPIO19;]
+ok rpi5 physical 37 = rc=0 out=[gpiochip0 26] err=[] argv=[gpiofind GPIO26;]
+ok rpi5 physical 38 = rc=0 out=[gpiochip0 20] err=[] argv=[gpiofind GPIO20;]
+ok rpi5 physical 40 = rc=0 out=[gpiochip0 21] err=[] argv=[gpiofind GPIO21;]
+== rpi5 ID lines, power/ground and unknown pins are refused without calling gpiofind
+ok pin 27 (ID_SDA) = rc=1 out=[] err=[gpio.sh: physical pin 27 is ID_SDA, not a GPIO line] argv=[]
+ok pin 28 (ID_SCL) = rc=1 out=[] err=[gpio.sh: physical pin 28 is ID_SCL, not a GPIO line] argv=[]
+pin 1: rc=1 out=[] err=[gpio.sh: physical pin 1 is 3V3, not a GPIO line] argv=[]
+pin 2: rc=1 out=[] err=[gpio.sh: physical pin 2 is 5V, not a GPIO line] argv=[]
+pin 6: rc=1 out=[] err=[gpio.sh: physical pin 6 is GND, not a GPIO line] argv=[]
+pin 9: rc=1 out=[] err=[gpio.sh: physical pin 9 is GND, not a GPIO line] argv=[]
+pin 39: rc=1 out=[] err=[gpio.sh: physical pin 39 is GND, not a GPIO line] argv=[]
+pin '0': rc=1 out=[] err=[gpio.sh: physical pin '0' is not in <REPO>/gs/boards/rpi5/pinmap.conf] argv=[]
+pin '41': rc=1 out=[] err=[gpio.sh: physical pin '41' is not in <REPO>/gs/boards/rpi5/pinmap.conf] argv=[]
+pin 'abc': rc=1 out=[] err=[gpio.sh: physical pin 'abc' is not in <REPO>/gs/boards/rpi5/pinmap.conf] argv=[]
+pin '': rc=1 out=[] err=[gpio.sh: physical pin '' is not in <REPO>/gs/boards/rpi5/pinmap.conf] argv=[]
+== pinmap.conf is a complete 40-pin table, no line named GPIO0/GPIO1
+ok pinmap rows = 40
+ok pinmap pins 1..40 once = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 
+ok GPIO rows (GPIO2..27 = 26) = 26
+ok GPIO numbers 2..27 each once = 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 
+ok ID rows = 27 ID_SDA;28 ID_SCL;
+ok power/ground rows (2x3V3 2x5V 8xGND = 12) = 12
+ok difference to rpi4 pinmap (only pins 27/28) = < 27 0;< 28 1;> 27 ID_SDA;> 28 ID_SCL;
+ok pinmap.conf points at the GPIO_PIN_PREFIX marker
+== udev templates render from the rpi5 profile
+ok 98-rename.rules has NAME="wifi0"
+ok 98-rename.rules has ID_NET_DRIVER}=="brcmfmac"
+ok 98-rename.rules has NAME="rpi0"
+bad=0

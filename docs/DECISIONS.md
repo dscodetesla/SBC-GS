@@ -25,3 +25,12 @@
 | База ОС Pi 5 (Bookworm чи Trixie) | **відкрито, не закрито** | Не було в запиті; залежить від HEVC-декодера й DKMS на 6.12/6.18 (`docs/PI-PORT.md`) |
 | Версія ArduPilot, тип апарата, комірки батареї | відкрито | потрібні від власника для порогів живлення й FS |
 | Дефекти D1–D22 fuzz, D1/D4/D9 моделей | закриваються окремо | див. `docs/SIM-FUZZ.md`, `docs/SIM-VALIDATION.md`, `docs/GAPS.md` §8 |
+
+## R4. База ОС Pi 5 = Raspberry Pi OS Bookworm (ядро 6.12.x, `rpi-2712`, 16K)
+
+- **Рішення (USER, 2026-10-03):** для Raspberry Pi 5 база ОС Raspberry Pi OS **Bookworm** 64-bit, ядро 6.12.x. Це **закриває** рядок «База ОС Pi 5» у таблиці R3 (рядок R3 не змінювався; чинне те, що тут). Для Pi 4 і Pi 3B+ окремого рішення немає. Профіль плати: `gs/boards/rpi5/`, документ `docs/BOARD-RPI5.md`, розділ `docs/PI-PORT.md` §12.
+- **Підстави (SRC/REPO, деталі в `docs/BOARD-RPI5.md`):** (1) `svpcom/rtl8812au@6e75916` збирається під `rpi-2712` 6.12.109 (16K) із патчем `0001` (RUN, `docs/SIM-DKMS.md` §2, §3.1); (2) Bookworm має `gpiod 1.6.3` із `gpiofind`, тож код `gs/` не потребує обгортки v1/v2 (на Trixie `gpiod 2.2.1`, API v2: `docs/CONTOUR-GS.md` п. 1.6); (3) основний декод відео на хості (x86), Pi 5 лише радіошлюз і MAVLink, тож слабкість GStreamer 1.22 на Pi 5 не блокує контур.
+- **Ціна (SRC):** GStreamer 1.22.0 (Bookworm) не має мапінгу `V4L2_PIX_FMT_NC12` → `DRM_FORMAT_MOD_BROADCOM_SAND128` (нуль збігів у тегах 1.22.0 і 1.22.12; є в 1.26.2 і 1.28.2, `gstv4l2format.c`), а апаратний HEVC-декодер Pi 5 виводить лише COL128 (`hevc_d_video.c:287-290`). Отже HEVC-декод на самому Pi 5 під Bookworm імовірно не працює (INF; виконання HW/UNVERIFIED).
+- **Умова перегляду:** якщо HEVC/GStreamer на Pi 5 під Bookworm не працює там, де його треба (декод саме на Pi 5), або збірка/виконання `88XXau_wfb` на 6.12/16K не проходить на залізі, **перейти на Trixie** (ядро 6.18, GStreamer 1.26.2). Тоді: libgpiod v2 (потрібна обгортка замість `gpiofind`), чорний список `rtw88_8812au`/`rtw88_8821au` (вбудовані з 6.18, SIM-DKMS §3.3-3.4), патч `0001` зайвий, переглянути `gs/boards/rpi5/board.conf`.
+- **Що перевіряє перший запуск:** `uname -r`, `getconf PAGESIZE` = 16384, DKMS, `gpiodetect`, `v4l2slh265dec` (чек-лист: `docs/BOARD-RPI5.md` п. 7).
+- **Не змінено:** `bench/install-driver.sh` (потрібен патч для 6.12 і розширений чорний список: `docs/BOARD-RPI5.md` п. 9), `config/registry.tsv`, `build/versions.env` (пропозиції ключів: п. 11 того ж документа).

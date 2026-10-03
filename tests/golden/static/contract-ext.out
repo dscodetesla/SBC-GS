@@ -62,6 +62,7 @@ ok PART_TABLE has src
 == validate.sh
   ok radxa-zero3
   ok rpi4
+  ok rpi5
 ok both boards pass
 ok GPIO_PIN_NUMBERING=sideways rejected: FAIL rpi4: bad value GPIO_PIN_NUMBERING='sideways' (allowed: physical,bcm)
 ok DTBO_MODE=symlink rejected: FAIL rpi4: bad value DTBO_MODE='symlink' (allowed: rename,config-txt)
