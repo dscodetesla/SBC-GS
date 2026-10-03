@@ -5,3 +5,4 @@ rootfs/
 bench/env
 __pycache__/
 *.whl
+bench/out/

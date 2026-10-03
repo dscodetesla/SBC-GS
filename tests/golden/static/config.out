@@ -181,6 +181,7 @@ mavp2p udps:0.0.0.0:14550 udps:0.0.0.0:14560 --hb-systemid=125
 bench/bench.sh 0
 bench/check.sh 1
 bench/configure-wfb.sh 2
+bench/doctor.sh 0
 bench/install-driver.sh 1
 bench/install-services.sh 1
 bench/install-wfb.sh 0

@@ -32,7 +32,7 @@ fi
 
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
-if "$PY" "$HERE/test_models.py" >"$log" 2>&1 && "$PY" "$HERE/test_degrade.py" >>"$log" 2>&1; then
+if "$PY" "$HERE/test_models.py" >"$log" 2>&1 && "$PY" "$HERE/test_degrade.py" >>"$log" 2>&1 && "$PY" "$HERE/test_calib.py" >>"$log" 2>&1; then
 	n="$(sed -n 's/^Ran \([0-9]*\) tests.*/\1/p' "$log" | awk '{s+=$1} END {print s}')"
 	echo "PASS models: $n tests; $(grep -o 'UNMEASURED parameters: .*' "$log"); $(grep -o 'UNMEASURED parameters (degrade file): .*' "$log")"
 else
