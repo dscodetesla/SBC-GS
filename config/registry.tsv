@@ -56,6 +56,13 @@ TCP_PORT	5760	port	1	65535	-	n	gs-mavlink	-	TCP server port
 SERIAL_DEV	~	path?	-	-	-	n	gs-mavlink	-	serial link to the FC (mavp2p only), must be under /dev/
 SERIAL_BAUD	115200	int	1200	3000000	baud	n	gs-mavlink	-	serial baud rate (used only with SERIAL_DEV)
 HB_SYSID	125	int	1	254	-	n	gs-mavlink	-	router heartbeat sysid; 3 (wfb-ng) and 255 (GCS) are refused by the script
+WD_FC_SYSID	1	int	1	255	-	n	gs-mavlink	-	sysid of the FC whose HEARTBEAT the watchdog waits for (ArduPilot SYSID_THISMAV)
+WD_LOSS_S	5	int	1	600	s	n	gs-mavlink	-	seconds without an FC heartbeat before the watchdog logs 'FC lost' and writes the state
+WD_RESTART_AFTER_S	30	int	5	3600	s	n	gs-mavlink	-	seconds without an FC heartbeat before the router is restarted (>= WD_LOSS_S)
+WD_MAX_RESTARTS_PER_H	3	int	0	60	-	n	gs-mavlink	-	at most this many router restarts per hour (0 = never restart, only log and write the state)
+WD_HB_SYSID	126	int	1	255	-	n	gs-mavlink	-	sysid of the watchdog's own HEARTBEAT (not 255, 3 or 125: GCS, wfb-ng, router heartbeat)
+WD_TARGET_HOST	127.0.0.1	ip	-	-	-	n	gs-mavlink	-	host of the router's first GCS UDP port the watchdog registers at
+WD_STATE_FILE	/run/gs-mavlink/fc.state	str	-	-	-	n	gs-mavlink	-	JSON state file (state up/lost/waiting, ages, restarts); empty = none
 HB_DISABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = no router heartbeat at all
 STREAMREQ_DISABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = router does not request data streams from ArduPilot
 DUMP_ENABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = tlog dump (mavp2p)

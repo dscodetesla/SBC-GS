@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Virtual gpiodetect for tests/sim/powerlab: replays $POWERLAB_FIXTURE/gpiodetect (the libgpiod v1/v2 format "gpiochipN [label] (M lines)").
+# No fixture = no output, status 1 (like a machine without libgpiod chips). Read-only.
+set -u
+f="${POWERLAB_FIXTURE:?POWERLAB_FIXTURE is not set}/gpiodetect"
+[ -f "$f" ] && { cat "$f"; exit 0; }
+exit 1

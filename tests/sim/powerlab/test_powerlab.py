@@ -332,7 +332,7 @@ class TestShimsAndDoctor(unittest.TestCase):
     def test_doctor_json_keeps_the_old_fields_and_adds_new_ones(self):
         d = load("calib_pi5_5a", "doctor.json")
         old = ["schema", "tag", "utc", "kernel", "pagesize", "board_model", "get_throttled", "soc_temp", "pi5_pmic_5v_rail", "usb_max_current_enable", "thermal_zone0_mC", "lsusb_tree",
-               "usb_radio_fc_candidates", "iw_monitor_capable", "iw_dev", "wifi_modules", "gpioinfo_head", "dmesg_usb_power_events", "serial_and_joystick", "systemd_state"]
+               "usb_radio_fc_candidates", "iw_monitor_capable", "iw_dev", "wifi_modules", "gpioinfo_head", "gpiodetect", "dmesg_usb_power_events", "serial_and_joystick", "systemd_state"]
         new = ["dmesg_rc", "dmesg_power_lines", "pi5_pmic_adc_full", "arm_clock", "dt_chosen_power", "uptime_s", "cpu0_cur_freq_khz", "thermal_zones", "hwmon", "usb_sysfs",
                "usb_port_over_current_count"]
         for k in old + new:
@@ -565,6 +565,30 @@ class TestContradictions(unittest.TestCase):
         win = write("k9/w.txt", "2026-10-06T09:00:00Z,2026-10-06T09:00:10Z,rtl8812:rx\n")
         _rc, ids, _ = ingest_findings(["--meter", "dongle:" + meter, "--windows", win, "--instr-log", write("k9/p.log", log)])
         self.assertIn("K9", ids)
+
+    GPIOD = "gpiochip0 [pinctrl-bcm2712-gpio] (32 lines)\ngpiochip1 [pinctrl-rp1] (54 lines)\ngpiochip2 [other-chip] (4 lines)\n"   # format SRC libgpiod; labels/numbers SYNTH
+
+    def test_k12_rp1_chip_is_found_by_label_whatever_its_number(self):
+        for text, num in ((self.GPIOD, 1), ("gpiochip3 [x] (8 lines)\ngpiochip7 [pinctrl-rp1] (54 lines)\n", 7)):
+            rc, ids, rj = ingest_findings(["--doctor", doctor_doc(gpiodetect=text), "--board", "pi5"])
+            self.assertIn("K12", ids)
+            rep = json.load(open(rj, encoding="utf-8"))
+            f = [x for x in rep["findings"] if x["id"] == "K12"][0]
+            self.assertEqual("INFO", f["severity"])
+            self.assertIn("gpiochip%d" % num, f["text"])
+
+    def test_k12_warns_without_the_label_or_with_two(self):
+        for text, sev, phrase in (("gpiochip0 [pinctrl-bcm2712-gpio] (32 lines)\n", "WARN", "no GPIO chip with the label"),
+                                  (self.GPIOD + "gpiochip9 [pinctrl-rp1] (54 lines)\n", "WARN", "2 GPIO chips with the label")):
+            rj = ingest_findings(["--doctor", doctor_doc(gpiodetect=text), "--board", "pi5"])[2]
+            f = [x for x in json.load(open(rj, encoding="utf-8"))["findings"] if x["id"] == "K12"]
+            self.assertEqual([sev], [x["severity"] for x in f])
+            self.assertIn(phrase, f[0]["text"])
+
+    def test_k12_is_silent_without_gpiodetect_or_on_another_board(self):
+        self.assertNotIn("K12", ingest_findings(["--doctor", doctor_doc(), "--board", "pi5"])[1])
+        d = doctor_doc(board_model="Raspberry Pi 4 Model B Rev 1.4", gpiodetect="gpiochip0 [pinctrl-bcm2711] (58 lines)\n")
+        self.assertNotIn("K12", ingest_findings(["--doctor", d])[1])
 
     def test_board_mismatch(self):
         d = doctor_doc(board_model="Raspberry Pi 4 Model B Rev 1.4")

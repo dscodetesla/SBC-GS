@@ -136,6 +136,11 @@
   "note": "analysis limits chosen by the author of this tool (INF), not hardware facts; change them here, not in the code",
   "steady_delta_c": 1.0
  },
+ "gpio": {
+  "pi5_chip_label": "pinctrl-rp1",
+  "tag": "SRC",
+  "note": "linux drivers/pinctrl/pinctrl-rp1.c:39,790 MODULE_NAME is the gpio_chip label (gs/boards/rpi5/board.conf GPIO_CHIP_LABEL); the chip NUMBER is not fixed"
+ },
  "board_models": {
   "pi5": "Raspberry Pi 5",
   "pi4": "Raspberry Pi 4",

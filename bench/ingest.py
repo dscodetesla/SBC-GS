@@ -267,6 +267,17 @@ def hex_bytes_to_int(h):
     return int.from_bytes(bytes.fromhex(h), "big")
 
 
+def parse_gpiodetect(text):
+    """libgpiod v1/v2 `gpiodetect` lines: "gpiochipN [label] (M lines)" -> [(n, label, lines)]."""
+    out = []
+    for ln in text.splitlines():
+        m = re.match(r"\s*gpiochip(\d+)\s+\[([^\]]*)\]\s+\((\d+) lines?\)", ln)
+        if m:
+            n, label, nlines = m.groups()
+            out.append((int(n), label, int(nlines)))
+    return out
+
+
 def parse_doctor(doc):
     if doc.get("schema") != "sbc-gs-doctor/1":
         raise InputError("not an sbc-gs-doctor/1 document")
@@ -290,6 +301,7 @@ def parse_doctor(doc):
     f["usb_sysfs"] = [ln for ln in (doc.get("usb_sysfs") or "").splitlines() if ln.strip()]
     f["usb_oc_count"] = kv_lines(doc.get("usb_port_over_current_count"))
     f["usb_radio_ids"] = [ln for ln in (doc.get("usb_radio_fc_candidates") or "").splitlines() if ln.strip()]
+    f["gpiochips"] = parse_gpiodetect(doc.get("gpiodetect") or "")
     f["hwmon"] = kv_lines(doc.get("hwmon"))
     f["thermal_zones"] = [ln for ln in (doc.get("thermal_zones") or "").splitlines() if ln.strip()]
     m = VP["arm_clock"].search(doc.get("arm_clock") or "")
@@ -923,6 +935,16 @@ def check_claims(c):
             if b not in ("tag", "note") and name in c.doctor["board_model"] and b != a.board:
                 c.find("K10", "WARN", "--board %s but the doctor snapshot says %r" % (a.board, c.doctor["board_model"]), [], "INF")
                 break
+    if c.doctor and (c.board == "pi5" or "Raspberry Pi 5" in c.doctor["board_model"]) and c.doctor.get("gpiochips") is not None and (c.doctor["raw"].get("gpiodetect") or "").strip():
+        lbl = RULES["gpio"]["pi5_chip_label"]
+        hit = [n for n, lab, _k in c.doctor["gpiochips"] if lab == lbl]
+        if len(hit) == 1:
+            c.find("K12", "INFO", "RP1 GPIO chip '%s' is gpiochip%d on this system (found by label: the number is not fixed; write it into docs/BOARD-RPI5.md)" % (lbl, hit[0]),
+                   [str(c.doctor["gpiochips"])], "HW")
+        elif not hit:
+            c.find("K12", "WARN", "no GPIO chip with the label '%s' (gpiodetect: %s): the Pi 5 board profile assumes it" % (lbl, [x[1] for x in c.doctor["gpiochips"]]), [], "HW")
+        else:
+            c.find("K12", "WARN", "%d GPIO chips with the label '%s': gpiofind by line name may pick the wrong one" % (len(hit), lbl), [], "HW")
     if c.board == "pi5" and not v_all and (c.windows or c.doctor):
         c.find("K11", "INFO", "no EXT5V_V in any input: resistance and voltage thresholds cannot be derived (vcgencmd pmic_read_adc is needed, Pi 5)", [], "SRC")
 

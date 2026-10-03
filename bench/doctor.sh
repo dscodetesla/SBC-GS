@@ -42,6 +42,7 @@ dmesg_re='under-?voltage|voltage normali|over-?current|USB disconnect|new .* USB
     { run iw dev; } | field iw_dev; echo ','
     { lsmod | grep -E '88x2|8812|8814|8821|rtw88|rtl8xxxu|mac80211_hwsim'; } | field wifi_modules; echo ',' # cfg-ok: driver names
     { run gpioinfo | head -60; } | field gpioinfo_head; echo ','
+    { run gpiodetect; } | field gpiodetect; echo ','
     { printf '%s\n' "$dmesg_txt" | grep -ciE 'usb .*disconnect|over-?current|under-?voltage'; } | field dmesg_usb_power_events; echo ','
     printf '%s' "$dmesg_rc" | field dmesg_rc; echo ','
     { printf '%s\n' "$dmesg_txt" | grep -iE "$dmesg_re" | tail -200; } | field dmesg_power_lines; echo ','

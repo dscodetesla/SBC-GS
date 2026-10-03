@@ -1,5 +1,5 @@
 == registry
-keys=148 bad_field_count=0 empty_fields=0 duplicates=0 safety_keys=14 safety_without_bounds=0
+keys=155 bad_field_count=0 empty_fields=0 duplicates=0 safety_keys=14 safety_without_bounds=0
 == defaults (sbc-gs-config show --defaults)
 TX12_CONN=udpout:127.0.0.1:14550	# default
 TX12_SYSID=255	# default
@@ -54,6 +54,13 @@ TCP_PORT=5760	# default
 SERIAL_DEV=	# default
 SERIAL_BAUD=115200	# default
 HB_SYSID=125	# default
+WD_FC_SYSID=1	# default
+WD_LOSS_S=5	# default
+WD_RESTART_AFTER_S=30	# default
+WD_MAX_RESTARTS_PER_H=3	# default
+WD_HB_SYSID=126	# default
+WD_TARGET_HOST=127.0.0.1	# default
+WD_STATE_FILE=/run/gs-mavlink/fc.state	# default
 HB_DISABLE=0	# default
 STREAMREQ_DISABLE=0	# default
 DUMP_ENABLE=0	# default
@@ -149,7 +156,7 @@ SMOKE_VIDEO_MIN_PROGRESS=3	# default
 WFB_NG_REF=2fe252b2f451c1ccfb16968e064fe1cdb18baaa0	# default
 WFB_VETH_RX_PORT=15700	# default
 WFB_VETH_TX_PORT=15702	# default
-legacy constants: identical (148 keys)
+legacy constants: identical (155 keys)
 python loader: identical output
 == unit tests
 ok lines: 83, unit failures: 0

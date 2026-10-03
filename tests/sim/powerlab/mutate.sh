@@ -31,6 +31,9 @@ MUTS=(
 "M13 hard-budget check (K8) never fires|bench/ingest.py|s=s.replace('if hi > budget and not acted:','if False and hi > budget and not acted:')"
 "M14 the generator ignores the truth cable resistance|tests/sim/powerlab/gen.py|s=s.replace('), g(\"power.cable_resistance_ohm\")','), 0.15')"
 "M15 doctor.sh starts loading a module (not read-only; a no-op in the copy)|bench/doctor.sh|s=s.replace('set -u\\nroot=','set -u\\n: modprobe dummy\\nroot=')"
+"M16 K12: the RP1 chip label is not compared (any chip counts)|bench/ingest.py|s=s.replace('hit = [n for n, lab, _k in c.doctor[\"gpiochips\"] if lab == lbl]','hit = [n for n, lab, _k in c.doctor[\"gpiochips\"]]')"
+"M17 K12: a missing RP1 label is not warned about|bench/ingest.py|s=s.replace('        elif not hit:\n            c.find(\"K12\", \"WARN\", \"no GPIO chip','        elif False:\n            c.find(\"K12\", \"WARN\", \"no GPIO chip')"
+"M18 doctor.sh no longer reads gpiodetect|bench/doctor.sh|s=s.replace('field gpiodetect;','field gpiodetect_x;')"
 )
 fail=0
 for m in "${MUTS[@]}"; do
