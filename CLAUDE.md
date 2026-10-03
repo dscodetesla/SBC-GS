@@ -17,3 +17,6 @@
 
 ## Кінцевий результат і дисципліна
 Мета: працюючий контур AIR<->GS (OpenIPC 720p + RTL8812AU, ArduPilot Matek H743 v3, ELRS Gemini; GS Pi 5 + TX12 MKII + хост Ubuntu 26+), а не обв'язка. Контур і невідомі: `MEMORY.md` §2. Факт без тегу й джерела не подавати; SYNTH/модель не видавати за вимір. Делегуючи, давати неперетинні файли й забороняти `git commit`; результат агента перевіряти самому (`AGENTS.md` §4).
+
+## Симуляція (стан 2026-10-03)
+Усі шари офлайн: `PY=<venv з pymavlink> tests/sim/layers.sh` (models, validate, twin, fuzz, bio, dkms; ≈40 с), `tests/sim/virt/run.sh all` (QEMU, довго), `tests/precommit.sh` перед комітом. Опис і межі: `docs/SIM-SCENARIOS.md`, `SIM-VALIDATION.md`, `SIM-TWIN.md`, `SIM-FUZZ.md`, `SIM-VIRT-DEVICES.md`, `SIM-DKMS.md`; рішення: `docs/DECISIONS.md`; динамічна конфігурація: `docs/CONFIG.md`. Усі числа моделей SYNTH/UNMEASURED, не виміри; залізо (понеділок) окремий pipeline: `docs/STATUS.md` §4, `bench/doctor.sh`, `tests/sim/models/calib.py`.
