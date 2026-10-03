@@ -8,7 +8,7 @@ gs/channel-scan.sh SC2154 1
 gs/fan.sh SC2154 14
 gs/fan.sh SC2164 1
 gs/gs-applyconf.sh SC2034 3
-gs/gs-applyconf.sh SC2046 2
+gs/gs-applyconf.sh SC2046 1
 gs/gs-applyconf.sh SC2053 1
 gs/gs-applyconf.sh SC2154 19
 gs/gs-init.sh SC2034 1

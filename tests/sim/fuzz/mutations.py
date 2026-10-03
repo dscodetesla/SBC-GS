@@ -62,8 +62,12 @@ MUTS = [
      "return -10.0 * math.log10(10.0 ** (-snr_db / 10.0) + 10.0 ** (evm / 10.0))", "return snr_db", ["TestModelProperties"]),
     ("M22", "priors.Rng: the seed is ignored (draws are not reproducible)", "tests/sim/models/priors.py",
      "        self.r = random.Random(seed)", "        self.r = random.Random()", ["TestModelProperties"]),
-    ("M23", "gs-applyconf.sh FIX applied (custom.conf merge neutralised): the pinned defect D14 must then FAIL loudly", "gs/gs-applyconf.sh",
-     "\t\tsed -i \"s/^${ckey}=.*/${ckey}=${cvalue}/\" $(readlink -f /etc/gs.conf)", "\t\t:", ["TestApplyconfFaults"]),
+    ("M23", "gs-applyconf.sh: the old sed merge is restored (D14 regression)", "gs/gs-applyconf.sh",
+     "\t\tgs_conf_merge_line \"$ckey\" \"$cvalue\" || true", "\t\tsed -i \"s/^${ckey}=.*/${ckey}=${cvalue}/\" $(readlink -f /etc/gs.conf)", ["TestApplyconfFaults"]),
+    ("M24", "fan.sh: the unreadable-temperature guard is removed (D17 regression)", "gs/fan.sh",
+     "if ! [[ \"$temp_cpu\" =~ ^[0-9]{4,}$ ]]; then", "if false; then", ["TestFanFaults"]),
+    ("M25", "gs-applyconf.sh: values are written unquoted again (D14 regression)", "gs/gs-applyconf.sh",
+     "\t\tval=\"'${val}'\"", "\t\t:", ["TestApplyconfFaults"]),
 ]
 
 NEED = ["config", "gs", "build", "bench", os.path.join("tests", "lib"), os.path.join("tests", "shims"), os.path.join("tests", "sim", "models"),

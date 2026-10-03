@@ -953,6 +953,7 @@ class TestApplyconfFaults(unittest.TestCase):
             "inject_cmdsubst": ({"config/custom.conf": "wifi_mode=$(touch PWNED)\n"}, {}),
             "inject_sed_e": ({"config/custom.conf": "wifi_mode=;touch PWNED;x/e;#\n"}, {}),
             "slash_value": ({"config/custom.conf": "wifi_mode=a/b\nwifi_ssid=zz\n"}, {}),
+            "hostile_values": ({"config/custom.conf": "wifi_ssid=My Net & co\\x\nwifi_mode=`touch PWNED`\nwifi_password='quoted pass'\nwifi_x=it's\n9bad=1\nwifi_mode2;touch PWNED=1\n"}, {}),
             "no_trailing_newline": ({"config/custom.conf": "wifi_ssid=zz"}, {}),
             "crlf": ({"config/custom.conf": "wifi_ssid=zz\r\n"}, {}),
             "empty_custom": ({"config/custom.conf": ""}, {}),
@@ -986,19 +987,35 @@ class TestApplyconfFaults(unittest.TestCase):
             self.assertEqual(norm(r.read("etc/gs.conf")), norm(self.r["baseline"].read("etc/gs.conf")), k)
             self.assertFalse(r.exists("PWNED"))
 
-    def test_DEFECT_D14_custom_conf_value_is_executed_as_shell(self):
+    def test_FIXED_D14_custom_conf_value_is_never_executed(self):
         a, b = self.r["inject_cmdsubst"], self.r["inject_sed_e"]
-        # /config/custom.conf is data that anybody on the anonymous Samba share can write; its values end up in gs.conf, which is `source`d
-        # as root (vector 1), and the unescaped value is also placed in a sed s///: a trailing "/e" makes GNU sed EXECUTE the line (vector 2)
+        # /config/custom.conf is data that anybody who can write /config controls; before the fix its values were `source`d as root
+        # (command substitution) and put into a sed s/// (a trailing "/e" made GNU sed execute the line). Fixed: awk + quoting.
         F.measure("applyconf.custom_conf_exec", {"cmdsubst_via_source": a.exists("PWNED"), "sed_e_flag": b.exists("PWNED")})
-        F.pinned(self, "D14", a.exists("PWNED") or b.exists("PWNED"), f"cmdsubst executed={a.exists('PWNED')} sed-e executed={b.exists('PWNED')}")
+        self.assertFalse(a.exists("PWNED"), "command substitution in a custom.conf value was executed")
+        self.assertFalse(b.exists("PWNED"), "the sed /e flag in a custom.conf value was executed")
+        conf = a.read("etc/gs.conf") or ""
+        self.assertIn("wifi_mode='$(touch PWNED)'", conf, "the hostile value must be stored inert (single-quoted)")
 
-    def test_DEFECT_D15_slash_in_value_aborts_the_merge_and_it_repeats_every_run(self):
+    def test_hostile_values_are_stored_inert_and_bad_lines_rejected(self):
+        r = self.r["hostile_values"]
+        conf = r.read("etc/gs.conf") or ""
+        self.assertFalse(r.exists("PWNED"))
+        self.assertIn("wifi_ssid='My Net & co\\x'", conf)  # spaces, & and a backslash survive literally inside single quotes
+        self.assertIn("wifi_mode='`touch PWNED`'", conf)
+        self.assertIn("wifi_password='quoted pass'", conf)  # already quoted: not double quoted
+        self.assertNotIn("it's", conf)  # a value with a single quote is rejected, the old value stays
+        self.assertNotIn("9bad", conf)
+        self.assertTrue(r.exists("config/custom-merged.conf"), "the file is consumed even if lines were rejected")
+        self.assertIn("rejected", r.f("stderr"))
+
+    def test_FIXED_D15_slash_in_value_does_not_abort_the_merge(self):
         r = self.r["slash_value"]
         F.measure("applyconf.slash_value", {"exit": r.exit, "custom.conf_kept": r.exists("config/custom.conf"), "merged": r.exists("config/custom-merged.conf")})
-        # sed error under `set -e`: the merge stops at the first bad line, custom.conf is NOT renamed, later keys are lost
-        F.pinned(self, "D15", r.exit not in (0, None) and r.exists("config/custom.conf") and not r.exists("config/custom-merged.conf") and "zz" not in (r.read("etc/gs.conf") or ""),
-                 f"exit={r.exit} files={os.listdir(os.path.join(r.root, 'config'))}")
+        self.assertTrue(r.exists("config/custom-merged.conf") and not r.exists("config/custom.conf"), "custom.conf must be consumed")
+        conf = r.read("etc/gs.conf") or ""
+        self.assertIn("wifi_mode=a/b", conf)
+        self.assertIn("wifi_ssid=zz", conf, "later keys must not be lost after a value with a slash")
 
     def test_DEFECT_D16_empty_gsconf_is_not_detected_and_requests_a_reboot(self):
         r = self.r["empty_gsconf"]
@@ -1033,7 +1050,7 @@ class TestFanFaults(unittest.TestCase):
         return self.r[k].f("stdout").count("Max temperature")
 
     def test_normal_and_odd_but_numeric_temperatures_keep_the_loop_alive(self):
-        for k in ("ok", "negative", "garbage", "freq_neg"):
+        for k in ("ok", "freq_neg"):
             self.assertEqual(self.r[k].exit, 143, (k, self.r[k].f("stderr")[-200:]))
             self.assertEqual(self.loops(k), 2, k)
 
@@ -1042,13 +1059,15 @@ class TestFanFaults(unittest.TestCase):
         self.assertEqual(r.exit, 143)
         self.assertEqual((r.read("sys/class/pwm/pwmchip14/pwm0/duty_cycle") or "").strip(), (r.read("sys/class/pwm/pwmchip14/pwm0/period") or "").strip(), "overheat -> duty == period (100 %)")
 
-    def test_DEFECT_D17_unreadable_temperature_kills_the_fan_controller(self):
-        died = {k: (self.r[k].exit, self.loops(k)) for k in ("empty", "short", "missing")}
-        for k, v in died.items():
-            F.measure(f"fan.{k}", {"exit": v[0], "loops": v[1]})
-        # ${temp_cpu:0:-3} aborts the script ("substring expression < 0"): no retry, the PWM stays at the start duty (period/5 = 20 %) forever
-        duty = {k: (self.r[k].read("sys/class/pwm/pwmchip14/pwm0/duty_cycle") or "").strip() for k in died}
-        F.pinned(self, "D17", all(v == (1, 0) for v in died.values()) and all(d == "8000" for d in duty.values()), f"{died} duty={duty}")
+    def test_FIXED_D17_unreadable_temperature_fails_safe_and_keeps_the_loop_alive(self):
+        for k in ("empty", "short", "missing", "negative", "garbage"):
+            r = self.r[k]
+            duty = (r.read("sys/class/pwm/pwmchip14/pwm0/duty_cycle") or "").strip()
+            period = (r.read("sys/class/pwm/pwmchip14/pwm0/period") or "").strip()
+            F.measure(f"fan.{k}", {"exit": r.exit, "duty": duty, "period": period})
+            self.assertEqual(r.exit, 143, (k, r.f("stderr")[-200:]))  # killed by the sandbox SLEEP_LIMIT, not dead on its own
+            self.assertEqual(duty, period, f"{k}: an unreadable temperature must drive the fan to 100 %")
+            self.assertIn("unreadable", r.f("stdout"))
 
     def test_garbage_threshold_config_degrades_silently(self):
         r = self.r["overheat_garbage_cfg"]

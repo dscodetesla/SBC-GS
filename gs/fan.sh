@@ -25,7 +25,14 @@ echo $fan_pwm_polarity > polarity
 sleep 10
 
 while true; do
-	temp_cpu=$(cat "$(hw_cpu_temp_file)")
+	temp_cpu=$(cat "$(hw_cpu_temp_file)" 2>/dev/null)
+	if ! [[ "$temp_cpu" =~ ^[0-9]{4,}$ ]]; then
+		# unreadable or implausible (empty, missing, < 1 degree C): the controller must not die and must not run cold; fail safe at 100 %
+		echo "CAUTION: CPU temperature unreadable ('${temp_cpu}'), fan speed up to 100%!"
+		echo $period > ${pwmchip_path}/pwm${fan_pwm_channel}/duty_cycle
+		sleep $temperature_monitor_cycle
+		continue
+	fi
 	temp_max=${temp_cpu:0:-3}
 	echo "CPU temperature: ${temp_max}°"
 	if [[ "$monitor_8812eu_temperature" == "yes" && -d /proc/net/rtl88x2eu && $(ls /proc/net/rtl88x2eu | wc -l) -gt 10 ]]; then
