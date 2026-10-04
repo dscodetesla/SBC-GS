@@ -1,0 +1,31 @@
+== legacy root login only under GS_LEGACY_ROOT_LOGIN guard
+markers: block=found guard=found else=found
+ok   'chpasswd' (legacy line) inside guard
+ok   chpasswd of GS_ROOT_PASSWORD (not 'root:root')
+ok   'PermitRootLogin yes' (legacy line) inside guard
+ok   exactly one 'root:root' chpasswd in build.sh
+ok   exactly one 'PermitRootLogin yes' in build.sh
+== simulation of the root-login block
+-- default (rc=0)
+sshd_config: PermitRootLogin prohibit-password
+chpasswd input: none
+-- GS_LEGACY_ROOT_LOGIN=1 (rc=0)
+sshd_config: PermitRootLogin yes
+chpasswd input: root:root
+-- GS_ROOT_PASSWORD set (rc=0)
+sshd_config: PermitRootLogin prohibit-password
+chpasswd input: root:Sim-Pw-123
+ok   password not in xtrace log
+-- both set (legacy wins) (rc=0)
+sshd_config: PermitRootLogin yes
+chpasswd input: root:root
+== remaining known insecure defaults (ratchet: count may not increase)
+build/build.sh:238  ttyd runs as root (documented)
+gs/gs-init.sh:160  anonymous samba as root (documented)
+gs/gs-init.sh:169  anonymous samba as root (documented)
+gs/install.sh:35  public FPVue.key as working wfb key (documented)
+gs/gs.conf:10  default AP password (documented)
+gs/gs.conf:118  default AP password (documented)
+gs/gs.conf:4  hotspot as default mode (documented)
+total=7 (max 7)
+bad=0

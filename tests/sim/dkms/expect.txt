@@ -1,0 +1,17 @@
+# driver kernel verdict (PASS = builds, links, vermagic == shipped kernel, CRC mismatches 0)  -- expectations, edit only with evidence in docs/SIM-DKMS.md
+rtl8812au k612v8 PASS
+rtl8812au k612p5 PASS
+rtl8812au k618v8 PASS
+rtl8812au k618p5 PASS
+8814au k612v8 PASS
+8814au k612p5 PASS
+8814au k618v8 PASS
+8814au k618p5 PASS
+rtl8812eu k612v8 PASS
+rtl8812eu k612p5 PASS
+rtl8812eu k618v8 PASS
+rtl8812eu k618p5 PASS
+rtl88x2eu k612v8 PASS
+rtl88x2eu k612p5 PASS
+rtl88x2eu k618v8 PASS
+rtl88x2eu k618p5 PASS

@@ -1,0 +1,14 @@
+ok Pi: V4L2 stateless HEVC is preferred = v4l2slh265dec
+ok Pi: V4L2 H.264 = v4l2h264dec
+ok host with GPU: VA-API HEVC = vah265dec
+ok host with GPU: VA-API H.264 = vah264dec
+ok va element but no render node: software = avdec_h265
+ok render node but no va element: software = avdec_h265
+ok HOST_VAAPI=no: software = avdec_h265
+ok HOST_VAAPI=yes without the element fails = RC1
+ok HOST_VAAPI=yes with element and node = vah265dec
+ok explicit DECODER wins = avdec_h265
+ok bad HOST_VAAPI value is rejected by the registry (rc 2) = RC2
+ok Wayland session: autovideosink = autovideosink sync=false
+ok no display (console): kmssink = kmssink sync=false
+bad=0

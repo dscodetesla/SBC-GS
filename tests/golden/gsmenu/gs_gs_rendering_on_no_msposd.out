@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+systemctl restart stream
+== gs.conf changes
+42c42
+< osd_type='msposd_air'
+---
+> osd_type='msposd_gs'

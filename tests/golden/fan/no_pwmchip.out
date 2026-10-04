@@ -1,0 +1,15 @@
+== invocation: standalone
+== exit
+exit=143
+== stdout
+Need enale pwmchip14 channel 0 in rsetup!
+CPU temperature: 45°
+Max temperature: 45°
+45 is less than 47, but min fan speed limited to 0%
+------------------------------------------
+CPU temperature: 45°
+Max temperature: 45°
+45 is less than 47, but min fan speed limited to 0%
+------------------------------------------
+== shim calls
+== gs.conf changes

@@ -1,0 +1,16 @@
+== invocation: standalone
+== exit
+exit=0
+== stdout
+== shim calls
+== gs.conf changes
+180c180
+< gs_enable='yes'
+---
+> gs_enable='no'
+== file /etc/samba/smb.conf
+[global]
+== file /media/root-ro/etc/fstab
+== file /dev/ttyFIQ0
+== tree /etc/systemd/network
+D .

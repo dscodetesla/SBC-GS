@@ -1,0 +1,5 @@
+#!/bin/bash
+# logs the call; "is-enabled X" answers from the marker file $SHIM_ROOT/enabled/X
+echo "systemctl $*" >> "$SHIM_LOG"
+if [ "$1" = is-enabled ]; then if [ -e "$SHIM_ROOT/enabled/$2" ]; then echo enabled; exit 0; else echo disabled; exit 1; fi; fi
+exit 0

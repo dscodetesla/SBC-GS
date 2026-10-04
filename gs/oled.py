@@ -6,6 +6,7 @@ import glob
 import os
 import subprocess
 import re
+import sys
 from luma.core.interface.serial import i2c
 from luma.oled.device import ssd1306
 from luma.core.render import canvas
@@ -14,6 +15,15 @@ from dotenv import dotenv_values
 from smbus2 import SMBus, i2c_msg
 from pathlib import Path
 # import socket
+
+# board profile reader (gs/lib/board_conf.py); falls back to the Radxa literals if the profile is unavailable
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+_CPU_TEMP_FALLBACK = '/sys/class/thermal/thermal_zone0/temp'
+try:
+    import board_conf
+    CPU_TEMP_FILE = board_conf.get('THERMAL_CPU_TEMP_FILE', _CPU_TEMP_FALLBACK)
+except Exception:  # lib missing or unreadable: keep the original Radxa behaviour
+    CPU_TEMP_FILE = _CPU_TEMP_FALLBACK
 
 # ==========================================================
 # system
@@ -69,7 +79,7 @@ def get_ip_addresses():
 def get_cpu():
     cpu_usage = psutil.cpu_percent(interval=1)
     try:
-        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+        with open(CPU_TEMP_FILE, "r") as f:
             temp = round(int(f.read()) / 1000, 1)
     except:
         temp = "N/A"

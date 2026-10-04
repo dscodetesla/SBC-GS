@@ -1,0 +1,10 @@
+{
+  "_comment": "EdgeTX radio in USB joystick mode, Classic (Ch1-8 -> axes). SRC EdgeTX radio/src/usb_joystick.cpp (main, read 2026-10-03): HID logical range 0..2047, value = limit(0, channelOutput + 1024, 2047), so the centre is 1024; usages X Y Z Rx Ry Rz Slider Dial -> Linux ABS_X ABS_Y ABS_Z ABS_RX ABS_RY ABS_RZ ABS_THROTTLE ABS_RUDDER (CH1..CH8). Advanced mode reports up to 2048 for some axes; use Classic first. NOT yet confirmed on a real TX12 MKII (HW): check with `evtest /dev/input/eventN` and edit min/max/center if they differ. Axis names are python-evdev ecodes. Axes with 'center' are bipolar (deadband = fraction of half-travel); without 'center' they map linearly min..max -> 1000..2000. The 'reverse' flags and the channel order are operator choices, not facts about the radio (UNVERIFIED). 'device' is a guard: the opened evdev node must have this vendor/product (SRC usbd_desc.c: 0x1209 / 0x4F54) or the bridge refuses to start; add 'name' to pin the exact USB product string (UNVERIFIED for the TX12 MKII build); delete the block to disable the guard. The old placeholder -1024..1024 / centre 0 turned a centred stick (raw 1024) into full deflection (2000 us).",
+  "device": {"vendor": "0x1209", "product": "0x4f54"},
+  "axes": {
+    "ABS_X":  {"channel": 1, "min": 0, "max": 2047, "center": 1024, "deadband": 0.02, "reverse": false},
+    "ABS_Y":  {"channel": 2, "min": 0, "max": 2047, "center": 1024, "deadband": 0.02, "reverse": true},
+    "ABS_Z":  {"channel": 3, "min": 0, "max": 2047, "reverse": false},
+    "ABS_RX": {"channel": 4, "min": 0, "max": 2047, "center": 1024, "deadband": 0.02, "reverse": false}
+  }
+}

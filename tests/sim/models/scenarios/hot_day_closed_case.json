@@ -1,0 +1,32 @@
+{
+ "name": "hot_day_closed_case",
+ "description": "Hot day, direct sun, closed VTX enclosure, 25 dBm commanded power: thermal derate/shutdown risk.",
+ "kind": "link",
+ "cfg": {
+  "distance_m": 150,
+  "duration_s": 600,
+  "dt_s": 20,
+  "psu_a": 5.0,
+  "soak_s": 300
+ },
+ "set": {
+  "rf.tx_power_dbm": 25.0
+ },
+ "dist": {
+  "ext.ambient_c": {
+   "kind": "normal",
+   "mu": 38,
+   "sigma": 3
+  },
+  "ext.solar_rise_c": {
+   "kind": "uniform",
+   "lo": 8,
+   "hi": 18
+  },
+  "hw.air_ambient_rise_c": {
+   "kind": "uniform",
+   "lo": 8,
+   "hi": 20
+  }
+ }
+}

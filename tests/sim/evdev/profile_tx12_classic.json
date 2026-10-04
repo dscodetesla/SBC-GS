@@ -1,0 +1,104 @@
+{
+ "_comment": "Virtual EdgeTX Classic-mode USB joystick (docs/SIM-EVDEV.md). Every field is a PARAMETER of the emulator; see _provenance for what is known. Nothing here was measured on a real TX12 MKII (HW).",
+ "name": "OpenTX TX12MK2 Joystick",
+ "bustype": 3,
+ "vendor": "0x1209",
+ "product": "0x4f54",
+ "version": "0x0200",
+ "report_hz": 1000,
+ "axes": {
+  "ABS_X": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_Y": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_Z": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_RX": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_RY": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_RZ": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_THROTTLE": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  },
+  "ABS_RUDDER": {
+   "min": 0,
+   "max": 2047,
+   "fuzz": 7,
+   "flat": 127,
+   "value": 1024
+  }
+ },
+ "button_codes": [
+  304,
+  305,
+  306,
+  307,
+  308,
+  309,
+  310,
+  311,
+  312,
+  313,
+  314,
+  315,
+  316,
+  317,
+  318,
+  319,
+  704,
+  705,
+  706,
+  707,
+  708,
+  709,
+  710,
+  711
+ ],
+ "_provenance": {
+  "vendor/product": "SRC EdgeTX/edgetx main radio/src/targets/common/arm/stm32/usbd_desc.c:68,89-90 (0x1209 pid.codes, PID 0x4F54 'OpenTX assigned PID')",
+  "name": "UNVERIFIED: usbhid names the evdev node '<iManufacturer> <iProduct>'; manufacturer string is 'OpenTX' (SRC usbd_desc.c:71), product is USB_NAME + ' Joystick' (SRC usbd_desc.c:91) but the USB_NAME value of the TX12 MKII build was not found",
+  "version": "UNVERIFIED: bcdDevice comment says 2.00 (usbd_desc.c:209), not checked for the TX12 MKII build",
+  "axes names": "SRC usb_joystick.cpp HID_JOYSTICK_ClassicReportDesc: usages X Y Z Rx Ry Rz Slider Dial = CH1..CH8; INF Linux hid-input: ABS_X ABS_Y ABS_Z ABS_RX ABS_RY ABS_RZ ABS_THROTTLE ABS_RUDDER",
+  "axes min/max": "SRC usb_joystick.cpp:114-115 (descriptor LOGICAL 0..2047) and usbClassicStateUpdate: limit(0, channelOutputs+1024, 2047)",
+  "axes value": "SRC usbClassicStateUpdate: channelOutputs 0 -> 1024 (centre; also the initial state before any mixer output: INF)",
+  "axes fuzz/flat": "INF Linux drivers/hid/hid-input.c: Game Pad/Joystick application -> input_set_abs_params(.., fuzz=(max-min)>>8, flat=(max-min)>>4) = 7 and 127; verified against the 6.8 guest kernel by test_evdev.py (uhid back end)",
+  "buttons": "SRC 24 buttons; INF hid-input Game Pad rule: 1..16 -> BTN_GAMEPAD+n (0x130..0x13f), 17..24 -> BTN_TRIGGER_HAPPY (0x2c0..0x2c7); verified by the uhid back end",
+  "report_hz": "SRC usbd_hid_joystick.c:224 bInterval 1 ms (FS) and mixer_scheduler: 1 kHz with RF off, module period with RF on (docs/CONTOUR-GS.md 3.5); real rate HW/UNMEASURED"
+ }
+}

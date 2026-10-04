@@ -1,0 +1,25 @@
+[Unit]
+Description=GS MAVLink FC-loss watchdog (restarts gs-mavlink when the FC stays silent)
+After=gs-mavlink.service
+Wants=gs-mavlink.service
+
+[Service]
+Type=simple
+# Installed by hand to /gs/mavlink/ together with /gs/config/; config: /config/gs-mavlink.conf (WD_* keys, docs/GS-MAVLINK.md).
+# Runs as root ONLY because `systemctl restart gs-mavlink.service` needs it; everything else is locked down. It sends nothing but its own
+# harmless HEARTBEAT (sysid WD_HB_SYSID, not a GCS) and never reads a command from the configuration.
+ExecStart=/gs/mavlink/gs-mavlink-watchdog.sh
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=gs-mavlink
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

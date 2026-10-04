@@ -1,6 +1,9 @@
 #!/bin/bash
 set -o pipefail
 source /etc/gs.conf
+source /gs/lib/hw.sh
+source /gs/lib/gsconf.sh   # every write to gs.conf below goes through it (atomic, verified; D16)
+WIFI_IFACE="$(hw_wifi_iface)"
 # Configuration
 REMOTE_IP="10.5.0.10"
 SSH_PASS="12345"
@@ -585,10 +588,10 @@ case "$@" in
     "set gs system gs_rendering"*)
         if [ "$5" = "off" ]
         then
-            sed -i "s/^osd_type=.*/osd_type='msposd_air'/" "$(readlink -f /etc/gs.conf)"
+            gsconf_set_quoted /etc/gs.conf osd_type msposd_air || exit 1
             killall -q msposd
         else
-            sed -i "s/^osd_type=.*/osd_type='msposd_gs'/" "$(readlink -f /etc/gs.conf)"
+            gsconf_set_quoted /etc/gs.conf osd_type msposd_gs || exit 1
             if [ -e /dev/shm/msposd ]; then
                 if [ "$msposd_gs_record" == "yes" ]; then
                     msposd --master 0.0.0.0:$msposd_gs_port --osd -r $msposd_gs_fps --ahi $msposd_gs_ahi --subtitle $rec_dir &
@@ -601,10 +604,10 @@ case "$@" in
         fi
         ;;
     "set gs system resolution"*)
-        sed -i "s/^screen_mode=.*/screen_mode='$5'/" "$(readlink -f /etc/gs.conf)"
+        gsconf_set_quoted /etc/gs.conf screen_mode "$5" || exit 1
         ;;
     "set gs system rec_fps"*)
-        sed -i "s/^rec_fps=.*/rec_fps='$5'/" "$(readlink -f /etc/gs.conf)"
+        gsconf_set_quoted /etc/gs.conf rec_fps "$5" || exit 1
         ;;
     "set gs system rec_enabled"*)
         if [ "$5" = "off" ]
@@ -618,30 +621,30 @@ case "$@" in
         nmcli connection show --active | grep -q "hotspot" && echo 1 || echo 0
         ;;
     "get gs wifi wlan")
-        connection=$(nmcli -t connection show --active | grep wifi0 | cut -d : -f1)
+        connection=$(nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f1)
         [ -z "${connection}" ] && echo 0 || echo 1
         ;;
     "get gs wifi ssid")
-        if [ -d /sys/class/net/wifi0 ]; then
-            nmcli -t connection show --active | grep wifi0 | cut -d : -f1
+        if [ -d /sys/class/net/$WIFI_IFACE ]; then
+            nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f1
         else
             echo -n ""
         fi
         ;;
     "get gs wifi password")
-        if [ -d /sys/class/net/wifi0 ]; then
-            connection=$(nmcli -t connection show --active | grep wifi0 | cut -d : -f1)
+        if [ -d /sys/class/net/$WIFI_IFACE ]; then
+            connection=$(nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f1)
             nmcli -t connection show $connection --show-secrets | grep 802-11-wireless-security.psk: | cut -d : -f2
         else
                 echo -n ""
         fi
         ;;
     "get gs wifi IP")
-        WIFI_DEV=$(nmcli -t connection show --active | grep wifi0 | cut -d : -f4)
+        WIFI_DEV=$(nmcli -t connection show --active | grep "$WIFI_IFACE" | cut -d : -f4)
         ip -4 addr show "$WIFI_DEV" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
         ;;
     "set gs wifi wlan"*)
-        [ ! -d /sys/class/net/wifi0 ] && exit 0 # we have no wifi
+        [ ! -d /sys/class/net/$WIFI_IFACE ] && exit 0 # we have no wifi
         if [ "$5" = "on" ]
         then
             # Check if connection already exists
@@ -659,7 +662,7 @@ case "$@" in
         fi
         ;;
     "set gs wifi hotspot"*)
-        [ ! -d /sys/class/net/wifi0 ] && exit 0 # we have no wifi
+        [ ! -d /sys/class/net/$WIFI_IFACE ] && exit 0 # we have no wifi
         if [ "$5" = "on" ]
         then
             # Check if connection already exists
@@ -718,10 +721,10 @@ case "$@" in
     "set gs wfbng adaptivelink"*)
         if [ "$5" = "on" ]
         then
-            sed -i "s/^alink_enable=.*/alink_enable='yes'/" "$(readlink -f /etc/gs.conf)"
+            gsconf_set_quoted /etc/gs.conf alink_enable yes || exit 1
             systemd-run --unit=alink /usr/local/bin/alink --config /etc/alink.conf
         else
-            sed -i "s/^alink_enable=.*/alink_enable='no'/" "$(readlink -f /etc/gs.conf)"
+            gsconf_set_quoted /etc/gs.conf alink_enable no || exit 1
             systemctl stop alink.service
         fi
         ;;
@@ -731,11 +734,11 @@ case "$@" in
             $SSH wifibroadcast cli -s .wireless.channel $channel
             $SSH "(wifibroadcast stop ;wifibroadcast stop; sleep 1;  wifibroadcast start) >/dev/null 2>&1 &"
         fi
-        sed -i "s/^wfb_channel=.*/wfb_channel='$channel'/" "$(readlink -f /etc/gs.conf)"
+        gsconf_set_quoted /etc/gs.conf wfb_channel "$channel" || exit 1
         /gs/wfb.sh
         ;;
     "set gs wfbng bandwidth"*)
-        sed -i "s/^wfb_bandwidth=.*/wfb_bandwidth='$5'/" "$(readlink -f /etc/gs.conf)"
+        gsconf_set_quoted /etc/gs.conf wfb_bandwidth "$5" || exit 1
         /gs/wfb.sh
         ;;
     "set gs wfbng txpower"*)

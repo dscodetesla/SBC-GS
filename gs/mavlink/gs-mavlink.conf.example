@@ -1,0 +1,51 @@
+# gs-mavlink.conf: configuration of the ground-station MAVLink router service.
+# Install as /config/gs-mavlink.conf. Read as DATA (never executed): one KEY='value' per line, no shell syntax
+# ($, backticks, ';' are rejected). Keys are listed in config/registry.tsv; precedence: docs/CONFIG.md.
+# Every key is optional; the value shown is the default used by gs-mavlink.sh.
+# Facts and sources: docs/MAVLINK-ROUTER.md, docs/GS-MAVLINK.md.
+
+# Router backend: mavp2p (default) or mavlink-router (fallback, built from source).
+# Only mavp2p supports every option below; mavlink-router limits are noted per key.
+ROUTER='mavp2p'
+
+# Upstream from wfb-ng: the router listens here as a UDP server and wfb-ng
+# ([gs_mavlink] peer = connect://127.0.0.1:14550) sends the FC stream to it.
+# Keep the port equal to wfb_outgoing_port_mavlink in gs.conf.
+UPSTREAM_BIND='0.0.0.0'
+UPSTREAM_PORT='14550'
+
+# GCS clients, UDP server ports (mavp2p only): QGC/MAVProxy connect to these ports.
+# Space-separated list, empty = none. Must differ from UPSTREAM_PORT and TCP_PORT.
+GCS_UDP_PORTS='14560'
+
+# GCS clients that the router pushes to (UDP client endpoints, "ip:port", space-separated).
+# Works for both backends (mavp2p udpc:, mavlink-router -e).
+GCS_UDP_CLIENTS=''
+
+# Address of the GCS UDP and TCP server endpoints (not the upstream, see UPSTREAM_BIND). The legacy default 0.0.0.0 listens on
+# every interface without authentication/signing; 127.0.0.1 is recommended unless a remote GCS must connect (docs/CONFIG.md).
+LISTEN_ADDR='0.0.0.0'
+
+# TCP server for a phone/Mission Planner (0 = off). There is no authentication:
+# keep it on a trusted network. mavlink-router: off is emitted as "-t 0".
+TCP_ENABLE='0'
+TCP_PORT='5760'
+
+# Optional serial link to the flight controller (mavp2p only; empty = none).
+# Example: SERIAL_DEV='/dev/ttyAMA0' SERIAL_BAUD='921600'
+SERIAL_DEV=''
+SERIAL_BAUD='115200'
+
+# Heartbeat of the router itself (mavp2p --hb-systemid). Allowed 1..254 except
+# 3 (wfb-ng injected sysid) and 255 (default GCS sysid). Must differ per router in the network.
+# This is NOT the RC writer id: set MAV_GCS_SYSID on the FC to the TX12 bridge sysid
+# (see docs/GS-MAVLINK.md, "single RC writer").
+HB_SYSID='125'
+# 1 = do not send the router heartbeat at all (mavp2p --hb-disable)
+HB_DISABLE='0'
+# 1 = do not let mavp2p request data streams from ArduPilot (--streamreq-disable)
+STREAMREQ_DISABLE='0'
+
+# tlog dump (mavp2p --dump --dump-path); 0 = off. Absolute path, Go time layout allowed.
+DUMP_ENABLE='0'
+DUMP_PATH='/var/log/gs-mavlink/2006-01-02_15-04-05.tlog'

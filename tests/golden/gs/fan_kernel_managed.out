@@ -1,0 +1,29 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+fan is managed by the kernel on this board, not starting fan service
+start wfb in standalone mode
+start stream service
+start button service
+gs service start completed
+== shim calls (sorted: background jobs make the order non-deterministic)
+findmnt -n -o SOURCE /
+fsck.exfat -a /dev/mmcblk0p4
+gpiofind PIN_22
+gpioset -D push-pull gpiochip0 22=0
+ip ro add 224.0.0.0/4 dev br0
+lsblk -no PKNAME /dev/mmcblk0p3
+mount --bind <ROOT>/tmp/wifibroadcast.cfg <ROOT>/etc/wifibroadcast.cfg
+mount --bind <ROOT>/tmp/wifibroadcast.default <ROOT>/etc/default/wifibroadcast
+mount /dev/mmcblk0p4 <ROOT>/Videos
+stub gs-applyconf.sh 
+stub otg-gadget.sh 
+stub wfb.sh 
+systemctl enable --now ttyd
+systemctl is-enabled ttyd
+systemctl start webui
+systemd-run --unit=button --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/button.sh
+systemd-run --unit=oled --property=Restart=on-failure --property=RestartSec=2 --setenv=VIRTUAL_ENV=<ROOT>/gs/venv --setenv=PATH=<ROOT>/gs/venv/bin:<ROOT>/shims:/usr/bin:/bin <ROOT>/gs/venv/bin/python <ROOT>/gs/oled.py
+systemd-run --unit=stream --property=Restart=on-failure --property=RestartSec=2 <ROOT>/gs/stream.sh
+== gs.conf changes

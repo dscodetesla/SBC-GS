@@ -1,0 +1,29 @@
+# scenario_engine: hot_day_closed_case kind=link n=60 seed=1 antithetic=0
+# session: distance=150m duration=600s dt=20s board=pi5 psu=5.0A usb_max_current=0 codec=h265 queue=det spec: residual<=0.01 g2g<=250ms freeze<=1 flag_share>=0.1
+# priors: 145 sampled dims (INF=4 SYNTH=67 UNMEASURED=74); pinned: rf.fading_model,rf.loss_model,rf.tx_power_dbm
+output,unit,p5,p50,p95,p99,mean
+residual,frac,0.0007803,0.03806,1,1,0.1692
+margin_db,dB,5.332,11.72,17.37,18.36,11.76
+range_m,m,0,318.9,987.7,1658,427.3
+g2g_ms,ms,160.5,196.1,233.6,245,197.7
+availability,frac,0,0.8865,1,1,0.7285
+ttff_s,s,0,90,600,600,200.8
+P(no failure in session)=0.133  bring-up p50=3.6s
+P(dead link: no up slice, margin_db and g2g_ms undefined)=0.100; their percentiles/means are over the 54 (margin_db) / 54 (g2g_ms) of 60 draws with a link
+failure_mode,probability
+bringup_fail,0.017
+thermal_derate,0.417
+thermal_shutdown,0.117
+usb_dropout,0.083
+usb_trip,0.000
+usb_latched,0.000
+undervoltage,0.167
+soc_throttle,0.167
+agc_saturation,0.000
+desense,0.150
+burst_outage,0.267
+injection_overload,0.083
+idr_freeze,0.750
+latency_creep,0.017
+fec_exhaust,0.433
+# SYNTH/UNMEASURED priors: planning numbers, NOT predictions; low-is-bad outputs (margin, range, availability) read p5, high-is-bad read p95/p99

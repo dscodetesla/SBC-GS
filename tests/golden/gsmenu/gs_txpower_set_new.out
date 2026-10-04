@@ -1,0 +1,13 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+udevadm info <ROOT>/sys/class/net/wlan1/
+udevadm info <ROOT>/sys/class/net/wlan2/
+systemctl restart wifibroadcast.service
+== gs.conf changes
+== file /etc/wifibroadcast.cfg
+[common]
+wifi_txpower = { "wlan1": -2000, "wlan2": -2000}
+log_interval = 1000

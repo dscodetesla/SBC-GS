@@ -3,11 +3,15 @@
 set -e
 set -x
 source /etc/gs.conf
+source /gs/lib/hw.sh
+source /gs/lib/otg.sh
 [ "$gs_enable" == 'no' ] && exit 0
 
 sleep 12
 setfont /usr/share/consolefonts/CyrAsia-TerminusBold32x16.psf.gz
-cat | tee /dev/ttyFIQ0 /dev/tty1 << EOF
+console_tty="$(hw_console_tty)"
+[ -e "$console_tty" ] || console_tty=/dev/null   # no such console device (not every Pi has the Rockchip FIQ debugger): tee must not create a regular file in /dev
+cat | tee "$console_tty" /dev/tty1 << EOF
 
 ############################### Welcome to SBC Ground Station ##################################
 #                                                                                              #
@@ -18,12 +22,17 @@ cat | tee /dev/ttyFIQ0 /dev/tty1 << EOF
 
 EOF
 
-BOARD=$(cat /etc/hostname)
+part_table="$(hw_part_table)"
 
 # Expand overlay partition size and create vides partition(exfat)
+# Only the Radxa GPT image layout (rootfs p3, overlay p4, videos p5): on an MBR Raspberry Pi image `sgdisk -ge` would convert the table
+# to GPT (a Pi 3B+ does not boot from GPT) and `resizepart 4` would fail, so gs-init would repeat forever. A Pi keeps /Videos on a
+# partition labelled videos made when the image was built (gs.sh finds it by label) or on the root file system.
 [ -d $rec_dir ] || mkdir -p $rec_dir
 os_dev=$(blkid | grep rootfs | grep -oP "/dev/.+(?=p\d+)") || true
-if [ ! -b ${os_dev}p5 ]; then
+if [ "$part_table" != gpt ]; then
+	echo "partition table '$part_table' (not gpt): not repartitioning, $rec_dir stays on the label '$(hw_videos_label)' partition or the root file system"
+elif [ ! -b ${os_dev}p5 ]; then
 	sgdisk -ge $os_dev
 	overlay_partition_start=$(parted -m $os_dev unit MiB print | tail -n 1 | cut -d: -f3 | tr -d 'MiB')
 	overlay_partition_end=$(( $overlay_partition_start + $rootfs_reserved_space ))
@@ -41,19 +50,28 @@ fi
 mount -o remount,rw /media/root-ro
 
 # mount /dev/disk/by-partlabel/videos $rec_dir
-if ! grep -Pq "^/dev/[^\s]*\s*${rec_dir}\s*exfat\s*defaults\,nofail\s*0\s*0" /media/root-ro/etc/fstab; then
+if [ "$part_table" = gpt ] && ! grep -Pq "^/dev/[^\s]*\s*${rec_dir}\s*exfat\s*defaults\,nofail\s*0\s*0" /media/root-ro/etc/fstab; then
 	echo -e "${os_dev}p5 ${rec_dir} exfat defaults,nofail 0 0" >> /media/root-ro/etc/fstab
 fi
 
-# Enable dtbo
+# Enable dtbo (Rockchip overlays compiled to *.dtbo[.disabled] files; a Pi enables firmware overlays in config.txt instead: hw_dtbo_mode)
+if [ "$(hw_dtbo_mode)" = rename ]; then
 # set max resolution to 4k, disabled by default
 dtc -I dts -O dtb -o /media/root-ro/boot/dtbo/rk3566-hdmi-max-resolution-4k.dtbo.disabled /gs/rk3566-hdmi-max-resolution-4k.dts
 # enbale USB OTG role switch
 dtc -I dts -O dtb -o /media/root-ro/boot/dtbo/rk3566-dwc3-otg-role-switch.dtbo /gs/rk3566-dwc3-otg-role-switch.dts
 # INA226 device, disabled by default
 dtc -I dts -O dtb -o /media/root-ro/boot/dtbo/rk3566-ina226-overlay.dtbo.disabled /gs/rk3566-ina226-overlay.dts
+else
+	echo "dtbo mode '$(hw_dtbo_mode)': Rockchip overlays are not built (use config.txt dtoverlay= lines)"
+fi
 
 
+# Add br0 network configuration: systemd-networkd files (Radxa) or NetworkManager connections (Raspberry Pi OS), per the board profile
+if [ "$(hw_net_backend)" = networkmanager ]; then
+	source /gs/lib/net.sh
+	gs_net_nm_bridge br0 "${br0_fixed_ip}" "${br0_fixed_ip2}" eth0 eth1 usb0
+else
 # Add br0 network configuration
 [ -f /etc/systemd/network/br0.netdev ] || cat > /etc/systemd/network/br0.netdev << EOF
 [NetDev]
@@ -108,8 +126,10 @@ Name=dummy0
 [Network]
 Bridge=br0
 EOF
+fi
 
-# Add radxa0 usb gadget network configuration
+# Add radxa0 usb gadget network configuration (only on a board with a runtime OTG role switch: a Pi has no usb gadget port role switch here)
+if otg_supported; then
 echo "start configure radxa0 usb gadget network"
 gadget_net_fixed_ip_addr=${gadget_net_fixed_ip%/*}
 gadget_net_fixed_ip_sub=${gadget_net_fixed_ip%.*}
@@ -123,6 +143,9 @@ iface radxa0 inet static
         # post-down remove mass && mount -o remount,rw /Videos
         up /usr/sbin/dnsmasq --conf-file=/dev/null --no-hosts --bind-interfaces --except-interface=lo --clear-on-reload --strict-order --listen-address=${gadget_net_fixed_ip_addr} --dhcp-range=${gadget_net_fixed_ip_sub}.21,${gadget_net_fixed_ip_sub}.199,12h --dhcp-lease-max=5 --pid-file=/run/dnsmasq-radxa0.pid --dhcp-option=3 --dhcp-option=6
 EOF
+fi
+else
+	echo "no usb gadget role switch on this board: radxa0 network not configured"
 fi
 
 # Add samba configuration

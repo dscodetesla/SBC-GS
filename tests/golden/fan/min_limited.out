@@ -1,0 +1,27 @@
+== invocation: standalone
+== exit
+exit=143
+== stdout
+Using pwmchip14 channel 0 for fan
+CPU temperature: 40°
+Max temperature: 40°
+40 is less than 47, but min fan speed limited to 20%
+------------------------------------------
+CPU temperature: 40°
+Max temperature: 40°
+40 is less than 47, but min fan speed limited to 20%
+------------------------------------------
+== shim calls
+== gs.conf changes
+240c240
+< fan_pwm_min_duty_cycle='0'
+---
+> fan_pwm_min_duty_cycle='20'
+== file /sys/class/pwm/pwmchip14/pwm0/period
+40000
+== file /sys/class/pwm/pwmchip14/pwm0/duty_cycle
+8000
+== file /sys/class/pwm/pwmchip14/pwm0/enable
+1
+== file /sys/class/pwm/pwmchip14/pwm0/polarity
+normal

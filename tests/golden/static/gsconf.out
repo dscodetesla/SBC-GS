@@ -1,0 +1,113 @@
+== files
+ok gs/lib/gsconf.sh exists
+ok bash -n gsconf.sh
+ok install.sh copies the whole lib/ directory (gsconf.sh included)
+ok gs-applyconf.sh: no direct sed -i/redirect into gs.conf = 0
+ok gs-applyconf.sh sources lib/gsconf.sh
+ok gsmenu.sh: no direct sed -i/redirect into gs.conf = 0
+ok gsmenu.sh sources lib/gsconf.sh
+ok channel-scan.sh: no direct sed -i/redirect into gs.conf = 0
+ok channel-scan.sh sources lib/gsconf.sh
+== update through the symlink
+ok rc = 0
+ok symlink intact and still points at the real file
+ok target is still a regular file = regular file
+ok changed keys = rec_fps wfb_channel
+ok diff line count = 4
+ok wfb_channel = 36
+ok mode preserved = 640
+ok no leftovers = 0
+ok replaced by rename (new inode)
+== owner and mode are carried over
+ok rc = 0
+ok mode and owner unchanged = same
+== nothing to change: no rewrite
+ok same value rc = 0
+ok same value keeps the inode
+ok unknown key rc = 0
+ok unknown key keeps the inode
+ok content unchanged
+== hostile and malformed input: rejected, file untouched
+ok reject [rec_fps=it's] rc = 1
+ok   file untouched
+ok reject [rec_fps=a$(touch T/PWNED)'x] rc = 1
+ok   file untouched
+ok reject [9bad=1] rc = 1
+ok   file untouched
+ok reject [wifi_mode;touch T/PWNED=1] rc = 1
+ok   file untouched
+ok reject [rec_fps=a~b] rc = 1
+ok   file untouched
+ok no PWNED = no
+ok set_many refuses an unquoted unsafe rhs rc = 1
+ok set_many refuses a quote inside quotes rc = 1
+ok no PWNED after set_many = no
+== hostile characters inside single quotes are stored inert and read back
+ok rc = 0
+ok read back = My Net & co $(touch X) `touch Y` \x /a/b ;|<>"
+ok diff line count = 2
+== norm_value (custom.conf semantics)
+norm [zz] -> rc=0 out=[zz]
+norm [a/b] -> rc=0 out=[a/b]
+norm [My Net] -> rc=0 out=['My Net']
+norm ['quoted pass'] -> rc=0 out=['quoted pass']
+norm ["dq"] -> rc=0 out=[dq]
+norm [] -> rc=0 out=[]
+norm [x;y] -> rc=0 out=['x;y']
+norm [it's] -> rc=1 out=[]
+norm [a b~] -> rc=0 out=['a b']
+norm [$(x)] -> rc=0 out=['$(x)']
+== empty, truncated or unsourceable gs.conf is refused
+ok empty rc = 1
+ok empty stays empty = 0
+ok clear message (empty)
+ok truncated rc = 1
+ok truncated file untouched
+ok message names the missing key
+ok syntax error rc = 1
+ok syntax-error file untouched
+ok dangling symlink rc = 1
+ok clear message (dangling)
+ok gsconf_check on a missing file rc = 1
+ok gsconf_check on the default gs.conf rc = 0
+ok gsconf_check with an extra required key rc = 1
+== the directory cannot take a temp file: clear error, no damage
+ok rc = 1
+ok message names the cause
+ok file untouched
+ok no leftovers = 0
+ok gsconf_can_write rc = 1
+ok gsconf_can_write on a writable dir rc = 0
+ok gsconf_can_write leaves nothing = 0
+== a bad result after the rename is rolled back
+ok rc = 1
+ok previous content restored byte for byte
+ok message says it rolled back
+ok no leftovers = 0
+ok mode kept = 640
+== killed in the middle of the write: the target is never cut
+ok [KILL] partial temp file exists while writing = 1
+ok [KILL] target is still the complete old file
+ok [KILL] target passes the check
+ok [KILL] a stale temp file of the dead writer remains = 1
+ok [KILL] next update rc = 0
+ok [KILL] next update sweeps the leftovers = 0
+ok [KILL] next update applied = 90
+ok [TERM] partial temp file exists while writing = 1
+ok [TERM] target is still the complete old file
+ok [TERM] target passes the check
+ok [TERM] the handler removed the temp file = 0
+ok [TERM] next update rc = 0
+ok [TERM] next update sweeps the leftovers = 0
+ok [TERM] next update applied = 90
+== concurrent writers do not lose updates
+ok all five updates present = 91 40 40 msposd_gs yes
+ok no leftovers = 0
+== caller state: set -e, traps, PATH sync
+ok set -e caller survives, its EXIT trap is intact = survived CALLER_EXIT 
+ok the PATH sync shim is not used = no
+ok set -e caller stops on a failed update (like the sed it replaced) = 
+== usage
+ok odd argument count rc = 2
+ok missing arguments rc = 2
+gsconf: ALL OK

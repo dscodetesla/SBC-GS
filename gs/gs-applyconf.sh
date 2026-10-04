@@ -3,10 +3,36 @@
 set -e
 set -x
 
-# merge custom.conf to gs.conf
+# every write to /etc/gs.conf goes through gs/lib/gsconf.sh (atomic: temp file in the directory of the REAL target, fsync, verification
+# before and after, rollback; D16). Without the library the script must not fall back to an unchecked write.
+source /gs/lib/gsconf.sh || { echo "[error]: /gs/lib/gsconf.sh is missing: not applying any change" >&2; exit 1; }
+
+# merge custom.conf to gs.conf. /config/custom.conf is DATA that anybody who can write the /config partition controls, and gs.conf is
+# `source`d as root: a key must be a plain identifier, a value is written raw only if it has shell-safe characters only, otherwise inside
+# single quotes (a value with a single quote is rejected), and the replacement is done by awk (ENVIRON), never by a sed s/// expression.
+# The validation and the quoting are gsconf_valid_key / gsconf_norm_value, the write is gsconf_set_many (atomic).
+gs_conf_merge_line() {
+	local key="$1" val="$2" rhs
+	key="${key#"${key%%[![:space:]]*}"}"
+	key="${key%"${key##*[![:space:]]}"}"
+	gsconf_valid_key "$key" || { echo "custom.conf: rejected key '$key'" >&2; return 1; }
+	rhs="$(gsconf_norm_value "$val")" || { echo "custom.conf: rejected value of '$key' (contains a single quote)" >&2; return 1; }
+	gsconf_set_many /etc/gs.conf "$key" "$rhs"
+}
+
+# An empty or truncated /etc/gs.conf (power loss while it was rewritten) must not be applied: with empty values the script would
+# rewrite fstab/samba/gpsd and ask for a reboot at every start (D16). Checked in a subshell (no side effects) BEFORE anything is
+# changed, also before custom.conf is consumed. The listed keys are spread over the whole file, so a cut anywhere is noticed.
+if ! gsconf_check /etc/gs.conf; then
+	echo "[error]: /etc/gs.conf is empty, truncated or unreadable: not applying any change" >&2
+	exit 1
+fi
+
 if [ -f /config/custom.conf ]; then
+	# no directory to write into (read-only /config): keep custom.conf for the next run instead of consuming it without merging
+	gsconf_can_write /etc/gs.conf || { echo "[error]: cannot update /etc/gs.conf: /config/custom.conf is kept, nothing applied" >&2; exit 1; }
 	grep -E '^\s*[^#]' /config/custom.conf | while IFS='=' read -r ckey cvalue; do
-		sed -i "s/^${ckey}=.*/${ckey}=${cvalue}/" $(readlink -f /etc/gs.conf)
+		gs_conf_merge_line "$ckey" "$cvalue" || true
 	done
 	mv /config/custom.conf /config/custom-merged.conf
 	source /etc/gs.conf
@@ -22,16 +48,15 @@ if [ "$btn_pin_layout" != "custom" ]; then
 
 	if [ "$button_pins_conf" != "${!button_layout_conf}" ]; then
 		IFS=',' read -r -a button_pins_arr <<< "${!button_layout_conf},"
-		sed -i \
-			-e "s/btn_cu_pin=.*/btn_cu_pin='${button_pins_arr[0]}'/" \
-			-e "s/btn_cd_pin=.*/btn_cd_pin='${button_pins_arr[1]}'/" \
-			-e "s/btn_cl_pin=.*/btn_cl_pin='${button_pins_arr[2]}'/" \
-			-e "s/btn_cr_pin=.*/btn_cr_pin='${button_pins_arr[3]}'/" \
-			-e "s/btn_cm_pin=.*/btn_cm_pin='${button_pins_arr[4]}'/" \
-			-e "s/btn_q1_pin=.*/btn_q1_pin='${button_pins_arr[5]}'/" \
-			-e "s/btn_q2_pin=.*/btn_q2_pin='${button_pins_arr[6]}'/" \
-			-e "s/btn_q3_pin=.*/btn_q3_pin='${button_pins_arr[7]}'/" \
-			$(readlink -f /etc/gs.conf)
+		gsconf_set_quoted /etc/gs.conf \
+			btn_cu_pin "${button_pins_arr[0]}" \
+			btn_cd_pin "${button_pins_arr[1]}" \
+			btn_cl_pin "${button_pins_arr[2]}" \
+			btn_cr_pin "${button_pins_arr[3]}" \
+			btn_cm_pin "${button_pins_arr[4]}" \
+			btn_q1_pin "${button_pins_arr[5]}" \
+			btn_q2_pin "${button_pins_arr[6]}" \
+			btn_q3_pin "${button_pins_arr[7]}"
 		source /etc/gs.conf
 	fi
 fi

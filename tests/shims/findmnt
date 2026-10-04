@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "findmnt $*" >> "$SHIM_LOG"
+cat "$SHIM_ROOT/findmnt.source" 2>/dev/null || echo /dev/mmcblk0p3

@@ -1,0 +1,74 @@
+== radxa-zero3 (keys absent): legacy gpiofind PIN_<n>
+ok radxa pin 22 = rc=0 out=[gpiochip0 22] err=[] argv=[gpiofind PIN_22;]
+ok radxa pin 32 = rc=0 out=[gpiochip0 32] err=[] argv=[gpiofind PIN_32;]
+== unknown board falls back to legacy
+ok unknown board pin 22 = rc=0 out=[gpiochip0 22] err=[] argv=[gpiofind PIN_22;]
+== rpi4 physical via pinmap.conf
+ok rpi4 physical 7 = rc=0 out=[gpiochip0 4] err=[] argv=[gpiofind GPIO4;]
+ok rpi4 physical 3 = rc=0 out=[gpiochip0 2] err=[] argv=[gpiofind GPIO2;]
+ok rpi4 physical 5 = rc=0 out=[gpiochip0 3] err=[] argv=[gpiofind GPIO3;]
+ok rpi4 physical 11 = rc=0 out=[gpiochip0 17] err=[] argv=[gpiofind GPIO17;]
+ok rpi4 physical 12 = rc=0 out=[gpiochip0 18] err=[] argv=[gpiofind GPIO18;]
+ok rpi4 physical 26 = rc=0 out=[gpiochip0 7] err=[] argv=[gpiofind GPIO7;]
+ok rpi4 physical 27 = rc=0 out=[gpiochip0 0] err=[] argv=[gpiofind GPIO0;]
+ok rpi4 physical 28 = rc=0 out=[gpiochip0 1] err=[] argv=[gpiofind GPIO1;]
+ok rpi4 physical 40 = rc=0 out=[gpiochip0 21] err=[] argv=[gpiofind GPIO21;]
+ok rpi4 physical 32 = rc=0 out=[gpiochip0 12] err=[] argv=[gpiofind GPIO12;]
+== rpi4 non-GPIO and unknown pins
+pin 1: rc=1 out=[] err=[gpio.sh: physical pin 1 is 3V3, not a GPIO line] argv=[]
+pin 2: rc=1 out=[] err=[gpio.sh: physical pin 2 is 5V, not a GPIO line] argv=[]
+pin 6: rc=1 out=[] err=[gpio.sh: physical pin 6 is GND, not a GPIO line] argv=[]
+pin 9: rc=1 out=[] err=[gpio.sh: physical pin 9 is GND, not a GPIO line] argv=[]
+pin 39: rc=1 out=[] err=[gpio.sh: physical pin 39 is GND, not a GPIO line] argv=[]
+pin '0': rc=1 out=[] err=[gpio.sh: physical pin '0' is not in <REPO>/gs/boards/rpi4/pinmap.conf] argv=[]
+pin '41': rc=1 out=[] err=[gpio.sh: physical pin '41' is not in <REPO>/gs/boards/rpi4/pinmap.conf] argv=[]
+pin 'abc': rc=1 out=[] err=[gpio.sh: physical pin 'abc' is not in <REPO>/gs/boards/rpi4/pinmap.conf] argv=[]
+pin '': rc=1 out=[] err=[gpio.sh: physical pin '' is not in <REPO>/gs/boards/rpi4/pinmap.conf] argv=[]
+== pinmap.conf is a complete 40-pin table
+ok pinmap rows = 40
+ok pinmap pins 1..40 once = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 
+ok GPIO rows (BCM 0..27 = 28) = 28
+ok BCM numbers 0..27 each once = 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 
+ok power/ground rows (2x3V3 2x5V 8xGND = 12) = 12
+== synthetic board: bcm mode, missing map, unknown mode, other prefix
+ok bcm pin 4 = rc=0 out=[gpiochip0 4] err=[] argv=[gpiofind GPIO4;]
+ok bcm pin 17 = rc=0 out=[gpiochip0 17] err=[] argv=[gpiofind GPIO17;]
+bcm pin 'x': rc=1 out=[] err=[gpio.sh: BCM pin 'x' is not a number] argv=[]
+missing map: rc=1 out=[] err=[gpio.sh: pin map '<T>/gs/boards/m/nofile.conf' not found] argv=[]
+unknown mode: rc=1 out=[] err=[gpio.sh: unknown GPIO_PIN_NUMBERING 'weird' (physical|bcm)] argv=[]
+ok explicit physical, no map, prefix X_ = rc=0 out=[gpiochip0 7] err=[] argv=[gpiofind X_7;]
+== failure status of gpiofind is passed through (physical and mapped)
+ok radxa rc = 3
+ok rpi4 rc = 3
+== hw_dtbo_mode / hw_part_table
+ok radxa hw_dtbo_mode = rename
+ok rpi4 hw_dtbo_mode = config-txt
+ok unknown board hw_dtbo_mode = rename
+ok key absent (board b) hw_dtbo_mode = rename
+ok no board lib hw_dtbo_mode = rename
+ok radxa hw_part_table = gpt
+ok rpi4 hw_part_table = mbr
+ok unknown board hw_part_table = gpt
+ok key absent (board b) hw_part_table = gpt
+ok no board lib hw_part_table = gpt
+ok helpers set -e safe
+== radxa profile does not define the optional keys (defaults are in force)
+ok radxa-zero3 defines none of the 4 optional keys
+== rpi4 defines them, each with a src comment directly above
+ok GPIO_PIN_NUMBERING has src
+ok GPIO_PIN_MAP has src
+ok DTBO_MODE has src
+ok PART_TABLE has src
+== validate.sh
+  ok radxa-zero3
+  ok rpi4
+  ok rpi5
+ok both boards pass
+ok GPIO_PIN_NUMBERING=sideways rejected: FAIL rpi4: bad value GPIO_PIN_NUMBERING='sideways' (allowed: physical,bcm)
+ok DTBO_MODE=symlink rejected: FAIL rpi4: bad value DTBO_MODE='symlink' (allowed: rename,config-txt)
+ok PART_TABLE=lvm rejected: FAIL rpi4: bad value PART_TABLE='lvm' (allowed: gpt,mbr)
+ok PART_TABLE empty rejected: FAIL rpi4: bad value PART_TABLE='' (allowed: gpt,mbr)
+ok GPIO_PIN_MAP absolute rejected: FAIL rpi4: bad GPIO_PIN_MAP '/etc/passwd' (relative file name without '..' required)
+ok GPIO_PIN_MAP dotdot rejected: FAIL rpi4: bad GPIO_PIN_MAP '../radxa-zero3/board.conf' (relative file name without '..' required)
+ok GPIO_PIN_MAP missing file rejected: FAIL rpi4: GPIO_PIN_MAP file 'nope.conf' not found
+bad=0

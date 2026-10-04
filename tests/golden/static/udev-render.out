@@ -1,0 +1,25 @@
+== radxa-zero3 byte identity
+ok 98-rename.rules identical
+ok 99-GS.rules identical
+== fixture board valid-pi
+ok valid-pi
+<T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", KERNEL=="wl*", NAME="wlan0"
+<T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", KERNEL=="wl*", ENV{ID_NET_DRIVER}=="brcmfmac", NAME="wlan9"
+<T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", KERNELS=="gadget", NAME="pigad0"
+<T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", ENV{ID_USB_DRIVER}=="cdc_ncm", NAME="usb0"
+<T>/pi/98-rename.rules:ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth*", ENV{ID_BUS}=="usb", NAME="eth1"
+<T>/pi/99-GS.rules:SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="wlan9", RUN+="/usr/bin/systemd-run --no-block /gs/wfb.sh $name"
+<T>/pi/99-GS.rules:SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="remove", RUN+="/gs/wfb.sh"
+<T>/pi/99-GS.rules:ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEYBOARD}=="1", RUN+="/usr/bin/systemd-run /gs/button-kbd.py $devnode"
+<T>/pi/99-GS.rules:ACTION=="add", SUBSYSTEM=="block", KERNEL=="sda1", RUN+="/gs/button.sh mount_extdisk $devnode"
+ok no radxa literal / placeholder in fixture output
+== templates only use known placeholders
+@GADGET_IFNAME@
+@WIFI_ONBOARD_DRIVER@
+@WIFI_ONBOARD_IFACE@
+== failures
+render-udev.sh: key GADGET_IFNAME is empty in <T>/bad/board.conf
+ok empty key rejected
+render-udev.sh: no board.conf in <REPO>/gs/boards/nope
+ok unknown board rejected
+bad=0

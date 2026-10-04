@@ -1,0 +1,4 @@
+#!/bin/bash
+# like configfs: creating a mass_storage function also creates its lun.0
+/bin/mkdir "$@" || exit $?
+for a in "$@"; do case "$(basename "$a")" in mass_storage.*) /bin/mkdir -p "$a/lun.0";; esac; done

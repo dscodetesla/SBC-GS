@@ -1,0 +1,160 @@
+# SBC-GS configuration registry: the single source of truth for every tunable key (docs/CONFIG.md).
+# TAB-separated, 10 fields, no empty field ('~' = empty default, '-' = none):
+# KEY	default	type	min	max	unit	safety(y/n)	owner(s, comma)	env	description
+# type: int|float|port|ip|path|bool|str|enum:a|b (suffix ? = empty allowed). SAFETY keys: min/max are HARD bounds that
+# no layer may exceed without --i-know / SBC_GS_I_KNOW=1. env '-' = SBC_GS_<KEY>, otherwise the exact environment variable name.
+TX12_CONN	udpout:127.0.0.1:14550	str	-	-	-	n	tx12	-	MAVLink connection string of the TX12 bridge (pymavlink syntax)
+TX12_SYSID	255	int	1	255	-	n	tx12	-	MAVLink source sysid of the bridge; MUST equal MAV_GCS_SYSID on the FC
+TX12_COMPONENT_ID	190	int	1	255	-	n	tx12	-	MAVLink source component id of the bridge
+TX12_RATE_HZ	20.0	float	0.1	100	Hz	n	tx12	-	RC override send rate (must be <= TX12_MAX_RATE_HZ)
+TX12_MAX_RATE_HZ	50.0	float	1	100	Hz	y	tx12	-	hard cap on RC override frames per second ever sent
+TX12_DEADMAN_MS	300	int	50	1000	ms	y	tx12	-	no fresh valid input for this long: throttle failsafe, release, then silence
+TX12_THROTTLE_CH	3	int	1	8	-	n	tx12	-	1-based throttle channel (receives the failsafe value)
+TX12_FAILSAFE_THROTTLE_US	1000	int	1000	1100	us	y	tx12	-	throttle value sent in the failsafe frames before release
+TX12_CLAMP_LO_US	1000	int	900	1100	us	y	tx12	-	lower clamp of every stick value
+TX12_CLAMP_HI_US	2000	int	1900	2100	us	y	tx12	-	upper clamp of every stick value
+TX12_SANE_MIN_US	0	int	0	1000	us	y	tx12	-	samples below this are absurd and dropped (they do not refresh the dead-man)
+TX12_SANE_MAX_US	4000	int	2000	8000	us	y	tx12	-	samples above this are absurd and dropped
+TX12_RELEASE_HOLD_S	1.0	float	0.5	5	s	y	tx12	-	how long all-zero (release) frames are sent after the dead-man fires
+TX12_THROTTLE_FS_FRAMES	3	int	1	20	frames	y	tx12	-	number of throttle-failsafe frames before release (dead-man and exit)
+TX12_EXIT_RELEASE_FRAMES	5	int	1	20	frames	y	tx12	-	number of release frames sent on exit/SIGTERM/SIGINT
+TX12_HB_PERIOD_S	1.0	float	0.2	5	s	n	tx12	-	period of the GCS HEARTBEAT the bridge sends
+TX12_STAT_PERIOD_S	2.0	float	0.5	60	s	n	tx12	-	period of the status log line
+TX12_LOOP_SLEEP_S	0.005	float	0.001	0.1	s	n	tx12	-	main loop sleep (poll granularity)
+TX12_EVDEV_POLL_S	0.05	float	0.01	0.5	s	n	tx12	-	evdev reader select() timeout (device-alive freshness refresh)
+TX12_LOCK_PATH	~	path?	-	-	-	n	tx12	-	single-writer lock file; empty = /run/lock/tx12_bridge.lock or the temp dir
+TX12_MAP	~	path?	-	-	-	n	tx12	-	axis mapping JSON for --input evdev; empty = bench/tx12_map.example.json
+GSMAV_CONN	udpin:127.0.0.1:14550	str	-	-	-	n	gs_mav	-	MAVLink connection string of gs_mav (listens as wfb-ng gs_mavlink peer)
+GSMAV_SYSID	255	int	1	255	-	n	gs_mav	-	MAVLink source sysid of gs_mav
+GSMAV_COMPONENT_ID	190	int	1	255	-	n	gs_mav	-	MAVLink source component id of gs_mav
+GSMAV_RATE_HZ	20.0	float	0.1	50	Hz	y	gs_mav	-	RC override rate of the bench emulator
+GSMAV_NEUTRAL_US	1500	int	1400	1600	us	y	gs_mav	-	neutral stick value: hold value, sweep centre and aux channels 5-7
+GSMAV_SWEEP_AMP_US	400	int	0	500	us	y	gs_mav	-	sweep amplitude around the neutral value on channels 1-4
+GSMAV_HB_PERIOD_S	1.0	float	0.2	5	s	n	gs_mav	-	period of the GCS HEARTBEAT
+GSMAV_STAT_PERIOD_S	2.0	float	0.5	60	s	n	gs_mav	-	period of the status line
+GSMAV_RELEASE_REPEATS	5	int	1	20	frames	y	gs_mav	-	release (all 0) frames sent on exit
+GSMAV_RELEASE_INTERVAL_S	0.05	float	0.01	1	s	n	gs_mav	-	pause between exit release frames
+GSMAV_LOOP_SLEEP_S	0.005	float	0.001	0.1	s	n	gs_mav	-	main loop sleep
+GSMAV_RTT_WINDOW	40	int	1	10000	samples	n	gs_mav	-	number of last RTT samples in the status line
+FAKEFC_CONN	udpout:127.0.0.1:14550	str	-	-	-	n	fake_fc	-	MAVLink connection string of the FC emulator
+FAKEFC_COMPONENT_ID	1	int	1	255	-	n	fake_fc	-	MAVLink source component id of the FC emulator
+FAKEFC_GCS_SYSID	255	int	1	255	-	n	fake_fc	-	sysid whose HEARTBEAT counts as the GCS heartbeat
+FAKEFC_RC_OVERRIDE_TIME_S	3.0	float	0	3600	s	n	fake_fc	-	emulated RC_OVERRIDE_TIME (ArduPilot docs default 3 s)
+FAKEFC_GCS_TIMEOUT_S	5.0	float	0	3600	s	n	fake_fc	-	emulated FS_GCS_TIMEOUT (ArduPilot docs default 5 s)
+FAKEFC_SLOW_PERIOD_S	1.0	float	0.1	60	s	n	fake_fc	-	period of HEARTBEAT and SYS_STATUS
+FAKEFC_FAST_PERIOD_S	0.1	float	0.01	10	s	n	fake_fc	-	period of attitude/GPS/VFR/position telemetry
+FAKEFC_REPORT_PERIOD_S	5.0	float	0.5	600	s	n	fake_fc	-	period of the counters log line
+FAKEFC_LOOP_SLEEP_S	0.005	float	0.001	0.1	s	n	fake_fc	-	main loop sleep
+ROUTER	mavp2p	enum:mavp2p|mavlink-router	-	-	-	n	gs-mavlink	-	router backend
+UPSTREAM_BIND	0.0.0.0	ip	-	-	-	n	gs-mavlink	-	IPv4 the router listens on for the wfb-ng upstream
+UPSTREAM_PORT	14550	port	1	65535	-	n	gs-mavlink	-	UDP port of the wfb-ng upstream (= wfb_outgoing_port_mavlink in gs.conf)
+LISTEN_ADDR	0.0.0.0	ip	-	-	-	n	gs-mavlink	-	IPv4 the GCS UDP and TCP server endpoints bind to; 127.0.0.1 is recommended unless remote GCS access is needed (docs/CONFIG.md)
+GCS_UDP_PORTS	14560	str	-	-	-	n	gs-mavlink	-	space-separated UDP server ports for QGC/MAVProxy (mavp2p only)
+GCS_UDP_CLIENTS	~	str	-	-	-	n	gs-mavlink	-	space-separated ip:port UDP client endpoints the router pushes to
+TCP_ENABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = TCP server for a phone/Mission Planner (no authentication)
+TCP_PORT	5760	port	1	65535	-	n	gs-mavlink	-	TCP server port
+SERIAL_DEV	~	path?	-	-	-	n	gs-mavlink	-	serial link to the FC (mavp2p only), must be under /dev/
+SERIAL_BAUD	115200	int	1200	3000000	baud	n	gs-mavlink	-	serial baud rate (used only with SERIAL_DEV)
+HB_SYSID	125	int	1	254	-	n	gs-mavlink	-	router heartbeat sysid; 3 (wfb-ng) and 255 (GCS) are refused by the script
+WD_FC_SYSID	1	int	1	255	-	n	gs-mavlink	-	sysid of the FC whose HEARTBEAT the watchdog waits for (ArduPilot SYSID_THISMAV)
+WD_LOSS_S	5	int	1	600	s	n	gs-mavlink	-	seconds without an FC heartbeat before the watchdog logs 'FC lost' and writes the state
+WD_RESTART_AFTER_S	30	int	5	3600	s	n	gs-mavlink	-	seconds without an FC heartbeat before the router is restarted (>= WD_LOSS_S)
+WD_MAX_RESTARTS_PER_H	3	int	0	60	-	n	gs-mavlink	-	at most this many router restarts per hour (0 = never restart, only log and write the state)
+WD_HB_SYSID	126	int	1	255	-	n	gs-mavlink	-	sysid of the watchdog's own HEARTBEAT (not 255, 3 or 125: GCS, wfb-ng, router heartbeat)
+WD_TARGET_HOST	127.0.0.1	ip	-	-	-	n	gs-mavlink	-	host of the router's first GCS UDP port the watchdog registers at
+WD_STATE_FILE	/run/gs-mavlink/fc.state	str	-	-	-	n	gs-mavlink	-	JSON state file (state up/lost/waiting, ages, restarts); empty = none
+HB_DISABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = no router heartbeat at all
+STREAMREQ_DISABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = router does not request data streams from ArduPilot
+DUMP_ENABLE	0	bool	-	-	-	n	gs-mavlink	-	1 = tlog dump (mavp2p)
+DUMP_PATH	/var/log/gs-mavlink/2006-01-02_15-04-05.tlog	path	-	-	-	n	gs-mavlink	-	tlog path, Go time layout allowed
+WFB_REGION	~	str	-	-	-	n	bench	WFB_REGION	regulatory domain you may legally use (no default on purpose)
+WFB_CHANNEL	165	int	1	196	-	n	bench	WFB_CHANNEL	Wi-Fi channel (165 = 5825 MHz)
+WFB_NICS	~	str	-	-	-	n	bench	WFB_NICS	space-separated wfb-ng adapters; empty = autodetect
+TX_PWR_IDX	1	int	0	63	-	n	bench	TX_PWR_IDX	8812au rtw_tx_pwr_idx_override; keep minimal on the bench
+RTL8812AU_REF	6e75916416de1dce5ecd37f824896bebf96aaf8f	str	-	-	-	n	bench	RTL8812AU_REF	svpcom/rtl8812au commit
+DRIVER	8812au	enum:8812au|8812eu|8814au|8814au-morrownr	-	-	-	n	bench	DRIVER	Realtek driver variant
+DRIVER_PATCH_SERIES	tests/sim/dkms/patches/series	str	-	-	-	n	bench	DRIVER_PATCH_SERIES	patch series applied to the driver source before dkms-install for matching kernels (6.12: set_monitor_channel signature); relative to the repo root
+HOST_VAAPI	auto	enum:auto|yes|no	-	-	-	n	bench	HOST_VAAPI	host video decode: auto uses VA-API (vah264dec/vah265dec) when the element and a DRM render node exist, yes requires it, no never
+DRI_DIR	/dev/dri	str	-	-	-	n	bench	DRI_DIR	directory searched for DRM render nodes (renderD*) by bench/video-rx.sh
+VIDEO_CODEC	h264	enum:h264|h265	-	-	-	n	bench	VIDEO_CODEC	bench video codec
+VIDEO_W	1280	int	16	7680	px	n	bench	VIDEO_W	video width
+VIDEO_H	720	int	16	4320	px	n	bench	VIDEO_H	video height
+VIDEO_FPS	30	int	1	240	fps	n	bench	VIDEO_FPS	video frame rate (also the key-frame interval)
+VIDEO_BITRATE_KBPS	4000	int	100	100000	kbps	n	bench	VIDEO_BITRATE_KBPS	video bitrate
+VIDEO_PATTERN	ball	str	-	-	-	n	bench	VIDEO_PATTERN	videotestsrc pattern
+VIDEO_RTP_MTU	1400	int	576	9000	bytes	n	bench	VIDEO_RTP_MTU	RTP payloader mtu
+VIDEO_RTP_PT	96	int	96	127	-	n	bench	VIDEO_RTP_PT	RTP dynamic payload type
+VIDEO_X264_PRESET	ultrafast	str	-	-	-	n	bench	VIDEO_X264_PRESET	x264enc/x265enc speed-preset
+AIR_VIDEO_PORT	5602	port	1	65535	-	n	bench	AIR_VIDEO_PORT	drone_video listen port (wfb-ng)
+GS_VIDEO_PORT	5600	port	1	65535	-	n	bench	GS_VIDEO_PORT	gs_video connect port (wfb-ng)
+MAV_PORT	14550	port	1	65535	-	n	bench	MAV_PORT	MAVLink port on both sides (wfb-ng config)
+FC_SYSID	1	int	1	254	-	n	bench,fake_fc	FC_SYSID	sysid of the emulated FC; do not use 3 (wfb-ng injects sysid 3)
+DECODER	~	str	-	-	-	n	bench	DECODER	GS decoder element; empty = auto
+SINK	~	str	-	-	-	n	bench	SINK	GS video sink; empty = kmssink on console, autovideosink under X/Wayland
+VENV	/opt/gs-bench/venv	path	-	-	-	n	bench	VENV	python venv with pymavlink
+SOURCE	test	enum:test|webcam	-	-	-	n	bench	SOURCE	air video source
+WEBCAM_DEV	/dev/video0	path	-	-	-	n	bench	WEBCAM_DEV	UVC device for SOURCE=webcam
+WEBCAM_FORMAT	jpeg	enum:jpeg|raw	-	-	-	n	bench	WEBCAM_FORMAT	UVC pixel format
+ENCODER	x264	enum:x264|v4l2h264enc	-	-	-	n	bench	ENCODER	h264 encoder (v4l2h264enc is EXPERIMENTAL)
+FC_SERIAL	~	str	-	-	-	n	bench	FC_SERIAL	air: real FC serial device name (e.g. ttyACM0); empty = fake_fc
+FC_BAUD	115200	int	1200	3000000	baud	n	bench	FC_BAUD	baud for a UART FC
+GS_FORWARD_IP	~	ip?	-	-	-	n	bench	GS_FORWARD_IP	gs: forward video+MAVLink to this host; empty = local
+SINK_HOST	127.0.0.1	str	-	-	-	n	bench	SINK_HOST	video-src.sh: destination host
+SINK_PORT	~	port?	1	65535	-	n	bench	SINK_PORT	video-src.sh: destination port; empty = AIR_VIDEO_PORT
+NUM_BUFFERS	0	int	0	2147483647	frames	n	bench	NUM_BUFFERS	video-src.sh: frames to send, 0 = endless
+LISTEN_PORT	~	port?	1	65535	-	n	bench	LISTEN_PORT	video-rx.sh: UDP port; empty = GS_VIDEO_PORT
+PROGRESS	0	bool	-	-	-	n	bench	PROGRESS	video-rx.sh: 1 = print flow
+DRY_RUN	0	bool	-	-	-	n	bench	DRY_RUN	1 = print system-changing commands instead of running them
+CFG_ROOT	~	path?	-	-	-	n	bench	CFG_ROOT	prefix for file writes (scratch directory in tests)
+LB_FC_RC_OVERRIDE_TIME_S	1	float	0	3600	s	n	bench	-	loopback-test: emulated RC_OVERRIDE_TIME
+LB_FC_GCS_TIMEOUT_S	2	float	0	3600	s	n	bench	-	loopback-test: emulated FS_GCS_TIMEOUT
+LB_FC_DURATION_S	14	int	1	3600	s	n	bench	-	loopback-test: fake_fc lifetime
+LB_GS_DURATION_S	6	int	1	3600	s	n	bench	-	loopback-test: gs_mav lifetime
+LB_VIDEO_W	640	int	16	7680	px	n	bench	-	loopback-test: video width
+LB_VIDEO_H	360	int	16	4320	px	n	bench	-	loopback-test: video height
+LB_VIDEO_MIN_PROGRESS	3	int	1	1000	reports	n	bench	-	loopback-test: progress reports needed per codec
+TXT_GAP_TOLERANCE	0.98	float	0.5	1	ratio	n	bench	-	tx12 test: measured sender gap must be >= this fraction of 1/max-rate
+TXT_DEADMAN_LAT_MIN_S	0.20	float	0	10	s	n	bench	-	tx12 test: earliest accepted dead-man latency
+TXT_DEADMAN_LAT_MAX_S	0.60	float	0	10	s	n	bench	-	tx12 test: latest accepted dead-man latency
+SIM_LAT_PORT	15600	port	1	65535	-	n	sim	-	video_latency: UDP port
+SIM_LAT_FRAMES	90	int	10	100000	frames	n	sim	-	video_latency: frames sent
+SIM_LAT_FPS	30	int	1	240	fps	n	sim	-	video_latency: frame rate (also key-frame interval)
+SIM_LAT_SIZE	640x360	str	-	-	-	n	sim	-	video_latency: WIDTHxHEIGHT
+SIM_LAT_BITRATE_KBPS	2000	int	100	100000	kbps	n	sim	-	video_latency: encoder bitrate
+SIM_LAT_MAX_P95_MS	500.0	float	1	60000	ms	n	sim	-	video_latency: p95 limit (regression guard, not a Pi figure)
+SIM_LAT_MAX_LOST	3	int	0	1000	frames	n	sim	-	video_latency: tolerated missing frames at the tail
+SIM_UDP_COUNT	200	int	1	1000000	packets	n	sim	-	udp_probe: packets sent
+SIM_UDP_RATE_PPS	100.0	float	1	100000	pps	n	sim	-	udp_probe: send rate
+SIM_UDP_SIZE	1000	int	16	65000	bytes	n	sim	-	udp_probe: payload size
+SIM_UDP_SETTLE_S	1.0	float	0	60	s	n	sim	-	udp_probe: wait for stragglers after the last packet
+SIM_UDP_MIN_DELIVERY	0.99	float	0	1	ratio	n	sim	-	udp_probe: minimum delivery ratio
+RELAY_LOSS	0.0	float	0	1	ratio	n	sim	-	air_relay: frame loss probability
+RELAY_DELAY_MS	0.0	float	0	60000	ms	n	sim	-	air_relay: delay
+RELAY_JITTER_MS	0.0	float	0	60000	ms	n	sim	-	air_relay: jitter (gauss sigma)
+RELAY_SEED	1	int	0	2147483647	-	n	sim	-	air_relay: RNG seed
+RELAY_RX_SIGNAL_DBM	-50	int	-127	0	dBm	n	sim	-	air_relay: synthetic RX radiotap signal
+APM_CONN	udpout:127.0.0.1:14550	str	-	-	-	n	sim	-	apm_fc: MAVLink connection string
+APM_SYSID	1	int	1	254	-	n	sim	-	apm_fc: FC sysid
+APM_RC_OVERRIDE_TIME_S	3.0	float	-1	3600	s	n	sim	-	apm_fc: RC_OVERRIDE_TIME (0 disables, <0 never expires)
+APM_FS_GCS_ENABLE	0	int	0	5	-	n	sim	-	apm_fc: FS_GCS_ENABLE
+APM_FS_GCS_TIMEOUT_S	5.0	float	0	3600	s	n	sim	-	apm_fc: FS_GCS_TIMEOUT
+APM_RC_FS_TIMEOUT_S	1.0	float	0	3600	s	n	sim	-	apm_fc: radio failsafe timeout
+APM_MAV_GCS_SYSID	255	int	1	255	-	n	sim	-	apm_fc: MAV_GCS_SYSID
+APM_MAV_GCS_SYSID_HI	0	int	0	255	-	n	sim	-	apm_fc: MAV_GCS_SYSID_HI
+SMOKE_STRICT	0	bool	-	-	-	n	sim	SMOKE_STRICT	smoke.sh: a SKIP counts as FAIL
+SMOKE_ONLY	static model mavlink video router wfb qemu	str	-	-	-	n	sim	SMOKE_ONLY	smoke.sh: space-separated subset of paths
+SMOKE_QEMU	0	bool	-	-	-	n	sim	SMOKE_QEMU	smoke.sh: run the QEMU path
+SMOKE_WFB	0	bool	-	-	-	n	sim	SMOKE_WFB	smoke.sh: fetch+build wfb-ng for the wfb path
+SMOKE_PORT_FC	15553	port	1	65535	-	n	sim	-	smoke: fake_fc <-> gs_mav UDP port
+SMOKE_PORT_APM_A	15550	port	1	65535	-	n	sim	-	smoke: bridge sweep vs apm_fc UDP port
+SMOKE_PORT_APM_B	15551	port	1	65535	-	n	sim	-	smoke: dead-man scenario UDP port
+SMOKE_PORT_APM_C	15552	port	1	65535	-	n	sim	-	smoke: non-GCS sysid scenario UDP port
+SMOKE_PORT_ROUTER_UP	15560	port	1	65535	-	n	sim	-	smoke: router upstream UDP port
+SMOKE_PORT_ROUTER_GCS	15561	port	1	65535	-	n	sim	-	smoke: router GCS UDP port
+SMOKE_PORT_VIDEO	15600	port	1	65535	-	n	sim	-	smoke: bench video UDP port
+SMOKE_DEADMAN_MS	300	int	50	1000	ms	n	sim	-	smoke: dead-man passed to tx12_bridge
+SMOKE_DEADMAN_RELEASE_MAX_S	3.0	float	0.2	60	s	n	sim	-	smoke: override must expire within this long after start (must be < FC RC_OVERRIDE_TIME)
+SMOKE_VIDEO_MIN_PROGRESS	3	int	1	1000	reports	n	sim	-	smoke: progress reports needed from video-rx
+WFB_NG_REF	2fe252b2f451c1ccfb16968e064fe1cdb18baaa0	str	-	-	-	n	sim	WFB_NG_REF	wfb-ng commit for wfb_veth.sh / qemu_hwsim.sh
+WFB_VETH_RX_PORT	15700	port	1	65535	-	n	sim	-	wfb_veth: wfb_rx output UDP port
+WFB_VETH_TX_PORT	15702	port	1	65535	-	n	sim	-	wfb_veth: wfb_tx input UDP port

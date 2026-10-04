@@ -1,0 +1,22 @@
+# Target: rtl8812au @ 6e75916416de1dce5ecd37f824896bebf96aaf8f (svpcom/rtl8812au v5.2.20 pin of bench/lib.sh)
+# Kernels: Pi OS 6.12.x with the backported cfg80211 ABI (verified on 6.12.109+rpt, k612*); a no-op on 6.18 (condition already true)
+# Why: the pinned driver switches the signature of cfg80211_rtw_set_monitor_channel() at 6.13, but the Pi 6.12.109 headers
+#   already declare  int (*set_monitor_channel)(struct wiphy *, struct net_device *, struct cfg80211_chan_def *)  (include/net/cfg80211.h:4701).
+#   GCC says: "initialization of 'int (*)(struct wiphy *, struct net_device *, struct cfg80211_chan_def *)' from incompatible pointer type".
+#   It still LINKS; at run time cfg80211 would pass the net_device where the driver reads a chandef (iw set channel / wfb-ng channel setup).
+#   Same threshold as libc0607/rtl88x2eu-20230815 c066ed1 ("6.12.0" -> "6.12.101", docs/PI-PORT.md section 4).
+# Effect on the build: removes the -Wincompatible-pointer-types warning (check with: grep incompatible logs/build-rtl8812au-k612v8.log).
+# Runtime effect: UNVERIFIED (needs a Pi 4 on 6.12.x with an RTL8812AU; QEMU has no such device).
+diff --git a/os_dep/linux/ioctl_cfg80211.c b/os_dep/linux/ioctl_cfg80211.c
+index e483666..92a171c 100644
+--- a/os_dep/linux/ioctl_cfg80211.c
++++ b/os_dep/linux/ioctl_cfg80211.c
+@@ -5076,7 +5076,7 @@ static int	cfg80211_rtw_set_channel(struct wiphy *wiphy
+ }
+ 
+ static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 101))
+ 	, struct net_device *dev
+ 	, struct cfg80211_chan_def *chandef
+ #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))

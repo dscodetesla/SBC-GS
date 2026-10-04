@@ -1,0 +1,18 @@
+== active rules
+-- 98-rename.rules
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="wl*", NAME="wlan0"
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="wl*", ENV{ID_NET_DRIVER}=="aicwf_sdio", NAME="wifi0"
+ACTION=="add", SUBSYSTEM=="net", KERNELS=="gadget", NAME="radxa0"
+ACTION=="add", SUBSYSTEM=="net", ENV{ID_USB_DRIVER}=="cdc_ncm", NAME="usb0"
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth*", ENV{ID_BUS}=="usb", NAME="eth1"
+-- 99-GS.rules
+SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="wifi0", RUN+="/usr/bin/systemd-run --no-block /gs/wfb.sh $name"
+SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="remove", RUN+="/gs/wfb.sh"
+ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEYBOARD}=="1", RUN+="/usr/bin/systemd-run /gs/button-kbd.py $devnode"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sda1", RUN+="/gs/button.sh mount_extdisk $devnode"
+== checks
+ok target /gs/wfb.sh
+ok target /gs/button-kbd.py
+ok target /gs/button.sh
+ok install.sh renders the rules from the board profile and stores the id
+bad=0

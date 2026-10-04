@@ -5,6 +5,10 @@ set -x
 
 # load config
 source /etc/gs.conf
+# transient units that must come back after a crash (systemd-run units have no Restart= by default)
+restart_props="--property=Restart=on-failure --property=RestartSec=2"
+source /gs/lib/gpio.sh
+source /gs/lib/hw.sh
 [ "$gs_enable" == 'no' ] && exit 0
 
 # check and apply configuration in gs.conf
@@ -12,12 +16,13 @@ source /gs/gs-applyconf.sh
 
 # RTC
 if [ "$use_external_rtc" == "yes" ]; then
-	if [ -c /dev/i2c-4 ]; then
+	rtc_i2c_bus="$(hw_rtc_i2c_bus)"
+	if [ -c "/dev/i2c-${rtc_i2c_bus}" ]; then
 		modprobe i2c-dev
-		echo ds3231 0x68 >  /sys/class/i2c-adapter/i2c-4/new_device
+		echo ds3231 0x68 >  "/sys/class/i2c-adapter/i2c-${rtc_i2c_bus}/new_device"
 		( sleep 1 && [ -c /dev/rtc1 ] && hwclock -s -f /dev/rtc1 || echo "no ds3231 found" ) &
 	else
-		echo "i2c-4 is not enabled"
+		echo "i2c-${rtc_i2c_bus} is not enabled"
 	fi
 fi
 
@@ -25,12 +30,20 @@ fi
 [ "$use_gps" == "yes" ] && systemctl start chrony gpsd &
 
 # If set otg mode to device, use gadget acm, ncm, mass on boot
+# (boards without a runtime OTG role switch, e.g. Pi 5/Pi 4, skip it: otg-gadget.sh exits there too)
 if [ "$otg_mode" == "device" ]; then
 	/gs/otg-gadget.sh &
 fi
 
 # pwm fan service
-[ "$fan_service_enable" == "yes" ] && ( echo "start fan service"; systemd-run --unit=fan /gs/fan.sh )
+# (not on boards whose fan is driven by the kernel, e.g. Pi 5: hw_fan_kernel_managed)
+if [ "$fan_service_enable" == "yes" ]; then
+	if hw_fan_kernel_managed; then
+		echo "fan is managed by the kernel on this board, not starting fan service"
+	else
+		( echo "start fan service"; systemd-run --unit=fan $restart_props /gs/fan.sh )
+	fi
+fi
 
 # ttyd
 if [ "$ttyd_enable" == "yes" ]; then
@@ -40,22 +53,28 @@ else
 fi
 
 # fsck and mount record parittion if not auto mounted
+# The partition is found by its label first (hw_videos_label: gs-init.sh and a prepared Pi image name it videos), then by the legacy
+# Radxa guess "<system disk>p4". Neither a failed fsck (exit status 1 = errors corrected) nor a missing partition may stop the boot before
+# the video starts: without it $rec_dir stays on the root file system and gs.sh goes on with a warning.
 if ! grep -q $rec_dir /proc/mounts; then
-	rec_dev=/dev/$(lsblk -no PKNAME $(findmnt -n -o SOURCE /))p4
-	fsck.exfat -a $rec_dev
-	mount $rec_dev $rec_dir
+	rec_dev=/dev/disk/by-label/$(hw_videos_label)
+	[ -e "$rec_dev" ] || rec_dev=/dev/$(lsblk -no PKNAME $(findmnt -n -o SOURCE /))p4
+	fsck.exfat -a $rec_dev || echo "gs.sh: warning: fsck.exfat on $rec_dev returned $? (continuing)"
+	mount $rec_dev $rec_dir || echo "gs.sh: warning: cannot mount $rec_dev on $rec_dir: recordings go to the root file system"
 fi
 
 # If video_on_boot=yes, video playback will be automatically started
 if [ "$video_on_boot" == "yes" ]; then
+	ruby_home="$(hw_home_dir)"
+	wifi_iface="$(hw_wifi_iface)"
 	# Start RubyFpv
 	if [ "$fpv_firmware_type" == "rubyfpv" ]; then
 		# Load wifi drivers
 		[ -d "/sys/module/8812eu" ] || modprobe 8812eu rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0
 		[ -d "/sys/module/88XXau_wfb" ] || modprobe 88XXau_wfb rtw_tx_pwr_idx_override=1
 		# bind mount Vides dir to ruby
-		[ -d "/home/radxa/ruby/media" ] || mkdir -p /home/radxa/ruby/media
-		mount --bind $rec_dir /home/radxa/ruby/media
+		[ -d "${ruby_home}/ruby/media" ] || mkdir -p ${ruby_home}/ruby/media
+		mount --bind $rec_dir ${ruby_home}/ruby/media
 		# Use button gpio settings in gs.conf
 		button_gpio="$btn_cr_pin $btn_cl_pin $btn_cu_pin $btn_cd_pin $btn_q1_pin $btn_q2_pin $btn_q3_pin"
 		[ ! -e /config/gpio.txt ] && touch /config/gpio.txt
@@ -67,11 +86,11 @@ if [ "$video_on_boot" == "yes" ]; then
 			--property=StandardOutput=file:/dev/tty1 \
 			--property=StandardError=file:/dev/tty1 \
 			--property=Type=forking \
-			--property=WorkingDirectory=/home/radxa/ruby \
-			/home/radxa/ruby/ruby_start
+			--property=WorkingDirectory=${ruby_home}/ruby \
+			${ruby_home}/ruby/ruby_start
 	else
-		# add route to 224.0.0.1
-		ip ro add 224.0.0.0/4 dev br0
+		# add route to 224.0.0.1 (br0 is made by gs-init.sh; without it the route cannot be added and that must not stop the boot)
+		ip ro add 224.0.0.0/4 dev br0 || echo "gs.sh: warning: cannot add the multicast route 224.0.0.0/4 via br0 (is br0 up?), continuing"
 
 		# Start wfb
 		if [ "$wfb_mode" == "standalone" ]; then
@@ -87,23 +106,24 @@ if [ "$video_on_boot" == "yes" ]; then
 			/gs/wfb.sh &
 		elif [ "$wfb_mode" == "aggregator" ]; then
 			echo "start wfb in aggregator mode"
-			wfb_rx -a 10000 -K $wfb_key -i $wfb_link_id -c $wfb_outgoing_ip -u $wfb_outgoing_port_video 2>&1 > /dev/null &
-			wfb_rx -a 10001 -K $wfb_key -i $wfb_link_id -c $wfb_outgoing_ip -u $wfb_outgoing_port_mavlink 2>&1 > /dev/null &
-			if [[ "$wfb_integrated_wnic" == "wifi0" && -d /sys/class/net/wifi0 ]]; then
-				/gs/wfb.sh wifi0 &
+			# as supervised units: a crashed aggregator would otherwise stay dead until the next reboot
+			systemd-run --unit=wfb-agg-video $restart_props wfb_rx -a 10000 -K $wfb_key -i $wfb_link_id -c $wfb_outgoing_ip -u $wfb_outgoing_port_video
+			systemd-run --unit=wfb-agg-mavlink $restart_props wfb_rx -a 10001 -K $wfb_key -i $wfb_link_id -c $wfb_outgoing_ip -u $wfb_outgoing_port_mavlink
+			if [[ "$wfb_integrated_wnic" == "$wifi_iface" && -d "/sys/class/net/${wifi_iface}" ]]; then
+				/gs/wfb.sh "$wifi_iface" &
 			fi
 		fi
 
 		# start stream service
 		echo "start stream service"
-		systemd-run --unit=stream /gs/stream.sh
+		systemd-run --unit=stream $restart_props /gs/stream.sh
 
 		# start button service
 		echo "start button service"
-		systemd-run --unit=button /gs/button.sh
+		systemd-run --unit=button $restart_props /gs/button.sh
 
 		# start alink service
-		[ "$alink_enable" == "yes" ] && systemd-run --unit=alink /usr/local/bin/alink --config /etc/alink.conf
+		[ "$alink_enable" == "yes" ] && systemd-run --unit=alink $restart_props /usr/local/bin/alink --config /etc/alink.conf
 
 		# copy video stream to local
 		[[ "$wfb_outgoing_ip" != "224.0.0.1" && "$wfb_outgoing_ip" != "127.0.0.1" ]] && \
@@ -115,7 +135,7 @@ if [ "$video_on_boot" == "yes" ]; then
 fi
 
 # start oled
-[ "$oled_enable" == "yes" ] && systemd-run --unit=oled \
+[ "$oled_enable" == "yes" ] && systemd-run --unit=oled $restart_props \
 	  --setenv=VIRTUAL_ENV=/gs/venv \
 	  --setenv=PATH="/gs/venv/bin:$PATH" \
 	  /gs/venv/bin/python /gs/oled.py
@@ -124,7 +144,7 @@ fi
 [ "$webui_enable" == "yes" ] && systemctl start webui
 
 # system boot complete, turn red record LED off
-gpioset -D $red_led_drive $(gpiofind PIN_${red_led_pin})=0
+gpioset -D $red_led_drive $(gpio_find "${red_led_pin}")=0
 echo "gs service start completed"
 
 exit 0

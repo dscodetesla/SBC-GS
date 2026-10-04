@@ -1,0 +1,67 @@
+{
+  "_meta": {
+    "purpose": "Parameters for the biomimetic-inspired prototypes (contour_graph.py, failsafe_des.py). Every value carries a tag and a source.",
+    "tags": "SRC=read in primary source; REPO=read in this repo; INF=inference; UNVERIFIED=not confirmed; SYNTH=chosen by the author for planning, NEVER a measurement",
+    "contour_source": "MEMORY.md section 2 (user statement 2026-10-03) and docs/SIM-BLOCKERS.md section 1.1"
+  },
+  "timers": {
+    "rc_override_time_s": {"value": 3.0, "tag": "SRC", "source": "docs/MAVLINK-ROUTER.md section 6 (RC_Channels_VarInfo.h); SITL 4.7.1 measured expiry 2.8 s (docs/TESTABILITY.md section 4)"},
+    "rc_fs_timeout_s": {"value": 1.0, "tag": "SRC", "source": "docs/MAVLINK-ROUTER.md / apm_model.py default"},
+    "fs_gcs_timeout_s": {"value": 5.0, "tag": "SRC", "source": "ardupilot.org gcs-failsafe via docs/MAVLINK-ROUTER.md section 6; SITL default 5.0"},
+    "fs_gcs_enable": {"value": 1, "tag": "INF", "source": "SITL default is 0 (docs/TESTABILITY.md section 4); 1 = RTL is the value we WANT, not the default"},
+    "deadman_ms": {"value": 300, "tag": "REPO", "source": "config/registry.tsv TX12_DEADMAN_MS"},
+    "release_hold_s": {"value": 1.0, "tag": "REPO", "source": "config/registry.tsv TX12_RELEASE_HOLD_S"},
+    "throttle_fs_frames": {"value": 3, "tag": "REPO", "source": "config/registry.tsv TX12_THROTTLE_FS_FRAMES"},
+    "bridge_rate_hz": {"value": 20.0, "tag": "REPO", "source": "config/registry.tsv TX12_RATE_HZ"},
+    "bridge_hb_period_s": {"value": 1.0, "tag": "REPO", "source": "config/registry.tsv TX12_HB_PERIOD_S"},
+    "elrs_failsafe_s": {"value": 1.0, "tag": "SYNTH", "source": "ELRS receiver failsafe delay: not read from ELRS docs in this session; value is a placeholder, UNVERIFIED"},
+    "alink_fallback_ms": {"value": 1000, "tag": "REPO", "source": "docs/CONTOUR-AIR.md section 5 (alink fallback_ms -> profile 999 / MCS0)"}
+  },
+  "scoring_weights": {
+    "_note": "Value judgements, SYNTH. The ranking is also reported with uniform weights to show how much it depends on them.",
+    "safe_failsafe": 5, "control": 4, "rc_primary": 2, "rc_backup": 1, "telemetry": 2, "video": 1
+  },
+  "nodes": {
+    "cam":        {"label": "IMX415 camera", "needs": [["pwr_air"]], "tag": "SRC", "source": "SIM-BLOCKERS 1.1 (docs.openipc.org WiFiLink2)"},
+    "soc":        {"label": "SSC338Q SoC (majestic, wfb_tx/rx air, mavfwd)", "needs": [["pwr_air"]], "tag": "SRC", "source": "SIM-BLOCKERS 1.1"},
+    "wl_radio":   {"label": "RTL8812EU radio (WiFiLink2)", "needs": [["pwr_air"]], "tag": "SRC", "source": "MEMORY.md 2.4"},
+    "air_ant":    {"label": "AIR 5.8 GHz antenna", "needs": [], "tag": "INF", "source": "contour"},
+    "rf58":       {"label": "5.8 GHz RF channel", "needs": [], "tag": "INF", "source": "contour"},
+    "gs_ant":     {"label": "GS antenna", "needs": [], "tag": "INF", "source": "contour"},
+    "gs_dongle":  {"label": "RTL8812AU dongle", "needs": [["usb"]], "tag": "SRC", "source": "MEMORY.md 2"},
+    "drv":        {"label": "driver/DKMS (8812au, monitor+injection)", "needs": [["pi5"]], "tag": "REPO", "source": "SIM-BLOCKERS K2/K4"},
+    "wfb_gs":     {"label": "wfb-ng rx/tx on GS", "needs": [["pi5"]], "tag": "REPO", "source": "docs/CHAINS.md"},
+    "router":     {"label": "MAVLink router (mavp2p)", "needs": [["pi5"]], "tag": "REPO", "source": "docs/MAVLINK-ROUTER.md"},
+    "pi5":        {"label": "Raspberry Pi 5 SoC/OS", "needs": [["pwr_gs"]], "tag": "SRC", "source": "MEMORY.md 2"},
+    "usb":        {"label": "Pi 5 USB bus/port power", "needs": [["pi5"]], "tag": "INF", "source": "SIM-BLOCKERS K8"},
+    "pwr_gs":     {"label": "GS power supply", "needs": [], "tag": "INF", "source": "contour"},
+    "lan":        {"label": "Pi5 -> host LAN link", "needs": [["pi5"]], "tag": "INF", "source": "SIM-BLOCKERS 1.1 diagram"},
+    "host":       {"label": "Ubuntu 26.04+ host", "needs": [], "tag": "SRC", "source": "MEMORY.md 2"},
+    "display":    {"label": "video decode/display on host", "needs": [["host"]], "tag": "INF", "source": "SIM-BLOCKERS 1.1 diagram"},
+    "gcs":        {"label": "QGC on host", "needs": [["host"]], "tag": "INF", "source": "SIM-BLOCKERS 1.1 diagram"},
+    "mav_uart":   {"label": "WiFiLink2 single UART to FC (mavfwd)", "needs": [], "tag": "SRC", "source": "MEMORY.md 2.5"},
+    "fc":         {"label": "ArduPilot Matek H743 SLIM", "needs": [["pwr_air"]], "tag": "SRC", "source": "MEMORY.md 2.3"},
+    "pwr_air":    {"label": "AIR battery/BEC rails", "needs": [], "tag": "INF", "source": "contour; WiFiLink2 9-22 V (SIM-BLOCKERS 1.1)"},
+    "elrs_rx":    {"label": "ELRS 900 MHz RX", "needs": [["fc"]], "tag": "UNVERIFIED", "source": "assumes RX 5 V is taken from the FC; wiring not confirmed"},
+    "rf900":      {"label": "900 MHz RF channel", "needs": [], "tag": "SRC", "source": "MEMORY.md 2 clarification 1"},
+    "elrs_tx":    {"label": "external ELRS TX module", "needs": [["tx12"]], "tag": "UNVERIFIED", "source": "module type unknown (MEMORY.md 2); powered from the JR bay assumed"},
+    "tx12":       {"label": "TX12 MKII radio", "needs": [], "tag": "SRC", "source": "MEMORY.md 2", "stuck_capable": true},
+    "rc_bridge":  {"label": "tx12_bridge (RC override writer)", "needs": [["pi5"]], "tag": "INF", "source": "bench/tx12_bridge.py; host placement (Pi vs Ubuntu host) UNVERIFIED", "stuck_capable": true}
+  },
+  "functions": {
+    "video":      {"paths": [["cam", "soc", "wl_radio", "air_ant", "rf58", "gs_ant", "gs_dongle", "drv", "wfb_gs", "lan", "display"]], "tag": "INF", "source": "SIM-BLOCKERS 1.1"},
+    "telemetry":  {"paths": [["fc", "mav_uart", "soc", "wl_radio", "air_ant", "rf58", "gs_ant", "gs_dongle", "drv", "wfb_gs", "router", "lan", "gcs"]], "tag": "INF", "source": "docs/GS-MAVLINK.md, MEMORY.md 2.5"},
+    "rc_primary": {"paths": [["tx12", "elrs_tx", "rf900", "elrs_rx", "fc"]], "tag": "SRC", "source": "AGENTS.md section 3"},
+    "rc_backup":  {"paths": [["tx12", "rc_bridge", "router", "wfb_gs", "drv", "gs_dongle", "gs_ant", "rf58", "air_ant", "wl_radio", "soc", "mav_uart", "fc"]], "tag": "SRC", "source": "AGENTS.md section 3"}
+  },
+  "human_list": {
+    "_note": "Components named by the existing risk docs (SIM-BLOCKERS 2.2 top-10 K-items) mapped to graph nodes by the author (INF).",
+    "K2": ["wl_radio", "gs_dongle", "drv"],
+    "K6": ["elrs_rx", "elrs_tx", "rf900"],
+    "K4": ["pi5", "usb"],
+    "K8": ["pwr_air", "pwr_gs"],
+    "K7": ["rf58", "rf900"],
+    "K5": ["cam", "soc"],
+    "K9": ["tx12"]
+  }
+}

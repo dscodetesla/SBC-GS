@@ -1,0 +1,111 @@
+{
+ "schema": "sbc-gs-powerlab-scenario/1",
+ "name": "calib_pi5_hot_adapter",
+ "description": "Same bench protocol, but the adapter really draws 1.5 A in TX (the model prior is 0.9 A). Measured from a separate bench 5 V supply, so the Pi 5 limiter is not in play while measuring; the model then predicts USB_OVER and trips on the 1.6 A budget. t0 differs so the log is distinguishable.",
+ "board": "pi5",
+ "t0_utc": "2026-10-07T09:00:00Z",
+ "boot_offset_s": 900,
+ "psu_a": 5.0,
+ "claim_psu_a": 5.0,
+ "usb_max_current": true,
+ "claim_usb_max_current": 1,
+ "limiter": false,
+ "ambient_c": 24.0,
+ "ext_hwmon_ina": true,
+ "meters": {
+  "psu": {
+   "unit": "A"
+  },
+  "dongle": {
+   "unit": "mA"
+  }
+ },
+ "devices": [
+  {
+   "id": "rtl8812",
+   "kind": "rtl8812",
+   "bus_port": "1-1",
+   "vid_pid": "0bda:8812"
+  },
+  {
+   "id": "fc",
+   "kind": "fc",
+   "bus_port": "1-2",
+   "vid_pid": "0483:5740"
+  }
+ ],
+ "truth": {
+  "power.cable_resistance_ohm": 0.18,
+  "power.psu_nominal_v": 5.12,
+  "usb.cable_r_ohm": 0.15,
+  "power.devices.rtl8812_idle_a": 0.32,
+  "power.devices.rtl8812_rx_a": 0.6,
+  "power.devices.rtl8812_tx_a": 1.5,
+  "power.tx_peak_factor": 1.5,
+  "power.boards.pi5.board_idle_a": 0.95,
+  "power.boards.pi5.board_load_a": 1.6,
+  "hw.soc_rise_c": 40.0,
+  "hw.soc_soft_limit_c": 82.0
+ },
+ "phases": [
+  {
+   "name": "board idle",
+   "dur_s": 20,
+   "load": "idle",
+   "devices": [],
+   "label": "board_pi5:idle"
+  },
+  {
+   "name": "board load",
+   "dur_s": 30,
+   "load": "load",
+   "devices": [],
+   "label": "board_pi5:load"
+  },
+  {
+   "name": "dongle idle",
+   "dur_s": 20,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "idle",
+   "label": "rtl8812:idle"
+  },
+  {
+   "name": "dongle rx",
+   "dur_s": 20,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "rx",
+   "label": "rtl8812:rx"
+  },
+  {
+   "name": "dongle tx",
+   "dur_s": 30,
+   "load": "active",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "tx",
+   "label": "rtl8812:tx"
+  },
+  {
+   "name": "soc load",
+   "dur_s": 100,
+   "load": "load",
+   "devices": [
+    "rtl8812",
+    "fc"
+   ],
+   "adapter": "rx",
+   "label": "soc:load"
+  }
+ ],
+ "soc_tau_s": 8.0
+}

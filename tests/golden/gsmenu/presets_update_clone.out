@@ -1,0 +1,7 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+git clone https://github.com/OpenIPC/fpv-presets.git <ROOT>/etc/presets
+== gs.conf changes

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Virtual dmesg: prints $POWERLAB_FIXTURE/dmesg.txt. POWERLAB_DMESG_RC=<n> (n != 0) mimics a restricted kernel log: message on stderr, nothing on stdout.
+set -u
+if [ "${POWERLAB_DMESG_RC:-0}" != 0 ]; then
+	echo "dmesg: read kernel buffer failed: Operation not permitted" >&2
+	exit "$POWERLAB_DMESG_RC"
+fi
+cat "${POWERLAB_FIXTURE:?POWERLAB_FIXTURE is not set}/dmesg.txt"

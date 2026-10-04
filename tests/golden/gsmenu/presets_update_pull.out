@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+git fetch --all
+git pull origin master --force
+git reset --hard origin/master
+== gs.conf changes

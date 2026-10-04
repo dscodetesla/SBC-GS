@@ -1,6 +1,7 @@
 ## wifi hotplug
+# wfb.sh sleeps and starts set_txpower in the background: udev kills what a RUN program leaves behind after the event, so it runs as its own unit
 # Exclude wifi0 by name
-SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="wifi0", RUN+="/gs/wfb.sh $name"
+SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ENV{ID_NET_NAME}!="wifi0", RUN+="/usr/bin/systemd-run --no-block /gs/wfb.sh $name"
 # Exclude wlan by MAC
 # SUBSYSTEM=="net", KERNEL=="wl*", ACTION=="add", ATTR{address}!="98:03:cf:*:*:*", RUN+="/gs/wfb.sh $name"
 # Trigger only for USB WiFi

@@ -1,8 +1,18 @@
 #!/bin/bash
 
+# board-specific OTG values (controller, role switch file, mass-storage devices), Radxa fallbacks inside
+. /gs/lib/otg.sh
+OTG_MODE_FILE="$(otg_mode_file)"
+
+# boards without a runtime OTG role switch (OTG_CONTROLLER='none', e.g. Pi 5: both RP1 USB controllers are host only)
+if ! otg_supported; then
+	echo "otg gadget is not supported on this board, nothing to do"
+	exit 0
+fi
+
 # 切换OTG端口为device模式
-if [ "$(cat /sys/kernel/debug/usb/fcc00000.dwc3/mode)" == "host" ]; then
-	echo device > /sys/kernel/debug/usb/fcc00000.dwc3/mode || exit 1
+if [ "$(cat "$OTG_MODE_FILE")" == "host" ]; then
+	echo device > "$OTG_MODE_FILE" || exit 1
 	sleep 0.5
 fi
 
@@ -38,8 +48,8 @@ fi
 # 定义一些变量
 HOST_MAC="48:6f:73:74:50:43"
 DEVICE_MAC="42:61:64:55:53:42"
-MASS_FILE=/dev/mmcblk0p4
-[ -b /dev/mmcblk1p4 ] && MASS_FILE=/dev/mmcblk1p4
+MASS_FILE="$(otg_mass_default)"
+[ -b "$(otg_mass_alt)" ] && MASS_FILE="$(otg_mass_alt)"
 # MASS_FILE=/root/usbdisk.img
 # 若指定块设备不存在则创建一个测试用镜像
 # if [ ! -e $MASS_FILE ]; then

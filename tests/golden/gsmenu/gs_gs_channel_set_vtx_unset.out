@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+stub wfb.sh 
+== gs.conf changes
+97c97
+< wfb_channel='161'
+---
+> wfb_channel='149'

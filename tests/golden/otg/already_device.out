@@ -1,0 +1,55 @@
+== invocation: standalone
+== exit
+exit=0
+== stdout
+>>>>>>>>>>>>>Starting create gadget......
+>>>>>>>>>>>Create config1: ACM + Mass_Storage + NCM ......
+>>>>>>>>Create RNDIS ......
+>>>>>>>>Create serial ......
+>>>>>>>>Create Mass_Storage ......
+>>>>>>>>>>>Bind config1 to fcc00000.dwc3
+All is done, Run script again to delete the gadget!
+== shim calls
+mount -t configfs none <ROOT>/sys/kernel/config
+systemctl start serial-getty@ttyGS0.service
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+device
+== tree /sys/kernel/config
+D .
+D ./usb_gadget
+D ./usb_gadget/g1
+F ./usb_gadget/g1/UDC: fcc00000.dwc3|
+F ./usb_gadget/g1/bDeviceClass: 0xEF|
+F ./usb_gadget/g1/bDeviceProtocol: 0x01|
+F ./usb_gadget/g1/bDeviceSubClass: 0x02|
+F ./usb_gadget/g1/bcdDevice: 0x0100|
+F ./usb_gadget/g1/bcdUSB: 0x0200|
+D ./usb_gadget/g1/configs
+D ./usb_gadget/g1/configs/c.1
+F ./usb_gadget/g1/configs/c.1/MaxPower: 250|
+L ./usb_gadget/g1/configs/c.1/acm.gs0 -> functions/acm.gs0
+F ./usb_gadget/g1/configs/c.1/bmAttributes: 0x80|
+L ./usb_gadget/g1/configs/c.1/mass_storage.usb0 -> functions/mass_storage.usb0
+L ./usb_gadget/g1/configs/c.1/ncm.usb0 -> functions/ncm.usb0
+D ./usb_gadget/g1/configs/c.1/strings
+D ./usb_gadget/g1/configs/c.1/strings/0x409
+F ./usb_gadget/g1/configs/c.1/strings/0x409/configuration: config1: ACM + Mass_Storage + NCM|
+D ./usb_gadget/g1/functions
+D ./usb_gadget/g1/functions/acm.gs0
+D ./usb_gadget/g1/functions/mass_storage.usb0
+D ./usb_gadget/g1/functions/mass_storage.usb0/lun.0
+F ./usb_gadget/g1/functions/mass_storage.usb0/lun.0/file: /dev/mmcblk0p4|
+F ./usb_gadget/g1/functions/mass_storage.usb0/lun.0/removable: 1|
+F ./usb_gadget/g1/functions/mass_storage.usb0/lun.0/ro: 1|
+F ./usb_gadget/g1/functions/mass_storage.usb0/stall: 1|
+D ./usb_gadget/g1/functions/ncm.usb0
+F ./usb_gadget/g1/functions/ncm.usb0/dev_addr: 42:61:64:55:53:42|
+F ./usb_gadget/g1/functions/ncm.usb0/host_addr: 48:6f:73:74:50:43|
+F ./usb_gadget/g1/idProduct: 0x0104|
+F ./usb_gadget/g1/idVendor: 0x1d6b|
+D ./usb_gadget/g1/strings
+D ./usb_gadget/g1/strings/0x409
+F ./usb_gadget/g1/strings/0x409/manufacturer: 6.1.0-test|
+F ./usb_gadget/g1/strings/0x409/product: gs-test|
+F ./usb_gadget/g1/strings/0x409/serialnumber: 0123456789abcdef|

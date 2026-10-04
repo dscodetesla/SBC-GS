@@ -1,0 +1,5 @@
+#!/bin/bash
+# logs the call; fails when $SHIM_ROOT/nsenter.fail exists
+echo "nsenter $*" >> "$SHIM_LOG"
+[ -e "$SHIM_ROOT/nsenter.fail" ] && exit 1
+exit 0

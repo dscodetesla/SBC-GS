@@ -1,0 +1,23 @@
+== invocation: standalone_wait
+== exit
+exit=1
+== stdout
+auto screen_mode
+== shim calls (sorted: background jobs make the order non-deterministic)
+fbi -d /dev/fb0 -a -fitwidth -T 1 --noverbose <ROOT>/gs/wallpaper.png
+gpiofind PIN_22
+jq .widgets += (input.widgets) <ROOT>/etc/pixelpilot/pixelpilot_osd_simple.json <ROOT>/etc/pixelpilot/pixelpilot_osd_osmon.json
+pixelpilot --codec h265 --dvr-framerate 60 --dvr-template <ROOT>/Videos/record_%Y-%m-%d_%H-%M-%S.mp4 --dvr-sequenced-files --osd --osd-config <ROOT>/run/pixelpilot_osd.json --osd-custom-message --osd-refresh 50 --dvr-fmp4 --config <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.down = 18 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.left = 13 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.rec = 32 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.right = 11 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.up = 16 <ROOT>/etc/pixelpilot.yaml
+yq -i del(.gsmenu.gpio.center) <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.center <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.down <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.left <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.rec <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.right <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.up <ROOT>/etc/pixelpilot.yaml
+== gs.conf changes

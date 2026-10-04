@@ -1,0 +1,12 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+nmcli device status
+nmcli connection up hotspot
+== gs.conf changes
+== file /run/pixelpilot.msg
+WiFi changed to hotspot mode!
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

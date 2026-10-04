@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+WARING: no wifi0 found, can't switch wifi mode.
+== shim calls
+== gs.conf changes
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

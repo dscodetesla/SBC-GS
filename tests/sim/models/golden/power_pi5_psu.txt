@@ -1,0 +1,41 @@
+# power_model: board=pi5 psu=3.0A (recommended 5.0A) adapter=1xtx load=active usb_max_current=0
+item,amps,counts_against
+board_active,0.800,psu
+rtl8812_tx x1,0.900,usb
+fc,0.100,usb
+webcam,0.250,usb
+fan,0.200,psu
+total_a=2.250 psu_margin_a=+0.750
+usb_a=1.250 usb_budget_a=0.60 usb_margin_a=-0.650 usb_trip_a=0.645 (tol 7.5 %) usb_trip_margin_a=-0.605
+v_board=4.762V (undervolt threshold 4.63V)
+flags=USB_OVER
+verdict=FAIL
+# depends on 5 UNMEASURED parameter(s): power.cable_resistance_ohm,power.devices.fan_a,power.devices.fc_usb_a,power.devices.rtl8812_tx_a,power.devices.webcam_a
+
+# power_model: board=pi5 psu=5.0A (recommended 5.0A) adapter=1xtx load=active usb_max_current=0
+item,amps,counts_against
+board_active,0.800,psu
+rtl8812_tx x1 peak,1.350,usb
+fc,0.100,usb
+webcam,0.250,usb
+fan,0.200,psu
+total_a=2.700 psu_margin_a=+2.300
+usb_a=1.700 usb_budget_a=1.60 usb_margin_a=-0.100 usb_trip_a=1.720 (tol 7.5 %) usb_trip_margin_a=+0.020
+v_board=4.695V (undervolt threshold 4.63V)
+flags=USB_TOL_BAND
+verdict=WARN
+# depends on 6 UNMEASURED parameter(s): power.cable_resistance_ohm,power.devices.fan_a,power.devices.fc_usb_a,power.devices.rtl8812_tx_a,power.devices.webcam_a,power.tx_peak_factor
+
+# power_model: board=pi4 psu=3.0A (recommended 3.0A) adapter=1xtx load=active usb_max_current=0
+item,amps,counts_against
+board_active,0.600,psu
+rtl8812_tx x1 peak,1.350,usb
+fc,0.100,usb
+fan,0.200,psu
+total_a=2.250 psu_margin_a=+0.750
+usb_a=1.450 usb_budget_a=1.20 usb_margin_a=-0.250 usb_trip_a=1.200 (tol 0.0 %) usb_trip_margin_a=-0.250
+v_board=4.762V (undervolt threshold 4.63V)
+flags=USB_OVER
+verdict=FAIL
+# depends on 5 UNMEASURED parameter(s): power.cable_resistance_ohm,power.devices.fan_a,power.devices.fc_usb_a,power.devices.rtl8812_tx_a,power.tx_peak_factor
+

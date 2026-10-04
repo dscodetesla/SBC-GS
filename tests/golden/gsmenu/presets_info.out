@@ -1,0 +1,20 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+Name: 
+Author: 
+Description: 
+Category: 
+Sensor: 
+Status: 
+Tags: 
+== shim calls
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .name
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .author
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .description
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .category
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .sensor
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .status
+yaml-cli -i <ROOT>/etc/presets/presets/alpha/preset-config.yaml -g .tags
+== gs.conf changes

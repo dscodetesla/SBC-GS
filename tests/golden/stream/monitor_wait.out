@@ -1,0 +1,21 @@
+== invocation: standalone_wait
+== exit
+exit=143
+== stdout
+auto screen_mode
+== shim calls (sorted: background jobs make the order non-deterministic)
+gpiofind PIN_22
+jq .widgets += (input.widgets) <ROOT>/etc/pixelpilot/pixelpilot_osd_simple.json <ROOT>/etc/pixelpilot/pixelpilot_osd_osmon.json
+yq -i .gsmenu.gpio.down = 18 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.left = 13 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.rec = 32 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.right = 11 <ROOT>/etc/pixelpilot.yaml
+yq -i .gsmenu.gpio.up = 16 <ROOT>/etc/pixelpilot.yaml
+yq -i del(.gsmenu.gpio.center) <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.center <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.down <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.left <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.rec <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.right <ROOT>/etc/pixelpilot.yaml
+yq .gsmenu.gpio.up <ROOT>/etc/pixelpilot.yaml
+== gs.conf changes

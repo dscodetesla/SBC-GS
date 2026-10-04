@@ -1,0 +1,95 @@
+== invocation: standalone
+== exit
+exit=0
+== stdout
+
+############################### Welcome to SBC Ground Station ##################################
+#                                                                                              #
+# WARING: Thist is init startup, may take few minuts, system will auto restart when init done. #
+# WARING: Do not turn off the power during the initialization process.                         #
+#                                                                                              #
+################################################################################################
+
+partition table 'mbr' (not gpt): not repartitioning, <ROOT>/Videos stays on the label 'videos' partition or the root file system
+dtbo mode 'config-txt': Rockchip overlays are not built (use config.txt dtoverlay= lines)
+no usb gadget role switch on this board: radxa0 network not configured
+== shim calls
+setfont /usr/share/consolefonts/CyrAsia-TerminusBold32x16.psf.gz
+blkid 
+mount -o remount,rw <ROOT>/media/root-ro
+nmcli -t general status
+nmcli -t -f NAME connection show
+nmcli connection add type bridge ifname br0 con-name br0 bridge.stp no ipv4.method auto ipv4.may-fail yes ipv4.addresses 192.168.1.20/24,10.0.36.254/24 ipv6.method ignore
+nmcli -t -f NAME connection show
+nmcli connection add type bridge-slave ifname eth0 con-name br0-eth0 master br0
+nmcli -t -f NAME connection show
+nmcli connection add type bridge-slave ifname eth1 con-name br0-eth1 master br0
+nmcli -t -f NAME connection show
+nmcli connection add type bridge-slave ifname usb0 con-name br0-usb0 master br0
+nmcli -t -f NAME connection show
+nmcli connection add type dummy ifname dummy0 con-name br0-dummy0 master br0 slave-type bridge
+nmcli connection up br0
+systemctl disable gs-init.service
+stub gs-applyconf.sh 
+sync 
+reboot 
+== gs.conf changes
+== file /etc/wifibroadcast.cfg
+[common]
+wifi_channel = '161'
+wifi_region = '00'
+
+[gs_mavlink]
+peer = 'connect://224.0.0.1:14550'
+
+[gs_video]
+peer = 'connect://224.0.0.1:5600'
+
+[cluster]
+
+nodes = {
+          '127.0.0.1': { 'wlans': ['wlan'], 'wifi_txpower': None, 'server_address': '127.0.0.1' },
+          # Remote cards:
+          #'192.168.1.123' : { 'wlans': ['wlan0', 'wlan1'], 'wifi_txpower': 'off'},    # rx-only node
+          #'192.168.1.155' : { 'wlans': ['wlan0', 'wlan1']},     # rx/tx node
+        }
+
+server_address = '192.168.1.20'
+
+== file /etc/default/gpsd
+stty -F /dev/ttyS3 38400
+START_DAEMON="true"
+DEVICES="/dev/ttyS3"
+GPSD_OPTIONS="-n -b -G -r"
+USBAUTO="true"
+== file /etc/samba/smb.conf
+[global]
+[Videos]
+   path = /Videos
+   writable = yes
+   browseable = yes
+   create mode = 0777
+   directory mode = 0777
+   guest ok = yes
+   force user = root
+
+[config]
+   path = /config
+   writable = yes
+   browseable = yes
+   create mode = 0777
+   directory mode = 0777
+   guest ok = yes
+   force user = root
+== file /media/root-ro/etc/fstab
+== file /dev/ttyFIQ0
+
+############################### Welcome to SBC Ground Station ##################################
+#                                                                                              #
+# WARING: Thist is init startup, may take few minuts, system will auto restart when init done. #
+# WARING: Do not turn off the power during the initialization process.                         #
+#                                                                                              #
+################################################################################################
+
+== tree /etc/systemd/network
+D .

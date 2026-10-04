@@ -2,6 +2,8 @@
 
 set -e
 source /etc/gs.conf
+source /gs/lib/gpio.sh
+source /gs/lib/otg.sh
 
 # Exit if gs service is not enable
 [ -e /etc/systemd/system/multi-user.target.wants/gs.service ] || exit 0
@@ -48,8 +50,14 @@ function change_wifi_mode() {
 
 # change usb otg mode between host and device
 function change_otg_mode() {
-	local otg_mode_LED_PIN_info=$(gpiofind PIN_${!otg_mode_led_pin})
-	local otg_mode_file="/sys/kernel/debug/usb/fcc00000.dwc3/mode"
+	# Boards without a runtime OTG role switch (OTG_CONTROLLER='none', e.g. rpi4/rpi5) have no mode file to read.
+	if ! otg_supported; then
+		echo "otg mode switch is not supported on this board"
+		return 0
+	fi
+	local otg_mode_LED_PIN_info=$(gpio_find "${!otg_mode_led_pin}")
+	local otg_mode_file
+	otg_mode_file="$(otg_mode_file)"
 	local otg_mode=$(cat $otg_mode_file)
 	if [ "$otg_mode" == "host" ]; then
 		echo device > $otg_mode_file
@@ -190,7 +198,7 @@ else
 fi
 
 function button_action() {
-	local gpio_info=$(gpiofind PIN_${1})
+	local gpio_info=$(gpio_find "${1}")
 	while gpiomon -r -s -n 1 -B pull-down ${gpio_info}; do
 		sleep 0.05
 		[ "$(gpioget ${gpio_info})" == "1" ] || continue
@@ -213,6 +221,12 @@ function execute_button_function() {
 	local single_press_function="${1}_single_press"
 	local long_press_function="${1}_long_press"
 	[ -z "${!single_press_function}" ] && [ -z "${!long_press_function}" ] && exit 0
+	# a pin without a GPIO line on this board (unknown name, an ID line, the wrong profile): gpiomon would fail at once and the loop below
+	# would spin at 100 % CPU. Report it and leave this button alone.
+	if [ -z "$(gpio_find "${!gpio_pin}" 2>/dev/null)" ]; then
+		echo "button ${1}: no GPIO line for pin '${!gpio_pin}' on this board, this button is disabled" >&2
+		exit 0
+	fi
 	while true; do
 		local action=$(button_action ${!gpio_pin})
 		case $action in
@@ -224,6 +238,7 @@ function execute_button_function() {
 				;;
 			*)
 				echo "unknow button action"
+				sleep 1   # never spin: a failing gpiomon would otherwise repeat this at full speed
 		esac
 
 	done

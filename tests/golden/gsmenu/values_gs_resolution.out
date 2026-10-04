@@ -1,0 +1,9 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+1280x720@60
+1920x1080@60== shim calls (sorted: background jobs make the order non-deterministic)
+drm_info -j /dev/dri/card0
+jq -r ."/dev/dri/card0".connectors[1].modes[] | select(.name | contains("i") | not) | .name + "@" + (.vrefresh|tostring)
+== gs.conf changes

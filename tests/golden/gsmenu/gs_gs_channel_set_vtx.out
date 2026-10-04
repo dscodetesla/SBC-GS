@@ -1,0 +1,15 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls (sorted: background jobs make the order non-deterministic)
+sshpass -p 12345 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ControlMaster=auto -o ControlPath=<ROOT>/run/ssh_control:%h:%p:%r -o ControlPersist=15s -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.5.0.10 (wifibroadcast stop ;wifibroadcast stop; sleep 1;  wifibroadcast start) >/dev/null 2>&1 &
+sshpass -p 12345 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ControlMaster=auto -o ControlPath=<ROOT>/run/ssh_control:%h:%p:%r -o ControlPersist=15s -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.5.0.10 wifibroadcast cli -s .wireless.channel 149
+stub wfb.sh 
+== gs.conf changes
+97c97
+< wfb_channel='161'
+---
+> wfb_channel='149'
+253a254
+> GSMENU_VTX_DETECTED=1

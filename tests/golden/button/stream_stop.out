@@ -1,0 +1,11 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+systemctl stop stream.service
+== gs.conf changes
+== file /run/pixelpilot.msg
+Stop stream service
+== file /sys/kernel/debug/usb/fcc00000.dwc3/mode
+host

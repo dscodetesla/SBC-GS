@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "lsblk $*" >> "$SHIM_LOG"
+echo mmcblk0

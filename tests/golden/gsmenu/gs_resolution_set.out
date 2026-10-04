@@ -1,0 +1,10 @@
+== invocation: standalone_wait
+== exit
+exit=0
+== stdout
+== shim calls
+== gs.conf changes
+26c26
+< screen_mode=''
+---
+> screen_mode='1280x720@60'
