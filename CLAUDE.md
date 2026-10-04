@@ -2,6 +2,8 @@
 
 Це форк збірника образу наземної станції OpenIPC для Radxa Zero 3W. Триває порт на Raspberry Pi 3B+/4/5.
 
+**Нова сесія: спершу `docs/HANDOFF-2026-10-04.md`.**
+
 **Спершу прочитати:** `docs/KNOWLEDGE.md` (перевірені факти, помилки, досвід, відкриті питання), далі `docs/ROADMAP-EXECUTION.md` (поточний план), `docs/GAPS.md`, `docs/PI-PORT.md`, `docs/CHAINS.md`, `docs/BENCH-HARDWARE.md`, `docs/GUIDE.md`, `bench/README.md`; правила агентів `AGENTS.md`, пам'ять проєкту `MEMORY.md`, знімок стану й план перевірки на залізі `docs/STATUS.md`; нове: `docs/MAVLINK-ROUTER.md`, `docs/GS-MAVLINK.md`, `docs/BOARD-RPI4.md`, `docs/SECURITY-DEFAULTS.md`, `docs/REPRODUCIBLE-BUILD.md`.
 
 ## Правила роботи
