@@ -156,3 +156,11 @@ REPO, `tests/golden/gsmenu/`, номери рядків у `gs/gsmenu.sh` (дв�
 ## 7. Рішення власника проєкту, що очікують
 
 Базова ОС (Bookworm із зафіксованим ядром рекомендовано), збирач образу (chroot із шаром плати чи pi-gen), `/config`, чи потрібен Ruby на Pi, старт Фаз 0–1.
+
+## Знахідки 2026-10-04 (міграція Pi, REPO/INF)
+- (REPO) На Pi нічого не виставляло `BOARD`: скрипти мовчки брали профіль Radxa. Тепер `BOARD` env > `/etc/gs-board` > `/proc/device-tree/model` > `radxa-zero3`; невідома плата все ще дає Radxa (B2: небезпечно для Pi 3B+).
+- (REPO) `mount -o remount,rw /media/root-ro` безумовний у `gs-init.sh` і `gs-applyconf.sh` (B1): на Pi OS без overlayroot ламає старт під `set -e`.
+- (REPO) У `stream.sh` гілка gstreamer жорстко використовує `mppvideodec` (Rockchip): відео на Pi ще не працює.
+- (SRC) pi-gen@bookworm `stage2/02-net-tweaks` ставить `network-manager`: на Pi мережею володіє NM (R7).
+- (REPO) Sandbox-тести: `LOGONLY` shim-и завжди успішні; для збою перезаписати shim у `case_setup`; `conf_set` лише для наявних ключів.
+- (INF) Контейнер сесії досягає control plane/DERP Tailscale по HTTPS, але `tailscaled` не встановлений і не запускається (класифікатор); плата в tailnet недосяжна.

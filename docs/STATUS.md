@@ -119,3 +119,10 @@ CI (`lint`, `golden`, `loopback`, `sim-smoke`, `sim-layers`) блокуючий.
 Виправлено в продуктовому коді цією серією: D1-D22 fuzz (виконання `custom.conf` від root, `fan.sh` на непрочитаній температурі, валідація профілів/плат/udev/`fetch.sh`, міст), атомарний запис `gs.conf` (`gs/lib/gsconf.sh`), guard OTG/вентилятора для плат без них (`gs.sh`, `otg-gadget.sh`, `button.sh`), `install-driver.sh` (патчі за ядром, чорний список `rtw88_*`), VA-API на хості Ubuntu 26 (`video-rx.sh`), приклад мапи TX12 (0..2047, центр 1024: старі placeholder давали повне відхилення на центрі стіка).
 
 Лишається на залізі (окремий pipeline, `docs/STATUS.md` §4): реальні probe/monitor/ін'єкція RTL, RF, затримка HEVC, реальні струми RTL8812 і поведінка автомата Pi 5, реальний TX12 MKII (дескриптор, ім'я, таймінги), `gpiodetect` на Pi 5 (мітка й номер RP1), роль USB-C, реальний образ (`gs.conf` на флеші, втрата живлення), `fetch.sh` проти реального GitHub, QGC на Ubuntu 26 Wayland, VA-API на реальному GPU.
+
+## 9. Знімок 2026-10-04 (після міграції Pi 3/4/5, `ffefcfa`)
+
+- `tests/run.sh`: 228 з 228 ok (під root і `nobody`), `tests/precommit.sh` зелений; CI check-suite на `ffefcfa` і `916a5fb` без збоїв у сторонніх чеках (REPO). `tests/sim/layers.sh` після `ffefcfa` не перезапускали (перший пункт наступної сесії).
+- Закрито в коді (REPO, лише sandbox): автовизначення плати, `br0` через nmcli, MBR/config-txt/без OTG у `gs-init.sh`, мітка розділу відео, `Restart=on-failure`, будь-який HDMI-конектор, мертвий плеєр, `button.sh` без GPIO-лінії, udev через `systemd-run --no-block`.
+- Відкрито: B1, B2, профіль `rpi3bp`, декодер у профілі (`mppvideodec`), `gs-mavlink` у `install.sh`/`gs.sh`, `Restart=` для `local_node`/hotplug `wfb_rx`. Деталі й порядок: `docs/handoff/plan-rollout-pi.md`, `docs/TODO.md`.
+- Залізо: нуль вимірів; доступ до плати з контейнера відсутній (`docs/HANDOFF-2026-10-04.md` §6); план перевірки H0-H11: `docs/handoff/TEST-PLAN-HW.md`.

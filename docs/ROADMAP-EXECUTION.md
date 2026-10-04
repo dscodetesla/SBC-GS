@@ -110,3 +110,6 @@
 
 ## Доповнення 2026-10-03 (вечір)
 Симуляція доведена до межі «без заліза» (`docs/STATUS.md` §8): 220 golden/static, шари models/validate/twin/fuzz/netfetch/powerlab/evdev/dkms/bio в CI, QEMU-шари virt (gpio, usb, radio, roconf) і evdev `all` вручну. Закрито дефекти fuzz D1-D22 і моделей D1-D12. Далі: залізо за `docs/STATUS.md` §4 (окремий pipeline) із `bench/doctor.sh` -> `bench/ingest.py` -> `tests/sim/models/calib.py`.
+
+## Доповнення 2026-10-04
+Порядок наступних кроків (кожен окремим комітом з тестами): 0) `layers.sh` після `ffefcfa`; 1) B1; 2) B2; 3) профіль `rpi3bp`; 4) декодер у профілі; 5) `gs-mavlink` + порт OSD + ключі в реєстр; 6) `Restart=` для `local_node`/hotplug `wfb_rx`; далі залізо за `docs/handoff/TEST-PLAN-HW.md`. Живий список: `docs/TODO.md`.
